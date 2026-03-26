@@ -539,26 +539,43 @@ type BrandInfo = {
 };
 
 const BRAND_CATALOG: BrandInfo[] = [
-  { id: 'boen',       name: 'Boen',           category: 'flooring',  specialty: 'Engineered Hardwood',    url: 'https://www.boen.com' },
-  { id: 'kährs',      name: 'Kährs',          category: 'flooring',  specialty: 'Premium Wood Floors',    url: 'https://www.kahrs.com' },
-  { id: 'mutina',     name: 'Mutina',         category: 'flooring',  specialty: 'Designer Tiles',         url: 'https://www.mutina.it' },
-  { id: 'salvatori',  name: 'Salvatori',      category: 'stone',     specialty: 'Natural Stone',          url: 'https://www.salvatori.it' },
-  { id: 'poliform',   name: 'Poliform',       category: 'furniture', specialty: 'Contemporary Systems',   url: 'https://www.poliform.it' },
-  { id: 'minotti',    name: 'Minotti',        category: 'furniture', specialty: 'Italian Luxury',         url: 'https://www.minotti.com' },
-  { id: 'bbitalia',   name: 'B&B Italia',     category: 'furniture', specialty: 'Modern Design Icons',    url: 'https://www.bebitalia.com' },
-  { id: 'vitra',      name: 'Vitra',          category: 'furniture', specialty: 'Swiss Design Classics',  url: 'https://www.vitra.com' },
-  { id: 'cassina',    name: 'Cassina',        category: 'seating',   specialty: 'Iconic Seating',         url: 'https://www.cassina.com' },
-  { id: 'molteni',    name: 'Molteni&C',      category: 'seating',   specialty: 'Living Systems',         url: 'https://www.molteni.it' },
-  { id: 'baxter',     name: 'Baxter',         category: 'seating',   specialty: 'Leather & Fabric',       url: 'https://www.bafranco.it' },
-  { id: 'flos',       name: 'Flos',           category: 'lighting',  specialty: 'Architectural Lighting', url: 'https://www.flos.com' },
-  { id: 'artemide',   name: 'Artemide',       category: 'lighting',  specialty: 'Design Luminaires',      url: 'https://www.artemide.com' },
-  { id: 'vibia',      name: 'Vibia',          category: 'lighting',  specialty: 'Ambient Systems',        url: 'https://www.vibia.com' },
-  { id: 'kvadrat',    name: 'Kvadrat',        category: 'textile',   specialty: 'Premium Textiles',       url: 'https://www.kvadrat.dk' },
-  { id: 'fantini',    name: 'Fantini',        category: 'metal',     specialty: 'Designer Fittings',      url: 'https://www.fantini.it' },
-  { id: 'dornbracht', name: 'Dornbracht',     category: 'metal',     specialty: 'Precision Hardware',     url: 'https://www.dornbracht.com' },
-  { id: 'menu',       name: 'Menu/Audo',      category: 'decor',     specialty: 'Curated Objects',        url: 'https://www.menudesignshop.com' },
-  { id: 'ferm',       name: 'Ferm Living',    category: 'decor',     specialty: 'Scandinavian Decor',     url: 'https://www.fermliving.com' },
-  { id: 'aesop',      name: 'Aesop',          category: 'decor',     specialty: 'Lifestyle Objects',      url: 'https://www.aesop.com' },
+  // Flooring
+  { id: 'boen',       name: 'Boen',           category: 'flooring',  specialty: 'Engineered Hardwood',    url: 'https://www.boen.com/floors' },
+  { id: 'kährs',      name: 'Kährs',          category: 'flooring',  specialty: 'Premium Wood Floors',    url: 'https://www.kahrs.com/commercial/products' },
+  { id: 'mutina',     name: 'Mutina',         category: 'flooring',  specialty: 'Designer Tiles',         url: 'https://www.mutina.it/collections' },
+  // Stone
+  { id: 'salvatori',  name: 'Salvatori',      category: 'stone',     specialty: 'Natural Stone',          url: 'https://www.salvatori.it/en/products' },
+  // Furniture — sofas, tables, storage
+  { id: 'poliform',   name: 'Poliform',       category: 'furniture', specialty: 'Contemporary Systems',   url: 'https://www.poliform.it/en/products/sofas' },
+  { id: 'minotti',    name: 'Minotti',        category: 'furniture', specialty: 'Italian Luxury Sofas',   url: 'https://www.minotti.com/en/products/sofas' },
+  { id: 'bbitalia',   name: 'B&B Italia',     category: 'furniture', specialty: 'Design Icons',           url: 'https://www.bebitalia.com/en/furniture/sofas' },
+  { id: 'vitra',      name: 'Vitra',          category: 'furniture', specialty: 'Swiss Design Classics',  url: 'https://www.vitra.com/en-us/living/sofas' },
+  { id: 'molteni-f',  name: 'Molteni&C',      category: 'furniture', specialty: 'Modular Living',         url: 'https://www.molteni.it/en/products/living' },
+  { id: 'flexform',   name: 'Flexform',       category: 'furniture', specialty: 'Italian Comfort',        url: 'https://www.flexform.it/en/products/sofas' },
+  { id: 'living-div', name: 'Living Divani',  category: 'furniture', specialty: 'Minimalist Forms',       url: 'https://www.livingdivani.it/en/products/sofas' },
+  // Seating — chairs, dining, accent
+  { id: 'cassina',    name: 'Cassina',        category: 'seating',   specialty: 'Iconic Chairs',          url: 'https://www.cassina.com/en/collection/chairs' },
+  { id: 'fritz-h',    name: 'Fritz Hansen',   category: 'seating',   specialty: 'Danish Design',          url: 'https://fritzhansen.com/en/categories/chairs' },
+  { id: 'hay',        name: 'HAY',            category: 'seating',   specialty: 'Contemporary Danish',    url: 'https://hay.dk/en/furniture/chairs' },
+  { id: 'baxter',     name: 'Baxter',         category: 'seating',   specialty: 'Leather & Fabric',       url: 'https://www.bafranco.it/en/products/seating' },
+  { id: 'moroso',     name: 'Moroso',         category: 'seating',   specialty: 'Art Furniture',          url: 'https://www.moroso.it/en/products' },
+  // Lighting
+  { id: 'flos',       name: 'Flos',           category: 'lighting',  specialty: 'Architectural Lighting', url: 'https://www.flos.com/professional' },
+  { id: 'artemide',   name: 'Artemide',       category: 'lighting',  specialty: 'Design Luminaires',      url: 'https://www.artemide.com/en/products' },
+  { id: 'vibia',      name: 'Vibia',          category: 'lighting',  specialty: 'Ambient Systems',        url: 'https://www.vibia.com/en/products' },
+  { id: 'louis-p',    name: 'Louis Poulsen',  category: 'lighting',  specialty: 'Scandinavian Light',     url: 'https://www.louispoulsen.com/en/products' },
+  { id: 'tomdixon',   name: 'Tom Dixon',      category: 'lighting',  specialty: 'Sculptural Light',       url: 'https://www.tomdixon.net/collections/lighting' },
+  // Textile
+  { id: 'kvadrat',    name: 'Kvadrat',        category: 'textile',   specialty: 'Premium Textiles',       url: 'https://www.kvadrat.dk/en/products' },
+  { id: 'dedar',      name: 'Dedar',          category: 'textile',   specialty: 'Luxury Fabrics',         url: 'https://www.dedar.com/en/fabrics' },
+  // Metal / Hardware
+  { id: 'fantini',    name: 'Fantini',        category: 'metal',     specialty: 'Designer Fittings',      url: 'https://www.fantini.it/en/products' },
+  { id: 'dornbracht', name: 'Dornbracht',     category: 'metal',     specialty: 'Precision Hardware',     url: 'https://www.dornbracht.com/en/products' },
+  // Decor
+  { id: 'menu',       name: 'Menu/Audo',      category: 'decor',     specialty: 'Curated Objects',        url: 'https://afrancdo.com/collections' },
+  { id: 'ferm',       name: 'Ferm Living',    category: 'decor',     specialty: 'Scandinavian Decor',     url: 'https://www.fermliving.com/collections' },
+  // Wall
+  { id: 'farrow',     name: 'Farrow & Ball',  category: 'wall',      specialty: 'Paint & Wallpaper',      url: 'https://www.farrow-ball.com/paint-colours' },
 ];
 
 // Category display config
@@ -1296,12 +1313,36 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   );
                 })()}
 
-                {/* Compact Element Balance — interactive bars */}
+                {/* Compact Element Balance — interactive bars + direct input */}
                 <div className="mt-2 px-1 space-y-[3px]">
                   {(['earth', 'fire', 'water', 'air'] as Element[]).map(el => {
                     const val = Math.round(dist[el]);
                     const isDom = el === dominant;
                     const ec = ELEMENT_COLORS[el];
+                    const applyNewVal = (newVal: number) => {
+                      newVal = Math.max(0, Math.min(100, newVal));
+                      const diff = newVal - val;
+                      const others = (['earth', 'fire', 'water', 'air'] as Element[]).filter(x => x !== el);
+                      const othersSum = others.reduce((s, x) => s + dist[x], 0);
+                      const newDist = { ...dist } as Record<Element, number>;
+                      newDist[el] = newVal;
+                      others.forEach(x => {
+                        newDist[x] = othersSum > 0
+                          ? Math.max(0, Math.round(dist[x] - (diff * dist[x] / othersSum)))
+                          : Math.round((100 - newVal) / others.length);
+                      });
+                      const total = others.reduce((s, x) => s + newDist[x], 0) + newVal;
+                      if (total !== 100) {
+                        const biggest = others.sort((a, b) => newDist[b] - newDist[a])[0];
+                        newDist[biggest] += 100 - total;
+                      }
+                      const newSelection = getSelectionFromPercentages(newDist as any);
+                      setState(prev => ({
+                        ...prev,
+                        refinement: { ...prev.refinement, hasUserRefined: true, refinedPercentages: newDist as any, selectedAdjectives: newSelection.adjectives, selectedMaterials: newSelection.materials },
+                      }));
+                      setMaterialsChanged(true);
+                    };
                     return (
                       <div key={el} className="flex items-center gap-1.5" style={{ opacity: isDom ? 1 : 0.65 }}>
                         <span className="text-[8px] uppercase tracking-[0.1em] w-7 shrink-0 text-right" style={{ fontWeight: isDom ? 700 : 500, color: ec }}>{el.slice(0, 2)}</span>
@@ -1312,33 +1353,22 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                           <input
                             type="range" min="0" max="100" value={val}
                             className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-ew-resize"
-                            onChange={(e) => {
-                              const newVal = parseInt(e.target.value, 10);
-                              const diff = newVal - val;
-                              const others = (['earth', 'fire', 'water', 'air'] as Element[]).filter(x => x !== el);
-                              const othersSum = others.reduce((s, x) => s + dist[x], 0);
-                              const newDist = { ...dist } as Record<Element, number>;
-                              newDist[el] = newVal;
-                              others.forEach(x => {
-                                newDist[x] = othersSum > 0
-                                  ? Math.max(0, Math.round(dist[x] - (diff * dist[x] / othersSum)))
-                                  : Math.round((100 - newVal) / others.length);
-                              });
-                              const total = others.reduce((s, x) => s + newDist[x], 0) + newVal;
-                              if (total !== 100) {
-                                const biggest = others.sort((a, b) => newDist[b] - newDist[a])[0];
-                                newDist[biggest] += 100 - total;
-                              }
-                              const newSelection = getSelectionFromPercentages(newDist as any);
-                              setState(prev => ({
-                                ...prev,
-                                refinement: { ...prev.refinement, hasUserRefined: true, refinedPercentages: newDist as any, selectedAdjectives: newSelection.adjectives, selectedMaterials: newSelection.materials },
-                              }));
-                              setMaterialsChanged(true);
-                            }}
+                            onChange={(e) => applyNewVal(parseInt(e.target.value, 10))}
                           />
                         </div>
-                        <span className="font-mono tabular-nums text-[9px] w-6 text-right shrink-0" style={{ fontWeight: isDom ? 700 : 400, color: isDom ? ec : '#aaa' }}>{val}</span>
+                        <input
+                          type="number" min="0" max="100" value={val}
+                          className="font-mono tabular-nums text-[9px] w-8 text-center shrink-0 bg-transparent border border-transparent hover:border-gray-200 focus:border-gray-300 focus:bg-white rounded px-0.5 py-0 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          style={{ fontWeight: isDom ? 700 : 400, color: isDom ? ec : '#aaa' }}
+                          onChange={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            if (!isNaN(v)) applyNewVal(v);
+                          }}
+                          onBlur={(e) => {
+                            const v = parseInt(e.target.value, 10);
+                            if (isNaN(v)) applyNewVal(val);
+                          }}
+                        />
                       </div>
                     );
                   })}

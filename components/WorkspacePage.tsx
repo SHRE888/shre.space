@@ -1834,7 +1834,19 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                       {hasBar && <line x1="4" y1={isUp ? 7.5 : 6.5} x2="10" y2={isUp ? 7.5 : 6.5} stroke={ec} strokeWidth="1.2" strokeLinecap="round" />}
                     </svg>
                     <span className="text-[11px] uppercase tracking-[0.2em] font-semibold flex-1 transition-colors" style={{ color: isLocked ? '#ccc' : ec }}>{el}</span>
-                    <span className="font-mono tabular-nums text-[12px] font-semibold transition-colors" style={{ color: isLocked ? '#ccc' : '#444' }}>{roundVal}%</span>
+                    <div className="flex items-center gap-0.5">
+                      <input
+                        type="number" min="0" max="100" value={roundVal}
+                        disabled={isLocked}
+                        className="font-mono tabular-nums text-[12px] font-semibold w-10 text-right bg-transparent border border-transparent hover:border-gray-200 focus:border-gray-300 focus:bg-white rounded px-1 py-0 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-30"
+                        style={{ color: isLocked ? '#ccc' : '#444' }}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (!isNaN(v)) handleDistributionChange(elType, Math.max(0, Math.min(100, v)));
+                        }}
+                      />
+                      <span className="text-[10px] text-gray-300">%</span>
+                    </div>
                     <button onClick={() => toggleLock(elType)} className="shrink-0 w-5 h-5 flex items-center justify-center opacity-25 hover:opacity-70 transition-opacity" title={isLocked ? 'Unlock' : 'Lock'}>
                       <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke={isLocked ? ec : '#bbb'} strokeWidth="1.5">
                         {isLocked ? <><rect x="2" y="5" width="8" height="6" rx="1" /><path d="M4 5V3a2 2 0 0 1 4 0v2" /></> : <><rect x="2" y="5" width="8" height="6" rx="1" /><path d="M4 5V3a2 2 0 0 1 4 0" /></>}
