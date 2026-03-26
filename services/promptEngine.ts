@@ -1461,24 +1461,52 @@ export const buildTargetedEditPrompt = (
   const matList = materials.slice(0, 5).map(m => m.name).join(', ');
   const adjList = adjectives.slice(0, 3).map(a => a.label).join(', ');
 
+  const ELEMENT_FURNITURE_STYLE: Record<Element, string> = {
+    earth: 'solid wood frames, organic curved forms, raw linen/bouclé upholstery, hand-thrown ceramic legs, warm walnut/oak tones — brands like Poliform, Carl Hansen, Arper',
+    fire: 'bold sculptural silhouettes, dark leather/velvet, oxidized metal accents, dramatic contrast pieces, jewel-tone fabrics — brands like Minotti, Baxter, Meridiani',
+    water: 'fluid curved lines, chrome/polished steel frames, cool grey/blue fabrics, glass-topped pieces, seamless microcement finishes — brands like B&B Italia, Flexform, MDF Italia',
+    air: 'ultra-minimal geometric forms, thin metal frames, translucent/acrylic elements, white/silver palette, weightless appearance — brands like Kartell, Flos, Hay, Magis',
+  };
+
+  const ELEMENT_MATERIAL_STYLE: Record<Element, string> = {
+    earth: 'natural stone with visible veining, aged plaster, raw timber planking, terracotta, hand-glazed tiles, cork, sisal',
+    fire: 'corten steel, blackened bronze, dark marble (Nero Marquina), hammered copper, charred wood (shou sugi ban), volcanic stone',
+    water: 'polished concrete, microcement, frosted glass, mirror-polished stainless steel, blue-grey terrazzo, liquid-effect resin',
+    air: 'white corian, matte anodized aluminum, translucent onyx, dichroic glass panels, ultra-thin porcelain slabs, titanium finish',
+  };
+
   const lines: string[] = [
-    `CRITICAL INSTRUCTION: This is a TARGETED EDIT of an existing architectural render. You MUST preserve the ENTIRE image exactly as it is — same room layout, same camera angle, same lighting setup, same color palette, same furniture placement, same materials on walls/floors/ceiling, same decorative objects — EXCEPT for the ONE specific change requested below.`,
+    `CRITICAL INSTRUCTION: This is a TARGETED EDIT of an existing architectural render. You MUST preserve the ENTIRE image exactly as it is — same room, same camera angle, same lighting, same colors, same every piece of furniture, same materials on every surface, same decorative objects in the same positions — EXCEPT for the ONE specific change requested below.`,
     ``,
     `USER'S EDIT REQUEST: "${userInstruction}"`,
     ``,
-    `RULES FOR TARGETED EDITING:`,
-    `1. ONLY modify what the user explicitly asked to change. Everything else must remain PIXEL-IDENTICAL to the original image.`,
-    `2. The replacement/modification must match the existing design language: ${dominant.toUpperCase()}-dominant (${domPct}%) with ${secondary.toUpperCase()} secondary (${secPct}%).`,
-    `3. Aesthetic to maintain: ${ELEMENT_AESTHETIC[dominant]}`,
-    adjList ? `4. Active mood keywords: ${adjList}` : `4. Maintain the existing atmospheric mood.`,
-    matList ? `5. Active materials in the space: ${matList}. New/modified elements should harmonize with these.` : '',
-    `6. Domain: ${domain}. Space: ${spaceCategory}.`,
-    `7. The modified element must feel like it BELONGS in this space — same quality level, same design era, same brand tier.`,
-    `8. If changing furniture: use recognizable designer silhouettes (B&B Italia, Minotti, Poliform, Cassina, Vitra tier). The piece must respect the ${dominant} element aesthetic.`,
-    `9. If changing a material/finish: keep the same application area and boundaries, only change the surface treatment.`,
-    `10. If changing lighting: maintain the same fixture positions, only alter the fixture design or light quality.`,
+    `PRESERVATION RULES (absolute priority):`,
+    `- Walls: same color, texture, material — DO NOT CHANGE`,
+    `- Floor: same material, pattern, color — DO NOT CHANGE`,
+    `- Ceiling: same design — DO NOT CHANGE`,
+    `- Windows: same position, shape, curtains — DO NOT CHANGE (unless user explicitly asked)`,
+    `- Every piece of furniture NOT mentioned by the user: same design, same position, same color — DO NOT CHANGE`,
+    `- Lighting quality, color temperature, shadow patterns: PRESERVE EXACTLY`,
+    `- Camera angle and perspective: IDENTICAL to original`,
+    `- All decorative objects (plants, books, vases, art): KEEP IN PLACE`,
     ``,
-    `QUALITY: Photorealistic editorial architectural photograph at maximum quality. The edit must be seamless — the viewer should not be able to tell which element was changed.`,
+    `DESIGN LANGUAGE FOR THE EDIT:`,
+    `- Dominant energy: ${dominant.toUpperCase()} (${domPct}%), Secondary: ${secondary.toUpperCase()} (${secPct}%)`,
+    `- Overall aesthetic: ${ELEMENT_AESTHETIC[dominant]}`,
+    `- Furniture style for ${dominant}: ${ELEMENT_FURNITURE_STYLE[dominant]}`,
+    `- Material language for ${dominant}: ${ELEMENT_MATERIAL_STYLE[dominant]}`,
+    adjList ? `- Active mood: ${adjList}` : '',
+    matList ? `- Materials context: ${matList}` : '',
+    `- Space: ${spaceCategory} (${domain})`,
+    ``,
+    `EDIT QUALITY REQUIREMENTS:`,
+    `- The changed element must be photorealistic — real materials, real proportions, real shadows`,
+    `- Shadows and reflections of the new element must be consistent with the existing lighting`,
+    `- The new element must occupy the SAME physical space as the original (same position, similar scale)`,
+    `- Brand-quality designer furniture — recognizable silhouettes from premium manufacturers`,
+    `- Seamless integration — impossible to tell the edit happened`,
+    ``,
+    `OUTPUT: Maximum quality photorealistic architectural photograph. HDTV 16:9. The result must look like the same photo with only the requested element changed.`,
   ].filter(Boolean);
 
   return lines.join('\n');
