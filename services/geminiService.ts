@@ -30,6 +30,18 @@ const SYSTEM_INSTRUCTION = [
   'OUTPUT: Photorealistic editorial architectural photograph at maximum quality. HDTV 16:9 format. The viewer cannot tell if this is a real photograph or a visualization.',
 ].join(' ');
 
+const EDIT_SYSTEM_INSTRUCTION = [
+  'You are a precision architectural image editor. Your task is to make SURGICAL modifications to existing architectural photographs.',
+  'ABSOLUTE RULE: You receive an existing image and an edit instruction. You MUST keep the ENTIRE image identical — same room, same walls, same floor, same ceiling, same camera angle, same lighting, same color temperature, same every object — and ONLY change the ONE specific thing the user asks you to change.',
+  'Think of yourself as a Photoshop retoucher: you erase ONE object and replace it with something new that fits perfectly into the existing scene. Everything else stays untouched.',
+  'The replacement must match the existing lighting direction, color temperature, shadow patterns, and perspective geometry EXACTLY.',
+  'The new element must have photorealistic material quality: real textures, accurate reflections, proper shadows, gravity contact lines.',
+  'If replacing furniture: use real designer brand silhouettes (B&B Italia, Minotti, Poliform, Cassina, Vitra tier).',
+  'If replacing a surface material: keep the exact same geometry/area, only change the surface texture and finish.',
+  'The edit must be INVISIBLE — the result should look like the original photo was always this way. No artifacts, no style drift, no composition changes.',
+  'FORBIDDEN: Changing the camera angle. Changing the room layout. Moving furniture that was not mentioned. Changing wall colors/materials not mentioned. Changing the floor not mentioned. Changing the ceiling not mentioned. Changing the lighting setup not mentioned. Adding or removing windows. Changing any object the user did not explicitly ask to change.',
+].join(' ');
+
 const getClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) throw new Error("API Key not found. Set GEMINI_API_KEY in .env");
@@ -60,20 +72,23 @@ export const generateImageFromPrompt = async (
 
     const ar = '16:9';
 
+    const isEdit = !!(imagePart && targetedEditInstruction);
+
     const config: Record<string, unknown> = {
       responseModalities: ['TEXT', 'IMAGE'],
-      systemInstruction: SYSTEM_INSTRUCTION,
+      systemInstruction: isEdit ? EDIT_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION,
       imageConfig: {
         aspectRatio: ar,
       },
     };
 
-    if (imagePart && targetedEditInstruction) {
+    if (isEdit) {
         response = await ai.models.generateContent({
             model: IMAGE_MODEL,
             contents: [
-                imagePart,
-                { text: targetedEditInstruction }
+                { text: "Here is the current architectural render. I need you to make a PRECISE, SURGICAL edit to this image. Read my instructions carefully — change ONLY what I specify and keep EVERYTHING else exactly the same." },
+                imagePart!,
+                { text: targetedEditInstruction! }
             ],
             config,
         });
