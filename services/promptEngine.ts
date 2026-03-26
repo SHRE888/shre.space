@@ -1167,8 +1167,18 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
 
   const P: string[] = [];
 
+  // [0] DOMAIN LOCK — strict interior/architecture separation
+  if (input.domain === 'architecture') {
+    P.push(`DOMAIN: ARCHITECTURE / EXTERIOR. Generate ONLY an exterior architectural view — the camera is OUTSIDE showing a building, facade, landscape, urban context. Do NOT generate any interior spaces, room interiors, or indoor furniture. This is a BUILDING seen from outside.`);
+  } else {
+    P.push(`DOMAIN: INTERIOR. Generate ONLY an interior space — the camera is INSIDE a room. Do NOT generate any exterior building views, facades, or outdoor landscapes. This is a ROOM seen from inside.`);
+  }
+
+  // [0b] ELEMENT ENERGY AS ABSTRACT SPATIAL LOGIC — not literal
+  P.push(`ELEMENT ENERGY IS ABSTRACT DESIGN LOGIC. Earth, Fire, Water, Air = materiality, atmosphere, form, contrast, softness, openness, lighting behavior. They are NEVER literal — no flames, no water waves, no wind effects, no soil or dirt, no element symbols. Translate elemental energy into real architectural and design choices: materials, color temperature, furniture character, spatial proportion, light quality.`);
+
   // [1] PHOTOGRAPHIC IDENTITY
-  P.push(`Ultra-realistic editorial architectural photograph of a completed, physically built ${spaceLabel}. ${areaM2}m², ceiling height ${ceilingH}m. This image will be published in Dezeen, ArchDaily, or AD Magazine. Shot on location by an elite architectural photographer (Hélène Binet / Iwan Baan / Fernando Guerra caliber). The space is REAL, BUILT, INHABITED — not a render or concept. It shows years of careful design: patina on materials, wear on floors, books on shelves, ceramics curated over time. Light enters naturally through actual windows creating authentic shadow patterns on textured surfaces. Every material is identifiable from the photograph — you can see the stone veining, wood grain direction, plaster trowel marks, metal reflections of the room, fabric weave texture.`);
+  P.push(`Ultra-realistic editorial architectural photograph of a completed, physically built ${spaceLabel}. ${areaM2}m², ceiling height ${ceilingH}m. Published in Dezeen / ArchDaily / AD Magazine. Shot on location by an elite architectural photographer (Hélène Binet / Iwan Baan / Fernando Guerra caliber). The space is REAL, BUILT, INHABITED — not a render or concept. Years of design: patina on materials, wear on floors, curated objects. Light enters naturally through real windows creating authentic shadow patterns. Every material is identifiable — stone veining, wood grain, plaster trowel marks, metal reflections, fabric weave.`);
 
   // [1b] SPACE IDENTITY (critical — prevents a restaurant from looking like a living room)
   if (spaceIdentity) {
@@ -1345,6 +1355,16 @@ SPATIAL ANALYSIS REQUIREMENTS:
 The generated interior must feel like a direct 3D realization of this exact floor plan — as if you walked into the space drawn on paper.`);
   }
 
+  // [12b] REALISM ENFORCEMENT (final quality gate)
+  P.push(`REALISM QUALITY GATE (apply to every generation):
+- Prioritize architectural realism, high-quality proportions, believable materials, logical lighting, and clean professional composition above all else.
+- Every object must have a PURPOSE in the space — no random decorative items, no meaningless light fixtures, no objects placed just to fill emptiness.
+- Materials must be BUILDABLE and REAL — no fantasy textures, no impossible material combinations, no surfaces that don't exist in real construction.
+- The dominant element energy must be clearly READABLE through design choices (material selection, color temperature, spatial proportion, light quality) — not through literal symbols or decorative gimmicks.
+- If this is INTERIOR: the camera is inside a room. No exterior building facades visible. Windows show realistic exterior views (landscape, city, garden) but the composition is interior.
+- If this is ARCHITECTURE: the camera is outside. Show the building in its context. No room interiors visible beyond what's naturally seen through windows from outside.
+- The result must look like it was designed by a top-tier architecture firm (Olson Kundig, John Pawson, Tadao Ando, Studio Mumbai, Norm Architects caliber) and photographed for publication.`);
+
   // [13] REFINEMENT
   if (input.refinementFeedback) {
     P.push(`USER DIRECTION (highest priority): "${input.refinementFeedback}".`);
@@ -1358,7 +1378,7 @@ The generated interior must feel like a direct 3D realization of this exact floo
   const rawPrompt = P.join('\n\n');
   const finalPrompt = scrubBannedTokens(rawPrompt);
 
-  const negativePrompt = "3D render, CGI, concept art, Unreal Engine, V-Ray render, artificial perfection, plastic-looking surfaces, fisheye distortion, barrel distortion, tilted verticals, leaning walls, cropped furniture, cut-off edges, floating objects, furniture embedded in walls, impossible geometry, wrong proportions, oversized furniture, undersized furniture, blocked doorways, flames, water waves, literal element symbols, cartoon, illustration, text overlay, watermarks, people, human figures, neon lighting, colored LED strips, HDR tonemapping, Instagram filter, oversaturation, IKEA catalog look, Pinterest cliché, developer showroom, beige sofa repetition, symmetrical staged catalog, empty room, bare walls without texture, flat uniform surfaces without grain or variation, video game aesthetic, low resolution, blurry, noisy, compression artifacts, AI face artifacts, extra fingers, deformed objects, impossible shadows, multiple light source directions, clinical fluorescent lighting";
+  const negativePrompt = "3D render, CGI, concept art, Unreal Engine, V-Ray render, artificial perfection, plastic-looking surfaces, fisheye distortion, barrel distortion, tilted verticals, leaning walls, cropped furniture, cut-off edges, floating objects, furniture embedded in walls, impossible geometry, wrong proportions, oversized furniture, undersized furniture, blocked doorways, literal element symbols, actual flames, actual water waves, actual wind effects, soil or dirt piles, elemental symbols, cartoon, illustration, text overlay, watermarks, people, human figures, HDR tonemapping, Instagram filter, oversaturation, IKEA catalog look, Pinterest cliché, developer showroom, beige sofa repetition, symmetrical staged catalog, empty room, bare walls without texture, flat uniform surfaces without grain or variation, video game aesthetic, low resolution, blurry, noisy, compression artifacts, AI face artifacts, extra fingers, deformed objects, impossible shadows, multiple light source directions, clinical fluorescent lighting, random decorative objects with no purpose, meaningless accent lights, fake luxury gold trim, non-buildable fantasy forms, clutter, objects that serve no function";
 
   const designSummary = buildDesignSummary(input, activeDist);
   
