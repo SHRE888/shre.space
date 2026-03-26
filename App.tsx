@@ -1314,65 +1314,88 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 })()}
 
                 {/* Compact Element Balance — interactive bars + direct input */}
-                <div className="mt-2 px-1 space-y-[3px]">
-                  {(['earth', 'fire', 'water', 'air'] as Element[]).map(el => {
+                {(() => {
+                  const applyNewVal = (el: Element, newVal: number) => {
+                    newVal = Math.max(0, Math.min(100, newVal));
                     const val = Math.round(dist[el]);
-                    const isDom = el === dominant;
-                    const ec = ELEMENT_COLORS[el];
-                    const applyNewVal = (newVal: number) => {
-                      newVal = Math.max(0, Math.min(100, newVal));
-                      const diff = newVal - val;
-                      const others = (['earth', 'fire', 'water', 'air'] as Element[]).filter(x => x !== el);
-                      const othersSum = others.reduce((s, x) => s + dist[x], 0);
-                      const newDist = { ...dist } as Record<Element, number>;
-                      newDist[el] = newVal;
-                      others.forEach(x => {
-                        newDist[x] = othersSum > 0
-                          ? Math.max(0, Math.round(dist[x] - (diff * dist[x] / othersSum)))
-                          : Math.round((100 - newVal) / others.length);
-                      });
-                      const total = others.reduce((s, x) => s + newDist[x], 0) + newVal;
-                      if (total !== 100) {
-                        const biggest = others.sort((a, b) => newDist[b] - newDist[a])[0];
-                        newDist[biggest] += 100 - total;
-                      }
-                      const newSelection = getSelectionFromPercentages(newDist as any);
-                      setState(prev => ({
-                        ...prev,
-                        refinement: { ...prev.refinement, hasUserRefined: true, refinedPercentages: newDist as any, selectedAdjectives: newSelection.adjectives, selectedMaterials: newSelection.materials },
-                      }));
-                      setMaterialsChanged(true);
-                    };
-                    return (
-                      <div key={el} className="flex items-center gap-1.5" style={{ opacity: isDom ? 1 : 0.65 }}>
-                        <span className="text-[8px] uppercase tracking-[0.1em] w-7 shrink-0 text-right" style={{ fontWeight: isDom ? 700 : 500, color: ec }}>{el.slice(0, 2)}</span>
-                        <div className="flex-1 relative h-[14px] flex items-center cursor-ew-resize group">
-                          <div className="absolute left-0 right-0 h-[4px] rounded-full" style={{ background: 'rgba(0,0,0,0.04)' }} />
-                          <div className="absolute left-0 h-[4px] rounded-full transition-all duration-300"
-                            style={{ width: `${val}%`, backgroundColor: ec, opacity: isDom ? 0.8 : 0.45 }} />
-                          <input
-                            type="range" min="0" max="100" value={val}
-                            className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-ew-resize"
-                            onChange={(e) => applyNewVal(parseInt(e.target.value, 10))}
-                          />
-                        </div>
-                        <input
-                          type="number" min="0" max="100" value={val}
-                          className="font-mono tabular-nums text-[9px] w-8 text-center shrink-0 bg-transparent border border-transparent hover:border-gray-200 focus:border-gray-300 focus:bg-white rounded px-0.5 py-0 outline-none transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                          style={{ fontWeight: isDom ? 700 : 400, color: isDom ? ec : '#aaa' }}
-                          onChange={(e) => {
-                            const v = parseInt(e.target.value, 10);
-                            if (!isNaN(v)) applyNewVal(v);
-                          }}
-                          onBlur={(e) => {
-                            const v = parseInt(e.target.value, 10);
-                            if (isNaN(v)) applyNewVal(val);
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
+                    const diff = newVal - val;
+                    const others = (['earth', 'fire', 'water', 'air'] as Element[]).filter(x => x !== el);
+                    const othersSum = others.reduce((s, x) => s + dist[x], 0);
+                    const newDist = { ...dist } as Record<Element, number>;
+                    newDist[el] = newVal;
+                    others.forEach(x => {
+                      newDist[x] = othersSum > 0
+                        ? Math.max(0, Math.round(dist[x] - (diff * dist[x] / othersSum)))
+                        : Math.round((100 - newVal) / others.length);
+                    });
+                    const total = others.reduce((s, x) => s + newDist[x], 0) + newVal;
+                    if (total !== 100) {
+                      const biggest = others.sort((a, b) => newDist[b] - newDist[a])[0];
+                      newDist[biggest] += 100 - total;
+                    }
+                    const newSelection = getSelectionFromPercentages(newDist as any);
+                    setState(prev => ({
+                      ...prev,
+                      refinement: { ...prev.refinement, hasUserRefined: true, refinedPercentages: newDist as any, selectedAdjectives: newSelection.adjectives, selectedMaterials: newSelection.materials },
+                    }));
+                    setMaterialsChanged(true);
+                  };
+                  return (
+                    <div className="mt-2 px-1 space-y-[3px]">
+                      {(['earth', 'fire', 'water', 'air'] as Element[]).map(el => {
+                        const val = Math.round(dist[el]);
+                        const isDom = el === dominant;
+                        const ec = ELEMENT_COLORS[el];
+                        return (
+                          <div key={el} className="flex items-center gap-1.5" style={{ opacity: isDom ? 1 : 0.65 }}>
+                            <span className="text-[8px] uppercase tracking-[0.1em] w-7 shrink-0 text-right" style={{ fontWeight: isDom ? 700 : 500, color: ec }}>{el.slice(0, 2)}</span>
+                            <div className="flex-1 relative h-[14px] flex items-center cursor-ew-resize group">
+                              <div className="absolute left-0 right-0 h-[4px] rounded-full" style={{ background: 'rgba(0,0,0,0.04)' }} />
+                              <div className="absolute left-0 h-[4px] rounded-full transition-all duration-300"
+                                style={{ width: `${val}%`, backgroundColor: ec, opacity: isDom ? 0.8 : 0.45 }} />
+                              <input
+                                type="range" min="0" max="100" value={val}
+                                className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-ew-resize"
+                                onChange={(e) => applyNewVal(el, parseInt(e.target.value, 10))}
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              defaultValue={val}
+                              key={`${el}-${val}`}
+                              className="font-mono tabular-nums text-[10px] w-9 text-center shrink-0 rounded px-0.5 py-[1px] outline-none transition-all border"
+                              style={{
+                                fontWeight: isDom ? 700 : 500,
+                                color: isDom ? ec : '#888',
+                                borderColor: `${ec}25`,
+                                background: `${ec}06`,
+                              }}
+                              onFocus={(e) => { e.target.select(); e.target.style.borderColor = ec; e.target.style.background = '#fff'; }}
+                              onBlur={(e) => {
+                                e.target.style.borderColor = `${ec}25`;
+                                e.target.style.background = `${ec}06`;
+                                const v = parseInt(e.target.value, 10);
+                                if (!isNaN(v) && v !== val) applyNewVal(el, v);
+                                else e.target.value = String(val);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  const v = parseInt((e.target as HTMLInputElement).value, 10);
+                                  if (!isNaN(v)) applyNewVal(el, v);
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                                if (e.key === 'ArrowUp') { e.preventDefault(); applyNewVal(el, val + 1); }
+                                if (e.key === 'ArrowDown') { e.preventDefault(); applyNewVal(el, val - 1); }
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
 
                 {materialsChanged && (
                   <div className="flex items-center gap-2 mt-1.5 px-2 py-1 rounded-md bg-amber-50/80 border border-amber-200/50 animate-fade-in">
