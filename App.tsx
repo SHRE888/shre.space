@@ -1112,15 +1112,20 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           {/* Expanded state */}
           {sidebarOpen && (
             <div className="flex flex-col h-full">
-              {/* ═══ SECTION 1: Header + Axonometric Orbital + Percentages ═══ */}
-              <div className="flex-shrink-0 px-4 pt-3 pb-2 bg-white z-10 border-b border-gray-100/80">
-                <div className="flex items-center justify-between mb-1">
+              {/* ═══ HEADER — fixed ═══ */}
+              <div className="flex-shrink-0 px-4 pt-3 pb-1.5 bg-white z-10 border-b border-gray-100/80">
+                <div className="flex items-center justify-between">
                   <p className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-medium">Material DNA</p>
                   <button onClick={() => setSidebarOpen(false)}
                     className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors">
                     <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round"><path d="M4 3 L7 6 L4 9" /></svg>
                   </button>
                 </div>
+              </div>
+
+              {/* ═══ SCROLLABLE BODY ═══ */}
+              <div className="flex-1 overflow-y-auto custom-scroll min-h-0">
+              <div className="px-4 pt-2 pb-2">
 
                 {/* Axonometric orbital — materials grouped by element sector */}
                 {(() => {
@@ -1194,111 +1199,53 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   );
                 })()}
 
-                {/* Element energy distribution — with clear element identification */}
-                <div className="mt-3 px-1">
-                  <p className="text-[8px] uppercase tracking-[0.25em] text-gray-300 font-medium text-center mb-2">Element Balance</p>
-                  {/* Element rows with symbol + name + bar + percentage */}
-                  <div className="space-y-1.5">
-                    {(['earth', 'fire', 'water', 'air'] as Element[]).map(el => {
-                      const val = dist[el];
-                      const roundVal = Math.round(val);
-                      const isDom = el === dominant;
-                      const ec = ELEMENT_COLORS[el];
-                      const isUp = el === 'fire' || el === 'air';
-                      const hasBar = el === 'air' || el === 'earth';
-                      return (
-                        <div key={el} className="flex items-center gap-2 transition-all duration-300" style={{ opacity: isDom ? 1 : 0.6 }}>
-                          {/* Alchemical triangle symbol */}
-                          <svg width="12" height="12" viewBox="0 0 14 14" className="shrink-0">
-                            <path d={isUp ? 'M7 2 L12 11 L2 11 Z' : 'M7 12 L12 3 L2 3 Z'}
-                              fill={isDom ? `${ec}20` : 'none'} stroke={ec} strokeWidth={isDom ? 1.5 : 1.2} strokeLinejoin="round" />
-                            {hasBar && <line x1="4" y1={isUp ? 7.5 : 6.5} x2="10" y2={isUp ? 7.5 : 6.5} stroke={ec} strokeWidth={isDom ? 1.4 : 1} strokeLinecap="round" />}
-                          </svg>
-                          {/* Element name */}
-                          <span className="text-[9px] uppercase tracking-[0.15em] w-9 shrink-0" style={{ fontWeight: isDom ? 700 : 500, color: ec }}>{el}</span>
-                          {/* Bar */}
-                          <div className="flex-1 h-[5px] rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.04)' }}>
-                            <div className="h-full rounded-full transition-all duration-700" style={{ width: `${val}%`, backgroundColor: ec, opacity: isDom ? 0.9 : 0.55 }} />
-                          </div>
-                          {/* Percentage */}
-                          <span className="font-mono tabular-nums text-[10px] w-7 text-right shrink-0" style={{ fontWeight: isDom ? 700 : 400, color: isDom ? ec : '#aaa' }}>{roundVal}</span>
+                {/* Compact Element Balance — interactive bars */}
+                <div className="mt-2 px-1 space-y-[3px]">
+                  {(['earth', 'fire', 'water', 'air'] as Element[]).map(el => {
+                    const val = Math.round(dist[el]);
+                    const isDom = el === dominant;
+                    const ec = ELEMENT_COLORS[el];
+                    return (
+                      <div key={el} className="flex items-center gap-1.5" style={{ opacity: isDom ? 1 : 0.65 }}>
+                        <span className="text-[8px] uppercase tracking-[0.1em] w-7 shrink-0 text-right" style={{ fontWeight: isDom ? 700 : 500, color: ec }}>{el.slice(0, 2)}</span>
+                        <div className="flex-1 relative h-[14px] flex items-center cursor-ew-resize group">
+                          <div className="absolute left-0 right-0 h-[4px] rounded-full" style={{ background: 'rgba(0,0,0,0.04)' }} />
+                          <div className="absolute left-0 h-[4px] rounded-full transition-all duration-300"
+                            style={{ width: `${val}%`, backgroundColor: ec, opacity: isDom ? 0.8 : 0.45 }} />
+                          <input
+                            type="range" min="0" max="100" value={val}
+                            className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-ew-resize"
+                            onChange={(e) => {
+                              const newVal = parseInt(e.target.value, 10);
+                              const diff = newVal - val;
+                              const others = (['earth', 'fire', 'water', 'air'] as Element[]).filter(x => x !== el);
+                              const othersSum = others.reduce((s, x) => s + dist[x], 0);
+                              const newDist = { ...dist } as Record<Element, number>;
+                              newDist[el] = newVal;
+                              others.forEach(x => {
+                                newDist[x] = othersSum > 0
+                                  ? Math.max(0, Math.round(dist[x] - (diff * dist[x] / othersSum)))
+                                  : Math.round((100 - newVal) / others.length);
+                              });
+                              const total = others.reduce((s, x) => s + newDist[x], 0) + newVal;
+                              if (total !== 100) {
+                                const biggest = others.sort((a, b) => newDist[b] - newDist[a])[0];
+                                newDist[biggest] += 100 - total;
+                              }
+                              const newSelection = getSelectionFromPercentages(newDist as any);
+                              setState(prev => ({
+                                ...prev,
+                                refinement: { ...prev.refinement, hasUserRefined: true, refinedPercentages: newDist as any, selectedAdjectives: newSelection.adjectives, selectedMaterials: newSelection.materials },
+                              }));
+                              setMaterialsChanged(true);
+                            }}
+                          />
                         </div>
-                      );
-                    })}
-                  </div>
-                  {/* Expand/collapse toggle for sliders */}
-                  <button
-                    onClick={() => setPctEditOpen(p => !p)}
-                    className="w-full flex items-center justify-center gap-1.5 mt-2.5 py-1.5 rounded-lg transition-all hover:bg-gray-50"
-                    style={{ border: '1px solid rgba(0,0,0,0.05)' }}
-                  >
-                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#999" strokeWidth="1.3" strokeLinecap="round">
-                      <path d="M2 5 h12 M2 8 h8 M2 11 h10" />
-                    </svg>
-                    <span className="text-[8px] uppercase tracking-[0.2em] text-gray-400 font-medium">Adjust Balance</span>
-                    <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round"
-                      className={`transition-transform duration-200 ${pctEditOpen ? 'rotate-180' : ''}`}>
-                      <polyline points="3,4.5 6,7.5 9,4.5" />
-                    </svg>
-                  </button>
+                        <span className="font-mono tabular-nums text-[9px] w-6 text-right shrink-0" style={{ fontWeight: isDom ? 700 : 400, color: isDom ? ec : '#aaa' }}>{val}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                {/* Inline percentage sliders */}
-                {pctEditOpen && (
-                  <div className="mt-1 px-2 py-3 rounded-xl animate-fade-in" style={{ animationDuration: '0.2s', background: 'rgba(0,0,0,0.015)', border: '1px solid rgba(0,0,0,0.04)' }}>
-                    {(['earth', 'fire', 'water', 'air'] as Element[]).map(el => {
-                      const val = Math.round(dist[el]);
-                      const isDom = el === dominant;
-                      const ec = ELEMENT_COLORS[el];
-                      const ELEMENT_SYMBOLS: Record<Element, string> = { earth: '▽', fire: '△', water: '▿', air: '△' };
-                      return (
-                        <div key={el} className="flex items-center gap-2.5 mb-2 last:mb-0">
-                          <span className="text-[11px] flex-shrink-0 w-3 text-center" style={{ color: ec, opacity: 0.7 }}>{ELEMENT_SYMBOLS[el]}</span>
-                          <span className="text-[9px] font-semibold uppercase tracking-[0.15em] w-10 flex-shrink-0" style={{ color: isDom ? ec : '#999' }}>
-                            {el}
-                          </span>
-                          <div className="flex-1 relative h-5 flex items-center">
-                            <div className="absolute left-0 right-0 h-[3px] rounded-full" style={{ background: 'rgba(0,0,0,0.04)' }} />
-                            <div className="absolute left-0 h-[3px] rounded-full transition-all duration-300"
-                              style={{ width: `${val}%`, backgroundColor: ec, opacity: isDom ? 0.7 : 0.4 }} />
-                            <input
-                              type="range" min="0" max="100" value={val}
-                              className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-ew-resize"
-                              onChange={(e) => {
-                                const newVal = parseInt(e.target.value, 10);
-                                const oldVal = val;
-                                const diff = newVal - oldVal;
-                                const others = (['earth', 'fire', 'water', 'air'] as Element[]).filter(x => x !== el);
-                                const othersSum = others.reduce((s, x) => s + dist[x], 0);
-                                const newDist = { ...dist } as Record<Element, number>;
-                                newDist[el] = newVal;
-                                others.forEach(x => {
-                                  newDist[x] = othersSum > 0
-                                    ? Math.max(0, Math.round(dist[x] - (diff * dist[x] / othersSum)))
-                                    : Math.round((100 - newVal) / others.length);
-                                });
-                                const total = others.reduce((s, x) => s + newDist[x], 0) + newVal;
-                                if (total !== 100) {
-                                  const biggest = others.sort((a, b) => newDist[b] - newDist[a])[0];
-                                  newDist[biggest] += 100 - total;
-                                }
-                                const newSelection = getSelectionFromPercentages(newDist as any);
-                                setState(prev => ({
-                                  ...prev,
-                                  refinement: { ...prev.refinement, hasUserRefined: true, refinedPercentages: newDist as any, selectedAdjectives: newSelection.adjectives, selectedMaterials: newSelection.materials },
-                                }));
-                                setMaterialsChanged(true);
-                              }}
-                            />
-                          </div>
-                          <span className="font-mono tabular-nums text-[10px] font-semibold w-8 text-right flex-shrink-0" style={{ color: isDom ? '#333' : '#bbb' }}>
-                            {val}%
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
 
                 {materialsChanged && (
                   <div className="flex items-center gap-2 mt-1.5 px-2 py-1 rounded-md bg-amber-50/80 border border-amber-200/50 animate-fade-in">
@@ -1308,8 +1255,8 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 )}
               </div>
 
-              {/* ═══ SECTION 2: Material Grid (always visible, own scroll if needed) ═══ */}
-              <div className="flex-shrink-0 px-3 pt-2.5 pb-2 bg-white z-[5] border-b border-gray-50/80" style={{ maxHeight: '380px', overflowY: 'auto' }}>
+              {/* Material Grid */}
+              <div className="px-3 pt-2.5 pb-2">
                 <div className="grid grid-cols-4 gap-1">
                   {dnaMaterials.map((mat, idx) => {
                     const elColor = ELEMENT_COLORS[mat.element];
@@ -1360,11 +1307,9 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 </button>
               </div>
 
-              {/* ═══ SECTION 3: Scrollable lower panel ═══ */}
-              <div className="flex-1 overflow-y-auto custom-scroll min-h-0">
                 {/* Material picker dropdown */}
                 {materialPickerOpen && (
-                  <div className="px-3 pt-3 pb-2 border-b border-gray-100 animate-fade-in-up bg-gray-50/40" style={{ animationDuration: '0.2s', maxHeight: '400px', overflowY: 'auto' }}>
+                  <div className="px-3 pt-3 pb-2 border-b border-gray-100 animate-fade-in-up bg-gray-50/40" style={{ animationDuration: '0.2s' }}>
                     <p className="text-[9px] uppercase tracking-[0.2em] text-gray-400 font-semibold mb-2.5">Available Materials</p>
                     {(Object.entries(CANONICAL_MATERIALS) as [string, string[]][])
                       .filter(([key]) => key !== 'shared')
@@ -1559,7 +1504,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 </div>
               </div>
 
-              {/* ═══ SECTION 4: Footer Actions (always visible) ═══ */}
+              {/* ═══ FOOTER Actions (always visible) ═══ */}
               <div className={`flex-shrink-0 px-3 py-2 border-t space-y-1.5 transition-all duration-300 ${materialsChanged ? 'border-amber-200/60 bg-amber-50/30' : 'border-gray-100/60 bg-white'}`}>
                 {materialsChanged && (
                   <button onClick={() => { chime(); setMaterialsChanged(false); setMaterialPickerOpen(false); setSelectedHistoryImage(null); setLoading(true); setPhase('generating'); setLoadProgress(0); setImageLoaded(false); setImageUrl(null); setGenerationKey(k => k + 1); }}
