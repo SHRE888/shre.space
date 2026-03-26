@@ -1,0 +1,593 @@
+/* Base reset & global styles */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Focus-visible: accessible keyboard focus ring */
+:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.5);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.5);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions for interactive elements (exclude transform — handled per-component) */
+button, a, [role="button"] {
+  transition-property: color, background-color, border-color, box-shadow, opacity;
+  transition-duration: 200ms;
+  transition-timing-function: ease-out;
+}
+
+/* Better scrollbar */
+.custom-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+}
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.16);
+}
+
+/* ── Custom Cursor System ── */
+
+/* Default: small dark-blue round dot */
+.layout-root {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Ccircle cx='10' cy='10' r='4' fill='%231B3A6B' fill-opacity='0.7'/%3E%3Ccircle cx='10' cy='10' r='6' fill='none' stroke='%231B3A6B' stroke-width='1' opacity='0.3'/%3E%3C/svg%3E") 10 10, default;
+}
+
+/* Pointer for buttons and clickable — enlarged dark-blue ring */
+.layout-root button,
+.layout-root a,
+.layout-root [role="button"],
+.layout-root label[for],
+.layout-root .cursor-pointer {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='12' fill='%231B3A6B' fill-opacity='0.06'  stroke='%231B3A6B' stroke-width='1.6' opacity='0.7'/%3E%3Ccircle cx='18' cy='18' r='3' fill='%231B3A6B' fill-opacity='0.8'/%3E%3C/svg%3E") 18 18, pointer;
+}
+
+/* Drag/grab — large dashed dark-blue ring */
+.layout-root [class*="cursor-grab"],
+.layout-root .cursor-grab {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='13' fill='none' stroke='%231B3A6B' stroke-width='1.2' stroke-dasharray='4 3' opacity='0.5'/%3E%3Ccircle cx='18' cy='18' r='3' fill='%231B3A6B' fill-opacity='0.6'/%3E%3C/svg%3E") 18 18, grab;
+}
+
+/* Grabbing — filled dark-blue ring */
+.layout-root [class*="cursor-grabbing"],
+.layout-root .cursor-grabbing {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'%3E%3Ccircle cx='18' cy='18' r='11' fill='%231B3A6B' fill-opacity='0.1' stroke='%231B3A6B' stroke-width='2' opacity='0.7'/%3E%3Ccircle cx='18' cy='18' r='3.5' fill='%231B3A6B' fill-opacity='0.8'/%3E%3C/svg%3E") 18 18, grabbing;
+}
+
+/* ── Core zone cursors — triangles ── */
+
+/* Triangle pointing UP — for core zone and upper orbit half */
+/* Dark blue triangles — used on outer rings */
+.cursor-tri-up {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 6 L26 26 L6 26 Z' fill='%231B3A6B' fill-opacity='0.12' stroke='%231B3A6B' stroke-width='1.8' stroke-linejoin='round' opacity='0.8'/%3E%3C/svg%3E") 16 16, pointer !important;
+}
+.cursor-tri-down {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 26 L6 6 L26 6 Z' fill='%231B3A6B' fill-opacity='0.12' stroke='%231B3A6B' stroke-width='1.8' stroke-linejoin='round' opacity='0.8'/%3E%3C/svg%3E") 16 16, pointer !important;
+}
+.cursor-tri-left {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M6 16 L26 6 L26 26 Z' fill='%231B3A6B' fill-opacity='0.12' stroke='%231B3A6B' stroke-width='1.8' stroke-linejoin='round' opacity='0.8'/%3E%3C/svg%3E") 16 16, pointer !important;
+}
+.cursor-tri-right {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M26 16 L6 6 L6 26 Z' fill='%231B3A6B' fill-opacity='0.12' stroke='%231B3A6B' stroke-width='1.8' stroke-linejoin='round' opacity='0.8'/%3E%3C/svg%3E") 16 16, pointer !important;
+}
+
+/* White triangles — used on center nucleus */
+.cursor-tri-w-up {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 6 L26 26 L6 26 Z' fill='white' fill-opacity='0.25' stroke='white' stroke-width='1.8' stroke-linejoin='round' opacity='0.9'/%3E%3C/svg%3E") 16 16, pointer !important;
+}
+.cursor-tri-w-down {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 26 L6 6 L26 6 Z' fill='white' fill-opacity='0.25' stroke='white' stroke-width='1.8' stroke-linejoin='round' opacity='0.9'/%3E%3C/svg%3E") 16 16, pointer !important;
+}
+.cursor-tri-w-left {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M6 16 L26 6 L26 26 Z' fill='white' fill-opacity='0.25' stroke='white' stroke-width='1.8' stroke-linejoin='round' opacity='0.9'/%3E%3C/svg%3E") 16 16, pointer !important;
+}
+.cursor-tri-w-right {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M26 16 L6 6 L6 26 Z' fill='white' fill-opacity='0.25' stroke='white' stroke-width='1.8' stroke-linejoin='round' opacity='0.9'/%3E%3C/svg%3E") 16 16, pointer !important;
+}
+
+/* Resize (sliders) — dark-blue horizontal arrows in circle */
+.layout-root .cursor-ew-resize,
+.layout-root input[type="range"] {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%231B3A6B' stroke-width='1' opacity='0.4'/%3E%3Cpath d='M9 16 L12 13 L12 19 Z' fill='%231B3A6B' opacity='0.65'/%3E%3Cpath d='M23 16 L20 13 L20 19 Z' fill='%231B3A6B' opacity='0.65'/%3E%3C/svg%3E") 16 16, ew-resize;
+}
+
+/* Text input — dark-blue I-beam */
+.layout-root input[type="text"],
+.layout-root input[type="number"],
+.layout-root textarea,
+.layout-root [contenteditable="true"] {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='28' viewBox='0 0 20 28'%3E%3Cline x1='10' y1='4' x2='10' y2='24' stroke='%231B3A6B' stroke-width='1.4' opacity='0.7'/%3E%3Cline x1='7' y1='4' x2='13' y2='4' stroke='%231B3A6B' stroke-width='1' opacity='0.5'/%3E%3Cline x1='7' y1='24' x2='13' y2='24' stroke='%231B3A6B' stroke-width='1' opacity='0.5'/%3E%3C/svg%3E") 10 14, text;
+}
+
+/* Disabled — faded dark-blue */
+.layout-root [disabled],
+.layout-root .cursor-not-allowed {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='7' fill='none' stroke='%231B3A6B' stroke-width='1' opacity='0.25'/%3E%3Cline x1='8' y1='8' x2='16' y2='16' stroke='%231B3A6B' stroke-width='1' opacity='0.25'/%3E%3C/svg%3E") 12 12, not-allowed;
+}
+
+/* Smooth page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+
+/* Custom range slider thumb */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: white;
+  border: 2px solid rgba(0,0,0,0.15);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.3);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: white;
+  border: 2px solid rgba(0,0,0,0.15);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  cursor: pointer;
+}
+
+/* Stagger animation helpers */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fadeInSlow {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Landing — soft breathe to draw attention */
+@keyframes landingBreathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.015); }
+}
+.animate-landing-breathe {
+  animation: landingBreathe 2.5s ease-in-out infinite;
+}
+
+.animate-slide-up { animation: slideUp 0.7s ease-out both; }
+.animate-slide-in { animation: slideIn 0.5s ease-out both; }
+.animate-scale-in { animation: scaleIn 0.5s ease-out both; }
+.animate-fade-slow { animation: fadeInSlow 1.2s ease-out both; }
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.04) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-400 { animation-delay: 0.4s; }
+.delay-500 { animation-delay: 0.5s; }
+.delay-600 { animation-delay: 0.6s; }
+.delay-700 { animation-delay: 0.7s; }
+.delay-800 { animation-delay: 0.8s; }
+
+/* Smooth scrollbar for panels */
+.custom-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: #e5e5e5;
+  border-radius: 10px;
+}
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: #d4d4d4;
+}
+
+/* Button press effect */
+.btn-press:active {
+  transform: scale(0.97);
+  transition: transform 0.1s;
+}
+
+/* ── Panel slider: thermometer track + thumb ── */
+.panel-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: #ebebeb;
+  cursor: pointer;
+  outline: none;
+  position: relative;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.06);
+}
+.panel-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: transparent;
+}
+.panel-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #333;
+  border: 2.5px solid white;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.06);
+  cursor: grab;
+  margin-top: -4px;
+  transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s;
+  position: relative;
+  z-index: 2;
+}
+.panel-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.35), 0 0 0 1px rgba(0,0,0,0.08);
+}
+.panel-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.15);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,0,0,0.1);
+}
+.panel-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #ebebeb;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.06);
+}
+.panel-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #333;
+  border: 2.5px solid white;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.06);
+  cursor: grab;
+}
+.panel-slider::-moz-range-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(26, 26, 26, 0.2);
+}
+
+/* ── System label typography token ──
+   Used for small, uppercase instrumentation labels (e.g. DIAGNOSTIC).
+   Goal: darker, calm, highly legible, without added decoration. */
+.system-label {
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: rgba(60, 60, 70, 0.55);
+  color: rgba(20, 20, 20, 0.46);
+  transition: color 120ms ease, letter-spacing 120ms ease;
+}
+
+.system-label:hover,
+.system-label:focus-visible {
+  letter-spacing: 0.20em;
+}
+
+/* Optional, extremely subtle elemental tints */
+[data-zone="earth"] .system-label {
+  color: rgba(80, 70, 60, 0.6);
+}
+[data-zone="fire"] .system-label {
+  color: rgba(90, 55, 40, 0.6);
+}
+[data-zone="water"] .system-label {
+  color: rgba(50, 65, 80, 0.6);
+}
+[data-zone="air"] .system-label {
+  color: rgba(40, 45, 55, 0.6);
+}
+
+/* Slow ping for mic button */
+@keyframes ping-slow {
+  0% { transform: scale(1); opacity: 0.6; }
+  75%, 100% { transform: scale(1.8); opacity: 0; }
+}
+.animate-ping-slow {
+  animation: ping-slow 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Orbit diagram animations */
+@keyframes orbit-label-appear {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.orbit-label-appear {
+  animation: orbit-label-appear 0.3s ease-out both;
+}
+
+@keyframes bead-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+.bead-pulse {
+  animation: bead-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ripple-out {
+  from { transform: scale(1); opacity: 0.6; }
+  to { transform: scale(5); opacity: 0; }
+}
+.ripple-out {
+  animation: ripple-out 0.5s ease-out both;
+}
+
+/* Bead ring fade-in when element is selected */
+@keyframes beadRingIn {
+  from { opacity: 0; transform: scale(0.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-bead-ring-in {
+  animation: beadRingIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Bead appearance — calm, deliberate entrance */
+@keyframes beadEnter {
+  0%   { opacity: 0; transform: scale(0.3); }
+  50%  { opacity: 0.8; transform: scale(1.08); }
+  70%  { opacity: 1; transform: scale(0.97); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Bead exit — smooth fade out */
+@keyframes beadExit {
+  0%   { opacity: 1; transform: scale(1); }
+  30%  { opacity: 0.8; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(0.3); }
+}
+
+/* Original soft entrance */
+.diagram-bead-enter {
+  animation: beadEnter 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Rigid snap entrance — decisive, mechanical feel */
+@keyframes beadSnap {
+  0%   { opacity: 0; transform: scale(0.4) translateY(6px); }
+  60%  { opacity: 1; transform: scale(1.02) translateY(-1px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+.diagram-bead-snap {
+  animation: beadSnap 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+/* Smooth cross-fade for beads moving between states */
+@keyframes beadMorph {
+  0%   { opacity: 0.3; transform: scale(0.7); }
+  60%  { opacity: 1; transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.diagram-bead-morph {
+  animation: beadMorph 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* Ring hover pulse animation */
+@keyframes ringPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* ── Results View animations ── */
+@keyframes revealImage {
+  from { opacity: 0; transform: scale(1.03) translateY(8px); filter: blur(4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+}
+.animate-reveal-image {
+  animation: revealImage 1.6s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.04; }
+  50% { opacity: 0.08; }
+}
+.animate-pulse-glow {
+  animation: pulseGlow 3s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+.animate-breathe {
+  animation: breathe 2s ease-in-out infinite;
+}
+
+/* Hotspot breathing — subtle, organic pulsing */
+@keyframes hotspotBreathe {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.3);
+    opacity: 1;
+  }
+}
+
+/* ═══ Workspace sunrise entrance — nucleus rises like a sun ═══ */
+
+@keyframes nucleusSunrise {
+  0%   { opacity: 0; transform: scale(0.3) translateY(120px); filter: blur(12px) brightness(0.2); }
+  25%  { opacity: 0.4; transform: scale(0.6) translateY(60px); filter: blur(6px) brightness(0.6); }
+  50%  { opacity: 0.8; transform: scale(0.85) translateY(20px); filter: blur(2px) brightness(0.9); }
+  75%  { opacity: 0.95; transform: scale(1.04) translateY(-4px); filter: blur(0px) brightness(1.05); }
+  100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0px) brightness(1); }
+}
+
+@keyframes nucleusGlowPulse {
+  0%   { box-shadow: 0 0 0px rgba(100,160,255,0), 0 0 0px rgba(60,120,220,0); }
+  30%  { box-shadow: 0 0 60px rgba(100,160,255,0.15), 0 0 120px rgba(60,120,220,0.08); }
+  60%  { box-shadow: 0 0 40px rgba(100,160,255,0.25), 0 0 80px rgba(60,120,220,0.12); }
+  100% { box-shadow: 0 0 0px rgba(100,160,255,0), 0 0 0px rgba(60,120,220,0); }
+}
+
+@keyframes ringEmerge {
+  0%   { opacity: 0; transform: scale(0.4); filter: blur(8px); }
+  40%  { opacity: 0.3; transform: scale(0.7); filter: blur(4px); }
+  70%  { opacity: 0.8; transform: scale(1.06); filter: blur(0px); }
+  85%  { opacity: 0.95; transform: scale(0.98); filter: blur(0px); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0px); }
+}
+
+@keyframes ringBulge {
+  0%   { opacity: 0; transform: scale(0.2); filter: blur(10px); }
+  30%  { opacity: 0.2; transform: scale(0.5); filter: blur(6px); }
+  60%  { opacity: 0.7; transform: scale(1.08); filter: blur(1px); }
+  80%  { opacity: 0.9; transform: scale(0.96); filter: blur(0px); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0px); }
+}
+
+@keyframes sunriseGlow {
+  0%   { opacity: 0; r: 80; }
+  30%  { opacity: 0.3; }
+  60%  { opacity: 0.15; r: 400; }
+  100% { opacity: 0; r: 600; }
+}
+
+@keyframes nucleusBreathe {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.012); }
+  100% { transform: scale(1); }
+}
+
+@keyframes tutorialPulse {
+  0%   { transform: scale(1); opacity: 0.6; }
+  50%  { transform: scale(1.4); opacity: 0; }
+  51%  { transform: scale(1); opacity: 0; }
+  100% { transform: scale(1); opacity: 0.6; }
+}
+
+@keyframes clickHintBounce {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 0.8; }
+  15% { transform: translateY(-4px) scale(0.92); opacity: 1; }
+  30% { transform: translateY(0) scale(1); opacity: 0.8; }
+  50% { transform: translateY(0) scale(1); opacity: 0.5; }
+}
+
+@keyframes rotateHint {
+  0% { transform: rotate(0deg); opacity: 0.7; }
+  40% { transform: rotate(45deg); opacity: 0.9; }
+  70% { transform: rotate(-20deg); opacity: 0.7; }
+  100% { transform: rotate(0deg); opacity: 0.5; }
+}
+
+.nucleus-sunrise {
+  animation: nucleusSunrise 2s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.nucleus-breathe {
+  animation: nucleusBreathe 7s ease-in-out infinite;
+}
+
+.nucleus-glow-pulse {
+  animation: nucleusGlowPulse 2.5s ease-out both;
+  animation-delay: 0.3s;
+}
+
+.ring-emerge-1 {
+  animation: ringEmerge 1.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation-delay: 1.0s;
+}
+
+.ring-emerge-2 {
+  animation: ringBulge 1.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation-delay: 1.4s;
+}
+
+.ring-emerge-3 {
+  animation: ringBulge 1.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation-delay: 1.8s;
+}
+
+@keyframes ringGlowPulse {
+  0%   { opacity: 0; }
+  15%  { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.ring-glow-active {
+  animation: ringGlowPulse 3s ease-in-out both;
+}
+
+.workspace-content-reveal {
+  animation: fadeInUp 1s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation-delay: 2.4s;
+}

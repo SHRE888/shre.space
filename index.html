@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <script>
+      try {
+        document.documentElement.setAttribute('data-brilliant',
+          localStorage.getItem('shre-brilliant-mode') === 'true' ? 'true' : 'false');
+      } catch (e) {}
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SHRE - Four Element Energy System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400;1,500&family=IBM+Plex+Sans:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,300;1,400&family=IBM+Plex+Serif:ital,wght@0,300;0,400;0,500;1,300;1,400&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                bg: '#FDFDFD',
+                text: '#1a1a1a',
+                muted: '#71717A',
+                border: '#E4E4E7',
+                panel: '#FAFAFA'
+              }
+            },
+            fontFamily: {
+              sans: ['IBM Plex Sans', 'Helvetica', 'Arial', 'sans-serif'],
+              serif: ['IBM Plex Serif', 'Georgia', 'serif'],
+              mono: ['IBM Plex Mono', 'Menlo', 'monospace'],
+            },
+            spacing: {
+              'xs': '0.25rem',
+              'sm': '0.5rem',
+              'md': '1rem',
+              'lg': '1.5rem',
+              'xl': '2rem',
+              '2xl': '4rem',
+            },
+            animation: {
+              fadeIn: 'fadeIn 0.6s ease-out both',
+              'fade-in-up': 'fadeInUp 0.7s ease-out both',
+              'fade-in-down': 'fadeInDown 0.5s ease-out both',
+              'spin-slow': 'spin 10s linear infinite',
+              'pulse-slow': 'pulse 3s ease-in-out infinite',
+              'pulse-dot': 'pulseDot 2s ease-in-out infinite',
+              'float': 'float 6s ease-in-out infinite',
+              'glow': 'glow 2s ease-in-out infinite alternate',
+              'breathe': 'breathe 4s ease-in-out infinite',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              fadeInUp: {
+                '0%': { opacity: '0', transform: 'translateY(16px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              fadeInDown: {
+                '0%': { opacity: '0', transform: 'translateY(-8px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              pulseDot: {
+                '0%, 100%': { opacity: '1', transform: 'scale(1)' },
+                '50%': { opacity: '0.5', transform: 'scale(1.5)' },
+              },
+              float: {
+                '0%, 100%': { transform: 'translateY(0px)' },
+                '50%': { transform: 'translateY(-8px)' },
+              },
+              glow: {
+                '0%': { boxShadow: '0 0 5px rgba(16,185,129,0.2)' },
+                '100%': { boxShadow: '0 0 20px rgba(16,185,129,0.4)' },
+              },
+              breathe: {
+                '0%, 100%': { opacity: '0.4' },
+                '50%': { opacity: '1' },
+              },
+            },
+            transitionDuration: {
+              '400': '400ms',
+              '600': '600ms',
+              '800': '800ms',
+              '1200': '1200ms',
+            },
+            backdropBlur: {
+              'xs': '2px',
+              '3xl': '64px',
+            },
+          }
+        }
+      }
+    </script>
+    <style>
+      html, body {
+        font-family: 'IBM Plex Sans', sans-serif;
+        background-color: #ffffff;
+        color: #1a1a1a;
+        margin: 0;
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: #e5e5e5 transparent;
+      }
+      .hero-title {
+        font-size: clamp(2.6rem, 7vw, 5rem);
+        line-height: 0.95;
+        font-weight: 200;
+        letter-spacing: -0.02em;
+      }
+      .label-caption {
+        font-size: 0.65rem;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        font-weight: 500;
+      }
+      /* Smooth global transitions */
+      button, a {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      button:focus-visible {
+        outline: 2px solid rgba(0,0,0,0.15);
+        outline-offset: 2px;
+      }
+      /* Range input styling */
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        background: transparent;
+      }
+      input[type="range"]::-webkit-slider-runnable-track {
+        height: 6px;
+        background: transparent;
+        border-radius: 3px;
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: white;
+        border: 2px solid rgba(0,0,0,0.12);
+        box-shadow: 0 1px 6px rgba(0,0,0,0.12);
+        cursor: pointer;
+        margin-top: -5px;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      input[type="range"]::-webkit-slider-thumb:hover {
+        transform: scale(1.4);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: white;
+        border: 2px solid rgba(0,0,0,0.12);
+        box-shadow: 0 1px 6px rgba(0,0,0,0.12);
+        cursor: pointer;
+      }
+      /* Selection styling */
+      ::selection {
+        background: rgba(0,0,0,0.08);
+        color: inherit;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react/": "https://esm.sh/react@18.2.0/",
+    "react-dom": "https://esm.sh/react-dom@18.2.0",
+    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
+    "recharts": "https://esm.sh/recharts@2.12.0?external=react,react-dom",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.22.0?external=react,react-dom",
+    "lucide-react": "https://esm.sh/lucide-react@0.344.0?external=react"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
