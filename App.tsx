@@ -588,6 +588,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   const [directionPhotoPreview, setDirectionPhotoPreview] = useState<string | null>(null);
   const directionPhotoRef = React.useRef<HTMLInputElement>(null);
   const [selectedHistoryImage, setSelectedHistoryImage] = useState<string | null>(null);
+  const [budgetOpen, setBudgetOpen] = useState(false);
   const refinementFeedbackRef = React.useRef<string | null>(null);
 
   const displayedImageUrl = selectedHistoryImage ?? imageUrl;
@@ -731,6 +732,67 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
     }
     return null;
   }, [hoveredHotspot, hoveredBrand, activeHotspot]);
+
+  const budgetEstimate = React.useMemo(() => {
+    const area = state.params.squareMeters || 120;
+    const cat = state.params.category || 'Living / Residential';
+    const dom = state.params.domain || 'interior';
+
+    const BASE_RATES: Record<string, { low: number; mid: number; high: number }> = {
+      'Living / Residential': { low: 400, mid: 900, high: 2200 },
+      'Office / Commercial': { low: 350, mid: 800, high: 1800 },
+      'Restaurant / Cafe': { low: 500, mid: 1100, high: 2800 },
+      'Hotel / Hospitality': { low: 550, mid: 1200, high: 3200 },
+      'Retail / Showroom': { low: 450, mid: 1000, high: 2500 },
+      'Cultural / Public': { low: 600, mid: 1400, high: 3500 },
+    };
+    const rate = BASE_RATES[cat] || { low: 400, mid: 900, high: 2200 };
+
+    if (dom === 'architecture') {
+      rate.low *= 2.2;
+      rate.mid *= 2.2;
+      rate.high *= 2.2;
+    }
+
+    const MATERIAL_TIER: Record<string, number> = {
+      'Carrara Marble': 1.35, 'Travertine': 1.25, 'Terrazzo': 1.2, 'Venetian Plaster': 1.15,
+      'Brass': 1.3, 'Copper': 1.25, 'Bronze': 1.3, 'Blackened Steel': 1.15,
+      'Walnut': 1.1, 'Oak': 1.05, 'Teak': 1.2, 'Bamboo': 0.95,
+      'Linen': 0.95, 'Velvet': 1.15, 'Leather': 1.2, 'Wool': 1.1,
+      'Concrete': 0.9, 'Raw Concrete': 0.85, 'Microcement': 1.05,
+      'Glass': 1.1, 'Smoked Glass': 1.15, 'Frosted Glass': 1.1,
+    };
+    let matMultiplier = 1.0;
+    const matNames = dnaMaterials.map(m => m.name);
+    let tierCount = 0;
+    matNames.forEach(n => {
+      if (MATERIAL_TIER[n]) { matMultiplier += (MATERIAL_TIER[n] - 1); tierCount++; }
+    });
+    if (tierCount > 0) matMultiplier = 1 + (matMultiplier - 1) / Math.max(1, tierCount * 0.7);
+
+    const fireRatio = (dist.fire || 25) / 100;
+    const luxuryBias = 1 + fireRatio * 0.15;
+
+    const lowTotal = Math.round(area * rate.low * matMultiplier * luxuryBias);
+    const midTotal = Math.round(area * rate.mid * matMultiplier * luxuryBias);
+    const highTotal = Math.round(area * rate.high * matMultiplier * luxuryBias);
+
+    const breakdown = [
+      { label: 'Construction & Base', pct: dom === 'architecture' ? 40 : 25 },
+      { label: 'Materials & Finishes', pct: 30 },
+      { label: 'Furniture & Fixtures', pct: dom === 'architecture' ? 10 : 25 },
+      { label: 'Lighting & MEP', pct: 12 },
+      { label: 'Decor & Accessories', pct: dom === 'architecture' ? 3 : 8 },
+      { label: 'Design & Management', pct: dom === 'architecture' ? 5 : 0 },
+    ].filter(b => b.pct > 0).map(b => ({
+      ...b,
+      low: Math.round(lowTotal * b.pct / 100),
+      mid: Math.round(midTotal * b.pct / 100),
+      high: Math.round(highTotal * b.pct / 100),
+    }));
+
+    return { area, lowTotal, midTotal, highTotal, breakdown, matMultiplier, luxuryBias };
+  }, [state.params, dist, dnaMaterials]);
 
   // Simulated loading progress
   React.useEffect(() => {
@@ -1072,6 +1134,14 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   })()}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button onClick={() => setBudgetOpen(true)}
+                    className="px-2.5 py-0.5 border text-[8px] uppercase tracking-[0.2em] font-semibold rounded transition-all flex items-center gap-1"
+                    style={{ borderColor: `${domColor}30`, color: domColor, background: `${domColor}06` }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = `${domColor}60`; e.currentTarget.style.background = `${domColor}10`; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = `${domColor}30`; e.currentTarget.style.background = `${domColor}06`; }}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
+                    Budget
+                  </button>
                   <button onClick={() => window.print()}
                     className="px-2 py-0.5 border border-gray-200 text-[8px] uppercase tracking-[0.2em] font-medium text-gray-400 hover:border-gray-400 hover:text-gray-600 rounded transition-all bg-white/60">
                     Export
@@ -1678,6 +1748,124 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 </div>
               </div>
             )}
+          </div>
+        );
+      })()}
+
+      {/* ═══ BUDGET ESTIMATE OVERLAY ═══ */}
+      {budgetOpen && (() => {
+        const b = budgetEstimate;
+        const fmt = (n: number) => n >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}K` : `${n}`;
+        const fmtFull = (n: number) => new Intl.NumberFormat('en-US').format(n);
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-sm animate-fade-in"
+            onClick={() => setBudgetOpen(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-[520px] max-w-[92vw] max-h-[85vh] overflow-hidden animate-fade-in-up"
+              onClick={e => e.stopPropagation()} style={{ animationDuration: '0.3s' }}>
+
+              {/* Header */}
+              <div className="px-6 pt-5 pb-3 border-b border-gray-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${domColor}10`, border: `1px solid ${domColor}20` }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={domColor} strokeWidth="1.8" strokeLinecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
+                    </div>
+                    <div>
+                      <h3 className="text-[13px] font-semibold text-gray-800 tracking-wide">Budget Estimate</h3>
+                      <p className="text-[10px] text-gray-400 tracking-wide mt-0.5">{spaceType} · {domain} · {b.area}m²</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setBudgetOpen(false)}
+                    className="w-7 h-7 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors">
+                    <svg width="12" height="12" viewBox="0 0 12 12" stroke="#999" strokeWidth="1.5"><line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/></svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Range Summary */}
+              <div className="px-6 py-4 bg-gradient-to-b from-gray-50/50 to-white">
+                <div className="flex items-end justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-[9px] uppercase tracking-[0.2em] text-gray-400 font-medium mb-2">Estimated Range (USD)</p>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-[22px] font-light text-gray-800 tracking-tight">${fmt(b.lowTotal)}</span>
+                      <span className="text-[13px] text-gray-300 mx-1">—</span>
+                      <span className="text-[22px] font-light text-gray-800 tracking-tight">${fmt(b.highTotal)}</span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1">Mid estimate: <span className="font-semibold text-gray-600">${fmtFull(b.midTotal)}</span></p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 text-[9px] text-gray-400">
+                    <span>${fmtFull(Math.round(b.midTotal / b.area))}/m²</span>
+                    <div className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: domColor, opacity: 0.6 }} />
+                      <span>{dominant}-led</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Visual range bar */}
+                <div className="mt-3 h-2 rounded-full bg-gray-100 overflow-hidden relative">
+                  <div className="absolute inset-y-0 rounded-full transition-all duration-700" style={{
+                    left: '0%', right: '0%',
+                    background: `linear-gradient(90deg, ${ELEMENT_COLORS.earth}50, ${ELEMENT_COLORS.fire}60, ${ELEMENT_COLORS.water}50, ${ELEMENT_COLORS.air}50)`,
+                  }} />
+                  <div className="absolute inset-y-0 w-0.5 bg-gray-600/40 rounded" style={{ left: '50%' }} />
+                </div>
+                <div className="flex justify-between mt-1">
+                  <span className="text-[8px] text-gray-400 uppercase tracking-wider">Standard</span>
+                  <span className="text-[8px] text-gray-400 uppercase tracking-wider">Premium</span>
+                </div>
+              </div>
+
+              {/* Breakdown */}
+              <div className="px-6 py-3 overflow-y-auto" style={{ maxHeight: '260px' }}>
+                <p className="text-[9px] uppercase tracking-[0.2em] text-gray-400 font-medium mb-2.5">Cost Breakdown</p>
+                <div className="space-y-2">
+                  {b.breakdown.map((item, i) => {
+                    const barColors = [ELEMENT_COLORS.earth, ELEMENT_COLORS.fire, ELEMENT_COLORS.water, ELEMENT_COLORS.air, `${domColor}80`, `${domColor}60`];
+                    return (
+                      <div key={item.label}>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-[11px] text-gray-600 font-medium">{item.label}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-gray-400">${fmtFull(item.low)} – ${fmtFull(item.high)}</span>
+                            <span className="text-[9px] text-gray-300 font-mono">{item.pct}%</span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-gray-50 overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-700 ease-out"
+                            style={{ width: `${item.pct}%`, backgroundColor: barColors[i % barColors.length], opacity: 0.55 }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Material Impact */}
+              <div className="px-6 py-3 border-t border-gray-100">
+                <div className="flex items-center gap-4 text-[10px]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-400">Material tier:</span>
+                    <span className="font-semibold text-gray-600">{b.matMultiplier > 1.15 ? 'Premium' : b.matMultiplier > 1.05 ? 'Mid-High' : 'Standard'}</span>
+                    <span className="text-gray-300">(×{b.matMultiplier.toFixed(2)})</span>
+                  </div>
+                  <div className="w-px h-3 bg-gray-200" />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-gray-400">Energy factor:</span>
+                    <span className="font-semibold text-gray-600">×{b.luxuryBias.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Disclaimer */}
+              <div className="px-6 py-3 bg-gray-50/80 border-t border-gray-100">
+                <p className="text-[9px] text-gray-400 leading-relaxed">
+                  Approximate estimate based on space parameters, material selection, and elemental distribution.
+                  Actual costs may vary significantly based on location, labor, brand choices, and project complexity.
+                </p>
+              </div>
+            </div>
           </div>
         );
       })()}
