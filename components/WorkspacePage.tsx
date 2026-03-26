@@ -1838,7 +1838,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                       <input
                         type="text"
                         inputMode="numeric"
-                        pattern="[0-9]*"
+                        maxLength={3}
                         defaultValue={roundVal}
                         key={`${el}-${roundVal}`}
                         disabled={isLocked}
@@ -1848,22 +1848,28 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                           borderColor: isLocked ? '#eee' : `${ec}30`,
                           background: isLocked ? 'transparent' : `${ec}06`,
                         }}
-                        onFocus={(e) => { e.target.select(); if (!isLocked) { e.target.style.borderColor = ec; e.target.style.background = '#fff'; } }}
+                        onFocus={(e) => { e.target.select(); if (!isLocked) { e.target.style.borderColor = ec; e.target.style.background = '#fff'; e.target.style.boxShadow = `0 0 0 2px ${ec}15`; } }}
                         onBlur={(e) => {
                           e.target.style.borderColor = isLocked ? '#eee' : `${ec}30`;
                           e.target.style.background = isLocked ? 'transparent' : `${ec}06`;
+                          e.target.style.boxShadow = 'none';
                           const v = parseInt(e.target.value, 10);
-                          if (!isNaN(v) && v !== roundVal) handleDistributionChange(elType, Math.max(0, Math.min(100, v)));
+                          if (!isNaN(v) && v >= 0 && v <= 100 && v !== roundVal) handleDistributionChange(elType, v);
                           else e.target.value = String(roundVal);
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             const v = parseInt((e.target as HTMLInputElement).value, 10);
-                            if (!isNaN(v)) handleDistributionChange(elType, Math.max(0, Math.min(100, v)));
+                            if (!isNaN(v) && v >= 0 && v <= 100) handleDistributionChange(elType, v);
                             (e.target as HTMLInputElement).blur();
                           }
                           if (e.key === 'ArrowUp') { e.preventDefault(); handleDistributionChange(elType, Math.min(100, roundVal + 1)); }
                           if (e.key === 'ArrowDown') { e.preventDefault(); handleDistributionChange(elType, Math.max(0, roundVal - 1)); }
+                        }}
+                        onInput={(e) => {
+                          const input = e.target as HTMLInputElement;
+                          input.value = input.value.replace(/[^0-9]/g, '');
+                          if (input.value.length > 0 && parseInt(input.value, 10) > 100) input.value = '100';
                         }}
                       />
                       <span className="text-[10px]" style={{ color: `${ec}60` }}>%</span>

@@ -1202,7 +1202,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
         {/* ── MATERIAL DNA SIDEBAR ── */}
         <div className={`bg-white border-l border-gray-100/60 flex flex-col overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
-          sidebarOpen ? 'w-[340px]' : 'w-[44px]'
+          sidebarOpen ? 'w-[400px]' : 'w-[44px]'
         } ${isRevealed ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}
           style={{ transitionDelay: isRevealed ? '300ms' : '0ms' }}>
 
@@ -1215,7 +1215,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 <span className="text-white text-[11px] font-semibold">{dnaMaterials.length}</span>
               </div>
               <div className="flex flex-col items-center" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
-                <span className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-medium group-hover:text-gray-600 transition-colors">Material DNA</span>
+                <span className="text-[11px] uppercase tracking-[0.3em] text-gray-400 font-medium group-hover:text-gray-600 transition-colors">Material DNA</span>
               </div>
               <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round" className="mt-1 group-hover:stroke-gray-600 transition-colors">
                 <path d="M8 3 L5 6 L8 9" />
@@ -1229,7 +1229,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
               {/* ═══ HEADER — fixed ═══ */}
               <div className="flex-shrink-0 px-4 pt-3 pb-1.5 bg-white z-10 border-b border-gray-100/80">
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-medium">Material DNA</p>
+                  <p className="text-[12px] uppercase tracking-[0.25em] text-gray-400 font-medium">Material DNA</p>
                   <button onClick={() => setSidebarOpen(false)}
                     className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors">
                     <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round"><path d="M4 3 L7 6 L4 9" /></svg>
@@ -1348,7 +1348,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         const ec = ELEMENT_COLORS[el];
                         return (
                           <div key={el} className="flex items-center gap-1.5" style={{ opacity: isDom ? 1 : 0.65 }}>
-                            <span className="text-[8px] uppercase tracking-[0.1em] w-7 shrink-0 text-right" style={{ fontWeight: isDom ? 700 : 500, color: ec }}>{el.slice(0, 2)}</span>
+                            <span className="text-[10px] uppercase tracking-[0.1em] w-8 shrink-0 text-right" style={{ fontWeight: isDom ? 700 : 500, color: ec }}>{el.slice(0, 2)}</span>
                             <div className="flex-1 relative h-[14px] flex items-center cursor-ew-resize group">
                               <div className="absolute left-0 right-0 h-[4px] rounded-full" style={{ background: 'rgba(0,0,0,0.04)' }} />
                               <div className="absolute left-0 h-[4px] rounded-full transition-all duration-300"
@@ -1362,34 +1362,41 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                             <input
                               type="text"
                               inputMode="numeric"
-                              pattern="[0-9]*"
+                              maxLength={3}
                               defaultValue={val}
                               key={`${el}-${val}`}
-                              className="font-mono tabular-nums text-[10px] w-9 text-center shrink-0 rounded px-0.5 py-[1px] outline-none transition-all border"
+                              className="font-mono tabular-nums text-[11px] w-10 text-center shrink-0 rounded px-0.5 py-[2px] outline-none transition-all border"
                               style={{
                                 fontWeight: isDom ? 700 : 500,
-                                color: isDom ? ec : '#888',
-                                borderColor: `${ec}25`,
-                                background: `${ec}06`,
+                                color: isDom ? ec : '#666',
+                                borderColor: `${ec}30`,
+                                background: `${ec}08`,
                               }}
-                              onFocus={(e) => { e.target.select(); e.target.style.borderColor = ec; e.target.style.background = '#fff'; }}
+                              onFocus={(e) => { e.target.select(); e.target.style.borderColor = ec; e.target.style.background = '#fff'; e.target.style.boxShadow = `0 0 0 2px ${ec}15`; }}
                               onBlur={(e) => {
-                                e.target.style.borderColor = `${ec}25`;
-                                e.target.style.background = `${ec}06`;
+                                e.target.style.borderColor = `${ec}30`;
+                                e.target.style.background = `${ec}08`;
+                                e.target.style.boxShadow = 'none';
                                 const v = parseInt(e.target.value, 10);
-                                if (!isNaN(v) && v !== val) applyNewVal(el, v);
+                                if (!isNaN(v) && v >= 0 && v <= 100 && v !== val) applyNewVal(el, v);
                                 else e.target.value = String(val);
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                   const v = parseInt((e.target as HTMLInputElement).value, 10);
-                                  if (!isNaN(v)) applyNewVal(el, v);
+                                  if (!isNaN(v) && v >= 0 && v <= 100) applyNewVal(el, v);
                                   (e.target as HTMLInputElement).blur();
                                 }
-                                if (e.key === 'ArrowUp') { e.preventDefault(); applyNewVal(el, val + 1); }
-                                if (e.key === 'ArrowDown') { e.preventDefault(); applyNewVal(el, val - 1); }
+                                if (e.key === 'ArrowUp') { e.preventDefault(); applyNewVal(el, Math.min(100, val + 1)); }
+                                if (e.key === 'ArrowDown') { e.preventDefault(); applyNewVal(el, Math.max(0, val - 1)); }
+                              }}
+                              onInput={(e) => {
+                                const input = e.target as HTMLInputElement;
+                                input.value = input.value.replace(/[^0-9]/g, '');
+                                if (input.value.length > 0 && parseInt(input.value, 10) > 100) input.value = '100';
                               }}
                             />
+                            <span className="text-[9px] font-medium" style={{ color: `${ec}50` }}>%</span>
                           </div>
                         );
                       })}
@@ -1399,8 +1406,8 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
                 {materialsChanged && (
                   <div className="flex items-center gap-2 mt-1.5 px-2 py-1 rounded-md bg-amber-50/80 border border-amber-200/50 animate-fade-in">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                    <span className="text-[9px] text-amber-700 font-medium">Distribution changed</span>
+                    <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="text-[10px] text-amber-700 font-medium">Distribution changed</span>
                   </div>
                 )}
               </div>
@@ -1420,7 +1427,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         title={`${mat.name} — ${ELEMENT_DESCRIPTORS[mat.element]} · ${Math.round(dist[mat.element])}%`}>
                         <div className="relative">
                           <div className={`rounded-full overflow-hidden transition-all duration-500 bg-white ${isLinked ? 'shadow-md scale-105' : ''}`}
-                            style={{ width: '58px', height: '58px', border: `1.5px solid ${elColor}15` }}>
+                            style={{ width: '64px', height: '64px', border: `1.5px solid ${elColor}15` }}>
                             {sphereImg && !sphereImg.startsWith('https://placehold')
                               ? <img src={sphereImg} alt={mat.name}
                                   className="w-[130%] h-[130%] max-w-none object-cover transition-transform duration-500 group-hover:scale-110"
@@ -1437,7 +1444,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                             </button>
                           )}
                         </div>
-                        <span className="text-center leading-tight mt-0.5 w-full truncate text-[7px]" style={{ color: '#8899b3' }}>
+                        <span className="text-center leading-tight mt-1 w-full truncate text-[9px] font-medium" style={{ color: '#7a8da6' }}>
                           {mat.name.split('(')[0].trim()}
                         </span>
                       </div>
@@ -1446,10 +1453,10 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 </div>
                 {/* Add material button inside the grid area */}
                 <button onClick={() => setMaterialPickerOpen(!materialPickerOpen)}
-                  className={`w-full mt-1.5 py-1.5 border border-dashed rounded-md text-[9px] uppercase tracking-[0.2em] font-medium transition-all duration-300 flex items-center justify-center gap-1 ${
+                  className={`w-full mt-2 py-2 border border-dashed rounded-md text-[10px] uppercase tracking-[0.15em] font-medium transition-all duration-300 flex items-center justify-center gap-1.5 ${
                     materialPickerOpen ? 'border-gray-400 text-gray-600 bg-gray-50' : 'border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-600'
                   }`}>
-                  <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
                     className={`transition-transform duration-300 ${materialPickerOpen ? 'rotate-45' : ''}`}>
                     <line x1="6" y1="1" x2="6" y2="11" /><line x1="1" y1="6" x2="11" y2="6" />
                   </svg>
@@ -1460,7 +1467,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 {/* Material picker dropdown */}
                 {materialPickerOpen && (
                   <div className="px-3 pt-3 pb-2 border-b border-gray-100 animate-fade-in-up bg-gray-50/40" style={{ animationDuration: '0.2s' }}>
-                    <p className="text-[9px] uppercase tracking-[0.2em] text-gray-400 font-semibold mb-2.5">Available Materials</p>
+                    <p className="text-[11px] uppercase tracking-[0.15em] text-gray-400 font-semibold mb-2.5">Available Materials</p>
                     {(Object.entries(CANONICAL_MATERIALS) as [string, string[]][])
                       .filter(([key]) => key !== 'shared')
                       .map(([elKey, matNames]) => {
@@ -1497,13 +1504,13 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 {/* Atmosphere chips */}
                 {selectedAtmosphere.length > 0 && (
                   <div className="px-3 pt-2 pb-1.5">
-                    <p className="text-[8px] uppercase tracking-[0.25em] text-gray-400 font-medium mb-1.5">Atmosphere</p>
-                    <div className="flex flex-wrap gap-1">
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400 font-medium mb-1.5">Atmosphere</p>
+                    <div className="flex flex-wrap gap-1.5">
                       {selectedAtmosphere.slice(0, 6).map((adj, i) => {
                         const ec = ELEMENT_COLORS[adj.element];
                         return (
                           <span key={`${adj.label}-${i}`}
-                            className="px-2 py-0.5 rounded-full text-[8px] tracking-[0.06em] font-light border"
+                            className="px-2.5 py-1 rounded-full text-[10px] tracking-[0.04em] font-normal border"
                             style={{ background: `${ec}08`, color: ec, borderColor: `${ec}18` }}>
                             {adj.label}
                           </span>
@@ -1515,7 +1522,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
                 {/* Palette quick-select */}
                 <div className="px-3 pt-1.5 pb-1.5 border-t border-gray-50/60">
-                  <p className="text-[8px] uppercase tracking-[0.25em] text-gray-400 font-medium mb-1">Palette</p>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400 font-medium mb-1.5">Palette</p>
                   <div className="flex flex-wrap gap-1">
                     {(() => {
                       const ELEMENT_PALETTES_GEN: Record<string, { id: string; label: string; colors: string[] }[]> = {
@@ -1552,11 +1559,11 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                               setState(prev => ({ ...prev, params: { ...prev.params, colorPalette: p.id as any } }));
                               setMaterialsChanged(true);
                             }}
-                            className={`flex items-center gap-1 px-1.5 py-[3px] rounded text-[8px] tracking-[0.03em] transition-all duration-200 border active:scale-95 ${
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] tracking-[0.02em] transition-all duration-200 border active:scale-95 ${
                               active ? 'border-gray-500 text-gray-700 bg-gray-50 font-semibold shadow-sm' : 'border-gray-100 text-gray-400 hover:border-gray-300 hover:text-gray-600'
                             }`}>
-                            <div className="flex gap-px">
-                              {p.colors.map((c, ci) => <div key={ci} className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />)}
+                            <div className="flex gap-0.5">
+                              {p.colors.map((c, ci) => <div key={ci} className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />)}
                             </div>
                             {p.label}
                           </button>
@@ -1568,7 +1575,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
                 {/* Direction bullets */}
                 <div className="px-3 pt-1.5 pb-2 border-t border-gray-50/60">
-                  <p className="text-[8px] uppercase tracking-[0.2em] text-gray-400 font-medium mb-1">Direction</p>
+                  <p className="text-[10px] uppercase tracking-[0.15em] text-gray-400 font-medium mb-1.5">Direction</p>
                   <div className="flex flex-wrap gap-1 mb-1.5">
                     {[
                       { label: 'Warmer', icon: '◐' },
@@ -1597,7 +1604,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                             setSelectedHistoryImage(null);
                             setMaterialsChanged(true);
                           }}
-                          className={`px-1.5 py-[2px] rounded text-[8px] tracking-[0.03em] border transition-all duration-200 active:scale-95 ${
+                          className={`px-2 py-1 rounded text-[10px] tracking-[0.02em] border transition-all duration-200 active:scale-95 ${
                             isDirectionActive
                               ? 'border-gray-600 text-gray-800 bg-gray-50 font-semibold shadow-sm'
                               : 'border-gray-100 text-gray-400 hover:border-gray-300 hover:text-gray-600'
@@ -1625,7 +1632,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         }
                       }}
                       placeholder={displayedImageUrl ? "e.g. change sofa design..." : "Custom direction..."}
-                      className="flex-1 px-2 py-1 border border-gray-100 rounded text-[10px] placeholder:text-gray-300 focus:outline-none focus:border-gray-300 transition-colors" />
+                      className="flex-1 px-2.5 py-1.5 border border-gray-100 rounded text-[11px] placeholder:text-gray-300 focus:outline-none focus:border-gray-300 transition-colors" />
                     <input ref={directionPhotoRef} type="file" accept="image/*" className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
@@ -1659,7 +1666,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         }}
                         disabled={!refinementInput.trim()}
                         title="Edit only the specified element on the current render (Shift+Enter)"
-                        className="px-2 py-1 border text-[8px] uppercase tracking-[0.1em] font-semibold rounded transition-all active:scale-[0.97] disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="px-2.5 py-1.5 border text-[10px] uppercase tracking-[0.08em] font-semibold rounded transition-all active:scale-[0.97] disabled:opacity-30 disabled:cursor-not-allowed"
                         style={{ borderColor: `${domColor}40`, color: domColor, background: `${domColor}06` }}>
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline -mt-px mr-0.5">
                           <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
@@ -1668,12 +1675,12 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                       </button>
                     )}
                     <button onClick={handleRefineSubmit} disabled={!refinementInput.trim()}
-                      className="px-2 py-1 border border-gray-200 text-[8px] uppercase tracking-[0.15em] font-semibold text-gray-500 hover:border-black hover:text-black disabled:opacity-40 disabled:cursor-not-allowed rounded transition-all active:scale-[0.97]">
+                      className="px-2.5 py-1.5 border border-gray-200 text-[10px] uppercase tracking-[0.12em] font-semibold text-gray-500 hover:border-black hover:text-black disabled:opacity-40 disabled:cursor-not-allowed rounded transition-all active:scale-[0.97]">
                       Apply
                     </button>
                   </div>
                   {displayedImageUrl && (
-                    <p className="text-[8px] text-gray-300 mt-0.5 leading-tight">
+                    <p className="text-[9px] text-gray-300 mt-1 leading-tight">
                       <span style={{ color: `${domColor}80` }}>Edit</span> = modify only specified element · <span className="text-gray-400">Apply</span> = full regeneration
                     </p>
                   )}
@@ -1685,12 +1692,12 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         className="text-[9px] text-gray-300 hover:text-red-400 transition-colors">&times;</button>
                     </div>
                   )}
-                  {refinementMessage && <p className="text-[9px] text-gray-500 font-light mt-1 italic leading-snug">{refinementMessage}</p>}
+                  {refinementMessage && <p className="text-[10px] text-gray-500 font-light mt-1.5 italic leading-snug">{refinementMessage}</p>}
                   {savedDirection && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <span className="text-[8px] text-gray-400">{targetedEditMode ? 'Edit:' : 'Active:'}</span>
-                      <span className="text-[8px] font-medium text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{savedDirection}</span>
-                      <button onClick={() => { setSavedDirection(null); refinementFeedbackRef.current = null; setTargetedEditMode(false); setTargetedEditText(null); }} className="text-[8px] text-gray-300 hover:text-gray-600 ml-0.5">&times;</button>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <span className="text-[9px] text-gray-400 font-medium">{targetedEditMode ? 'Edit:' : 'Active:'}</span>
+                      <span className="text-[9px] font-medium text-gray-600 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">{savedDirection}</span>
+                      <button onClick={() => { setSavedDirection(null); refinementFeedbackRef.current = null; setTargetedEditMode(false); setTargetedEditText(null); }} className="text-[9px] text-gray-300 hover:text-gray-600 ml-0.5">&times;</button>
                     </div>
                   )}
                 </div>
@@ -1700,7 +1707,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
               <div className={`flex-shrink-0 px-3 py-2 border-t space-y-1.5 transition-all duration-300 ${materialsChanged ? 'border-amber-200/60 bg-amber-50/30' : 'border-gray-100/60 bg-white'}`}>
                 {materialsChanged && (
                   <button onClick={() => { chime(); setMaterialsChanged(false); setMaterialPickerOpen(false); setSelectedHistoryImage(null); setLoading(true); setPhase('generating'); setLoadProgress(0); setImageLoaded(false); setImageUrl(null); setGenerationKey(k => k + 1); }}
-                    className="w-full py-2.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-lg text-[10px] uppercase tracking-[0.3em] font-semibold transition-all active:scale-[0.97] shadow-lg hover:shadow-xl flex items-center justify-center gap-2 relative overflow-hidden">
+                    className="w-full py-3 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-lg text-[11px] uppercase tracking-[0.25em] font-semibold transition-all active:scale-[0.97] shadow-lg hover:shadow-xl flex items-center justify-center gap-2 relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-transparent animate-pulse" />
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="relative z-10">
                       <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
@@ -1709,7 +1716,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   </button>
                 )}
                 <button onClick={() => { whoosh(); navigate('/core'); }}
-                  className="w-full py-1.5 border border-gray-200 text-[9px] uppercase tracking-[0.25em] font-medium text-gray-400 hover:border-black hover:text-black rounded-md transition-all active:scale-[0.97]">
+                  className="w-full py-2 border border-gray-200 text-[10px] uppercase tracking-[0.2em] font-medium text-gray-400 hover:border-black hover:text-black rounded-md transition-all active:scale-[0.97]">
                   Refine & Regenerate
                 </button>
               </div>

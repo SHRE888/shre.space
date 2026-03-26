@@ -1495,12 +1495,9 @@ export const buildTargetedEditPrompt = (
     air: 'white corian, matte anodized aluminum, translucent onyx, dichroic glass panels, ultra-thin porcelain slabs, titanium finish',
   };
 
-  const lines: string[] = [
-    `EDIT THIS IMAGE. Change ONLY what I describe below. Keep EVERYTHING ELSE identical.`,
-    ``,
-    `WHAT TO CHANGE: "${userInstruction}"`,
-    ``,
-    `DO NOT CHANGE (keep pixel-identical):`,
+  const isArch = domain.toLowerCase().includes('arch') || domain.toLowerCase().includes('exterior');
+
+  const preserveInterior = [
     `✗ Camera angle, perspective, framing`,
     `✗ Room shape, walls, floor, ceiling`,
     `✗ Wall color/texture/material`,
@@ -1510,12 +1507,37 @@ export const buildTargetedEditPrompt = (
     `✗ Lighting direction, color temperature, shadows`,
     `✗ Decorative objects (plants, books, vases, art)`,
     `✗ Background, exterior view through windows`,
+  ];
+
+  const preserveArchitecture = [
+    `✗ Camera angle, perspective, framing`,
+    `✗ Building overall form, massing, proportions`,
+    `✗ Structural elements (columns, beams, cantilevers)`,
+    `✗ Roof shape, roofline, eaves`,
+    `✗ Site context, landscaping, terrain`,
+    `✗ Window/door positions NOT mentioned above`,
+    `✗ Sky, weather, time of day lighting`,
+    `✗ Any facade elements NOT mentioned above`,
+    `✗ Surrounding buildings, street, context`,
+    `✗ Shadow direction and ambient light`,
+  ];
+
+  const lines: string[] = [
+    `EDIT THIS IMAGE. Change ONLY what I describe below. Keep EVERYTHING ELSE identical.`,
+    ``,
+    `DOMAIN: ${isArch ? 'ARCHITECTURE / EXTERIOR' : 'INTERIOR DESIGN'}`,
+    `SPACE: ${spaceCategory}`,
+    ``,
+    `WHAT TO CHANGE: "${userInstruction}"`,
+    ``,
+    `DO NOT CHANGE (keep pixel-identical):`,
+    ...(isArch ? preserveArchitecture : preserveInterior),
     ``,
     `STYLE FOR THE NEW ELEMENT:`,
     `The replacement must match ${dominant.toUpperCase()}-dominant aesthetic (${domPct}%):`,
     `${ELEMENT_AESTHETIC[dominant]}`,
     ``,
-    `Furniture reference: ${ELEMENT_FURNITURE_STYLE[dominant]}`,
+    isArch ? `Architectural language: ${ELEMENT_MATERIAL_STYLE[dominant]}` : `Furniture reference: ${ELEMENT_FURNITURE_STYLE[dominant]}`,
     `Material reference: ${ELEMENT_MATERIAL_STYLE[dominant]}`,
     adjList ? `Mood: ${adjList}` : '',
     ``,
@@ -1523,8 +1545,9 @@ export const buildTargetedEditPrompt = (
     `- Same position and approximate size as the original element`,
     `- Correct perspective matching the existing vanishing points`,
     `- Shadows consistent with the existing light source direction`,
-    `- Photorealistic material quality (real textures, not CG)`,
+    `- Photorealistic ${isArch ? 'architectural' : 'material'} quality (real textures, not CG)`,
     `- The edit must be seamless and invisible`,
+    isArch ? `- Maintain buildable, structurally plausible architecture` : '',
   ].filter(Boolean);
 
   return lines.join('\n');
