@@ -36,7 +36,12 @@ const getClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-export const generateImageFromPrompt = async (prompt: string, referenceImage?: File, aspectRatio?: string): Promise<string> => {
+export const generateImageFromPrompt = async (
+  prompt: string,
+  referenceImage?: File,
+  aspectRatio?: string,
+  targetedEditInstruction?: string,
+): Promise<string> => {
   const ai = getClient();
   
   try {
@@ -63,7 +68,16 @@ export const generateImageFromPrompt = async (prompt: string, referenceImage?: F
       },
     };
 
-    if (imagePart) {
+    if (imagePart && targetedEditInstruction) {
+        response = await ai.models.generateContent({
+            model: IMAGE_MODEL,
+            contents: [
+                imagePart,
+                { text: targetedEditInstruction }
+            ],
+            config,
+        });
+    } else if (imagePart) {
         response = await ai.models.generateContent({
             model: IMAGE_MODEL,
             contents: [
@@ -98,6 +112,12 @@ export const generateImageFromPrompt = async (prompt: string, referenceImage?: F
     }
     throw error;
   }
+};
+
+export const dataUrlToFile = async (dataUrl: string, filename: string = 'current-render.png'): Promise<File> => {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return new File([blob], filename, { type: blob.type || 'image/png' });
 };
 
 async function fileToGenerativePart(file: File): Promise<string> {

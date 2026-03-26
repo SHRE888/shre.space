@@ -1437,6 +1437,53 @@ export const buildArtifactPrompt = (distribution: Vector4, materials: MaterialDe
   return parts.join(" ");
 };
 
+export const buildTargetedEditPrompt = (
+  userInstruction: string,
+  dominant: Element,
+  dist: Record<Element, number>,
+  materials: { name: string; element: Element }[],
+  adjectives: { label: string; element: Element }[],
+  domain: string,
+  spaceCategory: string,
+): string => {
+  const domPct = Math.round(dist[dominant]);
+  const sorted = (['earth', 'fire', 'water', 'air'] as Element[]).sort((a, b) => dist[b] - dist[a]);
+  const secondary = sorted[1] || dominant;
+  const secPct = Math.round(dist[secondary]);
+
+  const ELEMENT_AESTHETIC: Record<Element, string> = {
+    earth: 'warm organic tones, natural materials (wood, stone, linen, clay), wabi-sabi imperfection, golden warm lighting, layered textures, handcrafted character',
+    fire: 'dramatic warmth, oxidized metals (copper, brass, corten), dark marble, focused light beams, deep shadows, bold contrasts, rich jewel tones',
+    water: 'cool fluid serenity, polished reflective surfaces, curved forms, glass, microcement, atmospheric calm, blue-grey-silver tones',
+    air: 'ethereal lightness, translucent materials, maximum daylight, metallic silver, clean minimal forms, futuristic elegance, cool white-grey palette',
+  };
+
+  const matList = materials.slice(0, 5).map(m => m.name).join(', ');
+  const adjList = adjectives.slice(0, 3).map(a => a.label).join(', ');
+
+  const lines: string[] = [
+    `CRITICAL INSTRUCTION: This is a TARGETED EDIT of an existing architectural render. You MUST preserve the ENTIRE image exactly as it is — same room layout, same camera angle, same lighting setup, same color palette, same furniture placement, same materials on walls/floors/ceiling, same decorative objects — EXCEPT for the ONE specific change requested below.`,
+    ``,
+    `USER'S EDIT REQUEST: "${userInstruction}"`,
+    ``,
+    `RULES FOR TARGETED EDITING:`,
+    `1. ONLY modify what the user explicitly asked to change. Everything else must remain PIXEL-IDENTICAL to the original image.`,
+    `2. The replacement/modification must match the existing design language: ${dominant.toUpperCase()}-dominant (${domPct}%) with ${secondary.toUpperCase()} secondary (${secPct}%).`,
+    `3. Aesthetic to maintain: ${ELEMENT_AESTHETIC[dominant]}`,
+    adjList ? `4. Active mood keywords: ${adjList}` : `4. Maintain the existing atmospheric mood.`,
+    matList ? `5. Active materials in the space: ${matList}. New/modified elements should harmonize with these.` : '',
+    `6. Domain: ${domain}. Space: ${spaceCategory}.`,
+    `7. The modified element must feel like it BELONGS in this space — same quality level, same design era, same brand tier.`,
+    `8. If changing furniture: use recognizable designer silhouettes (B&B Italia, Minotti, Poliform, Cassina, Vitra tier). The piece must respect the ${dominant} element aesthetic.`,
+    `9. If changing a material/finish: keep the same application area and boundaries, only change the surface treatment.`,
+    `10. If changing lighting: maintain the same fixture positions, only alter the fixture design or light quality.`,
+    ``,
+    `QUALITY: Photorealistic editorial architectural photograph at maximum quality. The edit must be seamless — the viewer should not be able to tell which element was changed.`,
+  ].filter(Boolean);
+
+  return lines.join('\n');
+};
+
 export interface PromptOptions {
   generationIndex?: number;
   refinementFeedback?: string;

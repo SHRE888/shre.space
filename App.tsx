@@ -7,8 +7,8 @@ import { AboutPage } from './components/AboutPage';
 import { SpaceGuide } from './components/SpaceGuide';
 import { UserState, Element, MaterialDef, GenerationHistoryEntry } from './types';
 import { loadState, saveState, clearState } from './services/storageService';
-import { calculateAnalysis, buildUniversalPrompt } from './services/promptEngine';
-import { generateImageFromPrompt } from './services/geminiService';
+import { calculateAnalysis, buildUniversalPrompt, buildTargetedEditPrompt } from './services/promptEngine';
+import { generateImageFromPrompt, dataUrlToFile } from './services/geminiService';
 import { interpretRefinementFeedback } from './services/refinementFeedback';
 import { getInitialSelection, getSelectionFromPercentages } from './services/refinementLogic';
 import { SHORT_QUESTIONS, ELEMENT_COLORS, CANONICAL_MATERIALS, MATERIAL_SPHERE_IMAGES, generateSurveyQuestions } from './constants';
@@ -589,6 +589,8 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   const directionPhotoRef = React.useRef<HTMLInputElement>(null);
   const [selectedHistoryImage, setSelectedHistoryImage] = useState<string | null>(null);
   const [budgetOpen, setBudgetOpen] = useState(false);
+  const [targetedEditMode, setTargetedEditMode] = useState(false);
+  const [targetedEditText, setTargetedEditText] = useState<string | null>(null);
   const refinementFeedbackRef = React.useRef<string | null>(null);
 
   const displayedImageUrl = selectedHistoryImage ?? imageUrl;
@@ -870,20 +872,45 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
         setRefinementMessage(null);
         const feedback = refinementFeedbackRef.current ?? savedDirection;
         refinementFeedbackRef.current = null;
-        const result = buildUniversalPrompt(state, {
-          generationIndex: generationKey,
-          refinementFeedback: feedback || undefined,
-        });
-        setStory(result.promptStory);
 
-        const imgUrl = await generateImageFromPrompt(result.imagePrompt, directionPhoto || undefined, result.aspectRatio);
-        if (!cancelled) {
-          finishGeneration(imgUrl);
+        const isTargeted = targetedEditMode && targetedEditText && displayedImageUrl;
+
+        if (isTargeted && displayedImageUrl) {
+          const currentDist = state.refinement.refinedPercentages || state.analysis?.percentages || { earth: 25, fire: 25, water: 25, air: 25 };
+          const sortedEls = (['earth', 'fire', 'water', 'air'] as Element[]).sort((a, b) => currentDist[b] - currentDist[a]);
+          const dom = sortedEls[0];
+          const mats = (state.refinement.selectedMaterials || []).map(m => ({ name: m.name, element: m.element }));
+          const adjs = (state.refinement.selectedAdjectives || []).map(a => ({ label: a.label, element: a.element }));
+          const editPrompt = buildTargetedEditPrompt(
+            targetedEditText!,
+            dom,
+            currentDist,
+            mats,
+            adjs,
+            state.params.domain || 'interior',
+            state.params.category || 'Living / Residential',
+          );
+          setStory(`Edit: ${targetedEditText}`);
+          const renderFile = await dataUrlToFile(displayedImageUrl);
+          const imgUrl = await generateImageFromPrompt('', renderFile, '16:9', editPrompt);
+          setTargetedEditMode(false);
+          setTargetedEditText(null);
+          if (!cancelled) finishGeneration(imgUrl);
+        } else {
+          const result = buildUniversalPrompt(state, {
+            generationIndex: generationKey,
+            refinementFeedback: feedback || undefined,
+          });
+          setStory(result.promptStory);
+          const imgUrl = await generateImageFromPrompt(result.imagePrompt, directionPhoto || undefined, result.aspectRatio);
+          if (!cancelled) finishGeneration(imgUrl);
         }
       } catch (err: any) {
         if (cancelled) return;
         console.error('Generation error:', err);
         setLoading(false);
+        setTargetedEditMode(false);
+        setTargetedEditText(null);
         setGenError(err?.message || 'Image generation failed. Check your API key and network connection.');
       }
     };
@@ -1529,8 +1556,22 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   </div>
                   <div className="flex gap-1.5">
                     <input type="text" value={refinementInput} onChange={(e) => setRefinementInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleRefineSubmit()}
-                      placeholder="Custom direction..."
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && e.shiftKey && refinementInput.trim() && displayedImageUrl) {
+                          e.preventDefault();
+                          chime();
+                          setTargetedEditText(refinementInput.trim());
+                          setTargetedEditMode(true);
+                          setSavedDirection(refinementInput.trim());
+                          setRefinementMessage(`Targeted edit: "${refinementInput.trim()}" — will modify only the specified element.`);
+                          setRefinementInput('');
+                          setSelectedHistoryImage(null);
+                          setLoading(true); setPhase('generating'); setLoadProgress(0); setImageLoaded(false); setGenerationKey(k => k + 1);
+                        } else if (e.key === 'Enter') {
+                          handleRefineSubmit();
+                        }
+                      }}
+                      placeholder={displayedImageUrl ? "e.g. change sofa design..." : "Custom direction..."}
                       className="flex-1 px-2 py-1 border border-gray-100 rounded text-[10px] placeholder:text-gray-300 focus:outline-none focus:border-gray-300 transition-colors" />
                     <input ref={directionPhotoRef} type="file" accept="image/*" className="hidden"
                       onChange={(e) => {
@@ -1550,11 +1591,39 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
                       </svg>
                     </button>
+                    {displayedImageUrl && (
+                      <button
+                        onClick={() => {
+                          if (!refinementInput.trim()) return;
+                          chime();
+                          setTargetedEditText(refinementInput.trim());
+                          setTargetedEditMode(true);
+                          setSavedDirection(refinementInput.trim());
+                          setRefinementMessage(`Targeted edit: "${refinementInput.trim()}"`);
+                          setRefinementInput('');
+                          setSelectedHistoryImage(null);
+                          setLoading(true); setPhase('generating'); setLoadProgress(0); setImageLoaded(false); setGenerationKey(k => k + 1);
+                        }}
+                        disabled={!refinementInput.trim()}
+                        title="Edit only the specified element on the current render (Shift+Enter)"
+                        className="px-2 py-1 border text-[8px] uppercase tracking-[0.1em] font-semibold rounded transition-all active:scale-[0.97] disabled:opacity-30 disabled:cursor-not-allowed"
+                        style={{ borderColor: `${domColor}40`, color: domColor, background: `${domColor}06` }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline -mt-px mr-0.5">
+                          <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                        </svg>
+                        Edit
+                      </button>
+                    )}
                     <button onClick={handleRefineSubmit} disabled={!refinementInput.trim()}
                       className="px-2 py-1 border border-gray-200 text-[8px] uppercase tracking-[0.15em] font-semibold text-gray-500 hover:border-black hover:text-black disabled:opacity-40 disabled:cursor-not-allowed rounded transition-all active:scale-[0.97]">
                       Apply
                     </button>
                   </div>
+                  {displayedImageUrl && (
+                    <p className="text-[8px] text-gray-300 mt-0.5 leading-tight">
+                      <span style={{ color: `${domColor}80` }}>Edit</span> = modify only specified element · <span className="text-gray-400">Apply</span> = full regeneration
+                    </p>
+                  )}
                   {directionPhotoPreview && (
                     <div className="flex items-center gap-2 mt-1.5">
                       <img src={directionPhotoPreview} alt="Reference" className="w-10 h-7 object-cover rounded border border-gray-200" />
@@ -1566,9 +1635,9 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   {refinementMessage && <p className="text-[9px] text-gray-500 font-light mt-1 italic leading-snug">{refinementMessage}</p>}
                   {savedDirection && (
                     <div className="flex items-center gap-1 mt-1">
-                      <span className="text-[8px] text-gray-400">Active:</span>
+                      <span className="text-[8px] text-gray-400">{targetedEditMode ? 'Edit:' : 'Active:'}</span>
                       <span className="text-[8px] font-medium text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">{savedDirection}</span>
-                      <button onClick={() => { setSavedDirection(null); refinementFeedbackRef.current = null; }} className="text-[8px] text-gray-300 hover:text-gray-600 ml-0.5">&times;</button>
+                      <button onClick={() => { setSavedDirection(null); refinementFeedbackRef.current = null; setTargetedEditMode(false); setTargetedEditText(null); }} className="text-[8px] text-gray-300 hover:text-gray-600 ml-0.5">&times;</button>
                     </div>
                   )}
                 </div>
