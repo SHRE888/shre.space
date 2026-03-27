@@ -12,7 +12,7 @@ export const Button: React.FC<ButtonProps> = ({
   className = '', 
   ...props 
 }) => {
-  const baseStyles = "px-8 py-3.5 text-[16px] uppercase tracking-[0.4em] font-medium transition-all duration-300 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed rounded-lg active:scale-[0.97]";
+  const baseStyles = "px-5 sm:px-8 py-3 sm:py-3.5 text-[14px] sm:text-[16px] uppercase tracking-[0.2em] sm:tracking-[0.4em] font-medium transition-all duration-300 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed rounded-lg active:scale-[0.97] touch-target-auto";
   
   const variants = {
     primary: "border border-gray-200 hover:border-black hover:bg-black hover:text-white text-gray-600 shadow-sm hover:shadow-md",

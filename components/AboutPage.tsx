@@ -21,15 +21,15 @@ export const AboutPage = () => {
   const fade = `transition-all duration-[900ms] ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`;
 
   return (
-    <div className="min-h-[calc(100vh-92px)] bg-[#fdfdfd] overflow-y-auto custom-scroll">
-      <div className="max-w-[600px] mx-auto px-6 sm:px-8 pt-16 sm:pt-24 pb-20">
+    <div className="min-h-[calc(100vh-92px)] min-h-[calc(100dvh-92px)] bg-[#fdfdfd] overflow-y-auto custom-scroll">
+      <div className="max-w-[600px] mx-auto px-4 sm:px-6 md:px-8 pt-10 sm:pt-16 md:pt-24 pb-16 sm:pb-20">
 
         {/* ── Origin ── */}
         <header className={`mb-16 ${fade}`}>
           <p className="text-[13px] uppercase tracking-[0.5em] text-gray-300 font-medium mb-8">
             SHRE Studio · Platform Engine
           </p>
-          <h1 className="text-[33px] sm:text-[48px] font-extralight tracking-[-0.01em] text-black leading-[1.3] mb-5">
+          <h1 className="text-[28px] sm:text-[33px] md:text-[48px] font-extralight tracking-[-0.01em] text-black leading-[1.3] mb-5">
             Four Element<br />Spatial System
           </h1>
           <div className="w-6 h-px bg-gray-200 mb-5" />
@@ -71,7 +71,7 @@ export const AboutPage = () => {
               <div key={el.key} className="px-3.5 py-3.5 border border-gray-100/80 rounded-lg hover:border-gray-200 transition-colors">
                 <div className="w-2 h-2 rounded-full mb-2.5 opacity-75" style={{ backgroundColor: el.color }} />
                 <p className="text-[13px] uppercase tracking-[0.3em] text-black font-medium mb-1">{el.label}</p>
-                <p className="text-[16px] leading-[1.55] text-gray-400 font-light">{el.desc}</p>
+                <p className="text-[13px] sm:text-[16px] leading-[1.55] text-gray-400 font-light">{el.desc}</p>
               </div>
             ))}
           </div>

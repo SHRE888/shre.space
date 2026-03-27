@@ -298,20 +298,20 @@ export const DeepDiveDrawer: React.FC<DeepDiveDrawerProps> = ({
       `}</style>
 
       {/* Header */}
-      <div className="h-12 border-b border-gray-100 bg-white/90 backdrop-blur-xl px-4 sm:px-8 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-6 h-6 rounded-full bg-black flex items-center justify-center">
+      <div className="h-12 border-b border-gray-100 bg-white/90 backdrop-blur-xl px-3 sm:px-8 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="w-6 h-6 rounded-full bg-black flex items-center justify-center shrink-0">
             <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
               <circle cx="8" cy="8" r="3" /><line x1="8" y1="1" x2="8" y2="4" /><line x1="8" y1="12" x2="8" y2="15" /><line x1="1" y1="8" x2="4" y2="8" /><line x1="12" y1="8" x2="15" y2="8" />
             </svg>
           </div>
-          <h2 className="text-[13px] uppercase tracking-[0.35em] font-semibold text-black">Deep Dive</h2>
+          <h2 className="text-[12px] sm:text-[13px] uppercase tracking-[0.2em] sm:tracking-[0.35em] font-semibold text-black">Deep Dive</h2>
           <span className="text-[11px] text-gray-400 font-light ml-1 hidden sm:inline">
             Architectural Perception Test
           </span>
         </div>
         <button onClick={onClose}
-          className="text-[11px] uppercase tracking-[0.25em] text-gray-400 hover:text-black font-medium px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-all">
+          className="text-[11px] uppercase tracking-[0.15em] sm:tracking-[0.25em] text-gray-400 hover:text-black font-medium px-2 sm:px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-all touch-target-auto shrink-0">
           Close ✕
         </button>
       </div>
@@ -449,7 +449,7 @@ export const DeepDiveDrawer: React.FC<DeepDiveDrawerProps> = ({
       </div>
 
       {/* Footer */}
-      <div className="h-14 border-t border-gray-100 bg-white/90 backdrop-blur-xl px-4 sm:px-8 flex items-center justify-between shrink-0">
+      <div className="min-h-[56px] border-t border-gray-100 bg-white/90 backdrop-blur-xl px-3 sm:px-8 flex items-center justify-between shrink-0 gap-2 py-2 safe-bottom">
         <button
           onClick={() => {
             if (currentQ > 0) {
@@ -458,24 +458,24 @@ export const DeepDiveDrawer: React.FC<DeepDiveDrawerProps> = ({
             }
           }}
           disabled={currentQ === 0}
-          className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.25em] text-gray-400 hover:text-black disabled:opacity-20 font-medium transition-all px-3 py-1.5 rounded-lg hover:bg-gray-50 disabled:hover:bg-transparent"
+          className="flex items-center gap-1 sm:gap-1.5 text-[11px] uppercase tracking-[0.15em] sm:tracking-[0.25em] text-gray-400 hover:text-black disabled:opacity-20 font-medium transition-all px-2 sm:px-3 py-1.5 rounded-lg hover:bg-gray-50 disabled:hover:bg-transparent touch-target-auto shrink-0"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M10 3 L5 8 L10 13" /></svg>
           Back
         </button>
 
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] text-gray-300 tracking-[0.1em] font-light">
-            {Object.keys(localAnswers).length}/{DEEP_QUESTIONS.length} answered
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="text-[9px] sm:text-[10px] text-gray-300 tracking-[0.1em] font-light hidden xs:inline">
+            {Object.keys(localAnswers).length}/{DEEP_QUESTIONS.length}
           </span>
           {canSubmit ? (
             <button onClick={handleSubmit}
-              className="px-7 py-2.5 bg-black text-white rounded-lg text-[11px] uppercase tracking-[0.3em] font-semibold hover:bg-gray-800 transition-all active:scale-[0.97] shadow-md hover:shadow-lg">
+              className="px-4 sm:px-7 py-2 sm:py-2.5 bg-black text-white rounded-lg text-[11px] uppercase tracking-[0.15em] sm:tracking-[0.3em] font-semibold hover:bg-gray-800 transition-all active:scale-[0.97] shadow-md hover:shadow-lg touch-target-auto">
               Apply Results
             </button>
           ) : (
-            <span className="text-[10px] text-gray-300 tracking-[0.12em] font-light px-4 py-2 border border-gray-100 rounded-lg">
-              answer 5+ to continue
+            <span className="text-[9px] sm:text-[10px] text-gray-300 tracking-[0.08em] sm:tracking-[0.12em] font-light px-2 sm:px-4 py-1.5 sm:py-2 border border-gray-100 rounded-lg">
+              5+ to continue
             </span>
           )}
         </div>

@@ -781,7 +781,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
   
 
   return (
-    <div className={`flex h-[calc(100vh-72px)] overflow-hidden relative transition-opacity duration-700 ${mounted ? 'opacity-100' : 'opacity-0'}`} style={{ background: '#f4f7fc' }}>
+    <div className={`flex h-[calc(100vh-72px)] h-[calc(100dvh-72px)] overflow-hidden relative transition-opacity duration-700 ${mounted ? 'opacity-100' : 'opacity-0'}`} style={{ background: '#f4f7fc' }}>
       {/* Workspace Area */}
       <div className={`flex-1 flex flex-col relative overflow-hidden transition-all duration-700 ease-out ${activeSidePanel || isMatrixOpen ? 'lg:mr-[300px]' : ''} ${isDomainPanelOpen ? 'lg:ml-[280px]' : ''}`}>
 
@@ -806,12 +806,12 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
         `}</style>
 
         {/* Action Buttons — top-right corner */}
-        <div className="absolute top-3 right-4 z-40 workspace-content-reveal" style={{ opacity: coreTutorialDone ? 1 : 0, pointerEvents: coreTutorialDone ? 'auto' : 'none', transition: 'opacity 0.8s ease' }}>
-          <div className="flex items-center gap-2">
+        <div className="absolute top-2 sm:top-3 right-2 sm:right-4 z-40 workspace-content-reveal" style={{ opacity: coreTutorialDone ? 1 : 0, pointerEvents: coreTutorialDone ? 'auto' : 'none', transition: 'opacity 0.8s ease' }}>
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Voice / Speech Button */}
             <button
               onClick={toggleSpeech}
-              className={`group relative w-11 h-11 rounded-full border backdrop-blur-md shadow-sm flex items-center justify-center transition-all duration-500 ${
+              className={`group relative w-9 h-9 sm:w-11 sm:h-11 rounded-full border backdrop-blur-md shadow-sm flex items-center justify-center transition-all duration-500 touch-target-auto ${
                 isListening
                   ? 'bg-red-50 border-red-200 shadow-[0_0_16px_rgba(239,68,68,0.2)]'
                   : 'bg-white/90 border-gray-100 hover:border-gray-300 hover:shadow-md hover:scale-105'
@@ -835,7 +835,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
             {/* Photo Upload Button */}
             <button
               onClick={() => photoInputRef.current?.click()}
-              className={`group relative w-11 h-11 rounded-full border backdrop-blur-md shadow-sm flex items-center justify-center transition-all duration-300 ${
+              className={`group relative w-9 h-9 sm:w-11 sm:h-11 rounded-full border backdrop-blur-md shadow-sm flex items-center justify-center transition-all duration-300 touch-target-auto ${
                 analyzingImage
                   ? 'bg-amber-50 border-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.15)]'
                   : imageAnalysisResult
@@ -868,7 +868,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
             {/* Mute Button */}
             <button
               onClick={toggleMute}
-              className={`group w-11 h-11 rounded-full border backdrop-blur-md shadow-sm flex items-center justify-center transition-all duration-300 ${
+              className={`group w-9 h-9 sm:w-11 sm:h-11 rounded-full border backdrop-blur-md shadow-sm flex items-center justify-center transition-all duration-300 touch-target-auto ${
                 isMuted
                   ? 'bg-gray-100 border-gray-200'
                   : 'bg-white/90 border-gray-100 hover:border-gray-300 hover:shadow-md hover:scale-105'
@@ -899,7 +899,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
 
           {/* Speech Transcript Bubble */}
           {showTranscript && (
-            <div className="absolute right-0 top-14 w-72 animate-fade-in-up z-50">
+            <div className="absolute right-0 top-12 sm:top-14 w-64 sm:w-72 animate-fade-in-up z-50">
               <div className="bg-white/95 backdrop-blur-xl border border-gray-100 rounded-2xl shadow-2xl overflow-hidden">
 
                 {/* === STATE 1: Listening === */}
@@ -1386,11 +1386,11 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
           );
         })()}
 
-        {/* Generate + Brilliant — left side bottom */}
-        <div ref={diagRef} className="absolute bottom-8 z-20 workspace-content-reveal flex flex-col items-center" style={{ left: '44px', width: '180px', opacity: coreTutorialDone ? 1 : 0, pointerEvents: coreTutorialDone ? 'auto' : 'none', transition: 'opacity 0.8s ease' }}>
+        {/* Generate + Brilliant — bottom center on mobile, left side on desktop */}
+        <div ref={diagRef} className="absolute bottom-4 sm:bottom-8 z-20 workspace-content-reveal flex flex-col items-center left-1/2 -translate-x-1/2 sm:left-[44px] sm:translate-x-0 w-[200px] sm:w-[180px]" style={{ opacity: coreTutorialDone ? 1 : 0, pointerEvents: coreTutorialDone ? 'auto' : 'none', transition: 'opacity 0.8s ease' }}>
           {/* Brilliant explanation panel — appears above on click */}
           {showDiagnosticPanel && (
-            <div className="mb-2 w-[260px] rounded-2xl border backdrop-blur-xl shadow-lg overflow-hidden animate-scale-in" style={{ background: 'rgba(255,255,255,0.65)', borderColor: brilliant ? 'rgba(53,88,160,0.15)' : 'rgba(230,230,230,0.5)', marginLeft: '20px', maxHeight: 'calc(100vh - 160px)', overflowY: 'auto' }}>
+            <div className="mb-2 w-[240px] sm:w-[260px] rounded-2xl border backdrop-blur-xl shadow-lg overflow-hidden animate-scale-in" style={{ background: 'rgba(255,255,255,0.65)', borderColor: brilliant ? 'rgba(53,88,160,0.15)' : 'rgba(230,230,230,0.5)', maxHeight: 'calc(100vh - 200px)', maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' }}>
               <div className="px-4 py-3 flex items-center justify-between border-b" style={{ borderColor: brilliant ? 'rgba(53,88,160,0.12)' : '#f5f5f5' }}>
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full transition-colors ${brilliant ? '' : 'bg-gray-300'}`} style={brilliant ? { background: '#5B8AD0' } : {}} />
@@ -1522,17 +1522,22 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
       {!isDomainPanelOpen && coreTutorialDone && (
         <button
           onClick={() => setIsDomainPanelOpen(true)}
-          className="fixed left-0 top-1/2 -translate-y-1/2 z-30 rounded-r-lg transition-all duration-300 opacity-50 hover:opacity-100"
-          style={{ background: 'rgba(255,255,255,0.85)', boxShadow: '2px 0 12px rgba(0,0,0,0.05)', padding: '20px 8px' }}
+          className="fixed left-0 top-1/2 -translate-y-1/2 z-30 rounded-r-lg transition-all duration-300 opacity-50 hover:opacity-100 touch-target-auto"
+          style={{ background: 'rgba(255,255,255,0.85)', boxShadow: '2px 0 12px rgba(0,0,0,0.05)', padding: '16px 6px' }}
         >
-          <span className="text-[11px] font-semibold uppercase" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.25em', color: '#8899b3' }}>
+          <span className="text-[10px] sm:text-[11px] font-semibold uppercase" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.25em', color: '#8899b3' }}>
             Space
           </span>
         </button>
       )}
 
-      {/* Space Config Sidebar — fixed left, like Matrix on right */}
-      <div className={`w-[280px] backdrop-blur-xl border-r flex flex-col z-30 transition-all duration-500 ease-out fixed left-0 top-11 bottom-0 ${isDomainPanelOpen ? 'translate-x-0' : '-translate-x-[280px]'}`}
+      {/* Mobile backdrop for Space Config */}
+      {isDomainPanelOpen && (
+        <div className="fixed inset-0 bg-black/10 z-[29] md:hidden" onClick={() => setIsDomainPanelOpen(false)} />
+      )}
+
+      {/* Space Config Sidebar — fixed left, full overlay on mobile */}
+      <div className={`w-[85vw] max-w-[280px] backdrop-blur-xl border-r flex flex-col z-30 transition-all duration-500 ease-out fixed left-0 top-11 bottom-0 ${isDomainPanelOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{ borderColor: 'rgba(45,75,140,0.08)', background: 'rgba(252,252,250,0.98)' }}>
 
         {/* Collapse tab — only visible when panel is open */}
@@ -1544,7 +1549,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
           </button>
         )}
 
-        <div className="flex-1 flex flex-col px-4 py-4 gap-3 overflow-hidden">
+        <div className="flex-1 flex flex-col px-3 sm:px-4 py-3 sm:py-4 gap-2.5 sm:gap-3 overflow-y-auto custom-scroll">
           <div className="text-center mb-1">
             <h2 className="text-[11px] uppercase tracking-[0.5em] font-semibold" style={{ color: '#8899b3' }}>Space</h2>
           </div>
@@ -1787,8 +1792,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
       {!isMatrixOpen && !activeSidePanel && coreTutorialDone && (
         <button
           onClick={() => setIsMatrixOpen(true)}
-          className="fixed right-0 top-1/2 -translate-y-1/2 z-30 rounded-l-lg transition-all duration-300 opacity-40 hover:opacity-90"
-          style={{ animation: 'matrixBreathe 4s ease-in-out infinite', background: 'rgba(255,255,255,0.88)', boxShadow: '-2px 0 10px rgba(0,0,0,0.03)', padding: '18px 6px' }}
+          className="fixed right-0 top-1/2 -translate-y-1/2 z-30 rounded-l-lg transition-all duration-300 opacity-40 hover:opacity-90 touch-target-auto"
+          style={{ animation: 'matrixBreathe 4s ease-in-out infinite', background: 'rgba(255,255,255,0.88)', boxShadow: '-2px 0 10px rgba(0,0,0,0.03)', padding: '16px 6px' }}
         >
           <span className="text-[10px] font-medium uppercase [writing-mode:vertical-lr] rotate-180" style={{ letterSpacing: '0.3em', color: '#aab4c2' }}>
             Matrix
@@ -1796,8 +1801,13 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
         </button>
       )}
 
+      {/* Mobile backdrop for Matrix */}
+      {(isMatrixOpen || activeSidePanel) && (
+        <div className="fixed inset-0 bg-black/10 z-[29] md:hidden" onClick={() => { setIsMatrixOpen(false); setActiveSidePanel(null); }} />
+      )}
+
       {/* Control Sidebar — compact, no scroll, premium */}
-      <div className={`w-[300px] backdrop-blur-xl border-l flex flex-col z-30 transition-all duration-500 ease-out fixed right-0 top-11 bottom-0 ${activeSidePanel ? 'translate-x-[300px]' : isMatrixOpen ? 'translate-x-0' : 'translate-x-[300px]'}`}
+      <div className={`w-[85vw] max-w-[300px] backdrop-blur-xl border-l flex flex-col z-30 transition-all duration-500 ease-out fixed right-0 top-11 bottom-0 ${activeSidePanel ? 'translate-x-full' : isMatrixOpen ? 'translate-x-0' : 'translate-x-full'}`}
         style={{ borderColor: 'rgba(0,0,0,0.04)', background: 'rgba(253,253,251,0.97)' }}>
 
         {/* Collapse tab — only visible when panel is open */}
@@ -1809,9 +1819,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
           </button>
         )}
 
-        <div className="flex-1 flex flex-col px-5 py-5 justify-between overflow-hidden">
-          <div className="text-center mb-3">
-            <h2 className="text-[13px] uppercase tracking-[0.6em] font-medium" style={{ color: '#aab4c2' }}>Matrix</h2>
+        <div className="flex-1 flex flex-col px-3 sm:px-5 py-3 sm:py-5 justify-between overflow-y-auto custom-scroll">
+          <div className="text-center mb-2 sm:mb-3">
+            <h2 className="text-[12px] sm:text-[13px] uppercase tracking-[0.4em] sm:tracking-[0.6em] font-medium" style={{ color: '#aab4c2' }}>Matrix</h2>
           </div>
 
           {/* Element Energy Sliders */}
@@ -1937,7 +1947,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
       </div>
 
       {/* Layer Selection Panel */}
-      <div className={`w-[300px] bg-white border-l border-gray-50 flex flex-col shadow-lg z-40 transition-all duration-500 ease-out fixed right-0 top-11 bottom-0 ${activeSidePanel ? 'translate-x-0' : 'translate-x-[300px]'}`}>
+      <div className={`w-[85vw] max-w-[300px] bg-white border-l border-gray-50 flex flex-col shadow-lg z-40 transition-all duration-500 ease-out fixed right-0 top-11 bottom-0 ${activeSidePanel ? 'translate-x-0' : 'translate-x-full'}`}>
         {/* Collapse tab — only visible when panel is open */}
         {activeSidePanel && (
           <button onClick={() => setActiveSidePanel(null)}
@@ -2099,16 +2109,16 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
               onClick={() => { setShowConceptPage(false); setGathering(false); }} />
 
             {/* Modal card */}
-            <div className="relative bg-white rounded-2xl overflow-hidden flex flex-col"
-              style={{ width: '860px', maxWidth: '92vw', maxHeight: '88vh', boxShadow: '0 8px 60px rgba(45,75,140,0.12), 0 2px 8px rgba(0,0,0,0.04)', animation: 'conceptScale 0.35s ease-out' }}>
+            <div className="relative bg-white rounded-xl sm:rounded-2xl overflow-hidden flex flex-col mx-2 sm:mx-0"
+              style={{ width: '860px', maxWidth: 'calc(100vw - 16px)', maxHeight: '90vh', maxHeight: '90dvh', boxShadow: '0 8px 60px rgba(45,75,140,0.12), 0 2px 8px rgba(0,0,0,0.04)', animation: 'conceptScale 0.35s ease-out' }}>
 
               {/* Accent line */}
               <div className="h-[2px] w-full shrink-0" style={{ background: `linear-gradient(90deg, ${domColor}60, ${domMc}60, ${domColor}60)` }} />
 
               {/* ═══ TOP: Space Config — prominent ═══ */}
-              <div className="px-7 pt-5 pb-4 shrink-0" style={{ background: 'rgba(247,249,252,0.6)', borderBottom: '1px solid rgba(45,75,140,0.05)' }}>
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-[13px] uppercase tracking-[0.4em] font-semibold" style={{ color: '#3558A0' }}>Space</h2>
+              <div className="px-4 sm:px-7 pt-4 sm:pt-5 pb-3 sm:pb-4 shrink-0 overflow-y-auto" style={{ background: 'rgba(247,249,252,0.6)', borderBottom: '1px solid rgba(45,75,140,0.05)' }}>
+                <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
+                  <h2 className="text-[12px] sm:text-[13px] uppercase tracking-[0.3em] sm:tracking-[0.4em] font-semibold" style={{ color: '#3558A0' }}>Space</h2>
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1.5">
                       {(Object.entries(pct) as [Element, number][])
@@ -2124,16 +2134,16 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 </div>
 
                 {/* Domain toggle */}
-                <div className="flex items-center gap-4 mb-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-3">
                   <div className="flex gap-1 rounded-lg p-[2px]" style={{ background: 'rgba(45,75,140,0.04)' }}>
                     {(['interior', 'architecture'] as Domain[]).map(d => (
                       <button key={d} onClick={() => handleUpdate({ params: { ...state.params, domain: d, category: d === 'interior' ? 'Living / Residential' : 'Private House', rooms: [], archContext: undefined } })}
-                        className={`text-[12px] uppercase tracking-[0.08em] px-4 py-[5px] rounded-md text-center transition-all ${
+                        className={`text-[11px] sm:text-[12px] uppercase tracking-[0.08em] px-3 sm:px-4 py-[5px] rounded-md text-center transition-all touch-target-auto ${
                           state.params.domain === d ? 'text-gray-800 font-semibold bg-white shadow-sm' : 'text-gray-400 hover:text-gray-600'
                         }`}>{d === 'interior' ? 'Interior' : 'Architecture'}</button>
                     ))}
                   </div>
-                  <div className="h-4 w-px" style={{ background: 'rgba(45,75,140,0.08)' }} />
+                  <div className="h-4 w-px hidden sm:block" style={{ background: 'rgba(45,75,140,0.08)' }} />
                   <div className="flex flex-wrap gap-1.5">
                     {(state.params.domain === 'interior'
                       ? ['Living / Residential', 'Office / Workspace', 'Hospitality', 'Restaurant / Cafe', 'Retail / Public Interior'] as SpaceCategory[]
@@ -2292,11 +2302,11 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 </div>
               </div>
 
-              {/* ═══ MIDDLE: Brief + Materials side by side ═══ */}
-              <div className="flex-1 flex min-h-0 overflow-hidden">
+              {/* ═══ MIDDLE: Brief + Materials side by side (stacked on mobile) ═══ */}
+              <div className="flex-1 flex flex-col sm:flex-row min-h-0 overflow-hidden">
 
                 {/* Brief */}
-                <div className="flex-1 px-7 py-4 overflow-y-auto" style={{ minWidth: 0 }}>
+                <div className="flex-1 px-4 sm:px-7 py-3 sm:py-4 overflow-y-auto" style={{ minWidth: 0 }}>
                   <div className="flex items-center gap-2.5 mb-3">
                     <div className="w-5 h-5 rounded-full shrink-0" style={{ background: `linear-gradient(135deg, ${domColor}, ${domMc})` }} />
                     <h3 className="text-[12px] uppercase tracking-[0.3em] font-semibold text-gray-700">Brief</h3>
@@ -2322,10 +2332,11 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 </div>
 
                 {/* Divider */}
-                <div className="w-px shrink-0" style={{ background: 'rgba(45,75,140,0.05)' }} />
+                <div className="hidden sm:block w-px shrink-0" style={{ background: 'rgba(45,75,140,0.05)' }} />
+                <div className="sm:hidden h-px shrink-0 mx-4" style={{ background: 'rgba(45,75,140,0.05)' }} />
 
                 {/* Materials + Atmosphere */}
-                <div className="w-[240px] shrink-0 px-5 py-4 overflow-y-auto" style={{ background: 'rgba(250,251,253,0.5)' }}>
+                <div className="w-full sm:w-[240px] shrink-0 px-4 sm:px-5 py-3 sm:py-4 overflow-y-auto" style={{ background: 'rgba(250,251,253,0.5)' }}>
                   <h3 className="text-[10px] uppercase tracking-[0.25em] font-semibold mb-3" style={{ color: '#8899b3' }}>Materials</h3>
                   <div className="grid grid-cols-3 gap-2 mb-3">
                     {state.refinement.selectedMaterials.map((m, i) => {
@@ -2363,9 +2374,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
               </div>
 
               {/* ═══ BOTTOM: Actions ═══ */}
-              <div className="px-7 py-3 flex items-center justify-between shrink-0" style={{ borderTop: '1px solid rgba(45,75,140,0.05)' }}>
+              <div className="px-4 sm:px-7 py-3 flex items-center justify-between shrink-0 gap-2" style={{ borderTop: '1px solid rgba(45,75,140,0.05)' }}>
                 <button onClick={() => { setShowConceptPage(false); setGathering(false); }}
-                  className="text-[10px] uppercase tracking-[0.2em] font-medium px-4 py-2 rounded-md transition-all hover:bg-gray-50" style={{ color: '#a0aec0' }}>
+                  className="text-[10px] uppercase tracking-[0.2em] font-medium px-3 sm:px-4 py-2 rounded-md transition-all hover:bg-gray-50 touch-target-auto" style={{ color: '#a0aec0' }}>
                   ← Back
                 </button>
                 <button onClick={() => {
@@ -2375,7 +2386,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                     handleConfirmGeneration();
                   }}
                   disabled={!hasSpace}
-                  className={`px-8 py-2.5 rounded-lg text-[12px] uppercase tracking-[0.3em] font-semibold transition-all active:scale-[0.97] ${
+                  className={`px-5 sm:px-8 py-2.5 rounded-lg text-[11px] sm:text-[12px] uppercase tracking-[0.2em] sm:tracking-[0.3em] font-semibold transition-all active:scale-[0.97] touch-target-auto ${
                     hasSpace ? 'text-white shadow-md hover:shadow-lg' : 'text-white/50 cursor-not-allowed'
                   }`}
                   style={hasSpace
@@ -2404,14 +2415,14 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
 
           {/* Modal */}
           <div
-            className="relative bg-white rounded-2xl shadow-2xl max-w-[560px] w-[90vw] overflow-hidden"
+            className="relative bg-white rounded-xl sm:rounded-2xl shadow-2xl max-w-[560px] w-[92vw] overflow-hidden mx-2 sm:mx-0 max-h-[90vh] max-h-[90dvh] overflow-y-auto"
             style={{ animation: 'fadeIn 0.35s ease-out' }}
           >
             {/* Blue accent bar */}
             <div className="h-1 w-full" style={{ background: 'linear-gradient(90deg, #7BA8D8, #3558A0, #7BA8D8)' }} />
 
             {/* Content */}
-            <div className="px-10 pt-10 pb-8">
+            <div className="px-5 sm:px-10 pt-6 sm:pt-10 pb-6 sm:pb-8">
               {/* Close button */}
               <button
                 onClick={() => setShowGenerateModal(null)}
@@ -2432,7 +2443,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
               </div>
 
               {/* Concept name */}
-              <h2 className="text-[39px] font-light text-gray-900 tracking-wide mb-3" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              <h2 className="text-[24px] sm:text-[39px] font-light text-gray-900 tracking-wide mb-3" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
                 {showGenerateModal.name}
               </h2>
 
@@ -2456,8 +2467,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
               {/* Divider */}
               <div className="w-12 h-px bg-gray-200 mb-6" />
 
-              {/* Conceptual prompt — large, beautiful */}
-              <p className="text-[19px] leading-[2] text-gray-600 font-light mb-8" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              {/* Conceptual prompt */}
+              <p className="text-[14px] sm:text-[19px] leading-[1.8] sm:leading-[2] text-gray-600 font-light mb-6 sm:mb-8" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
                 {showGenerateModal.prompt}
               </p>
 
@@ -2486,7 +2497,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                   setShowGenerateModal(null);
                   setShowSummary(true);
                 }}
-                className="w-full py-4 rounded-xl text-white font-semibold text-[19px] uppercase tracking-[0.5em] transition-all duration-300 flex items-center justify-center gap-3"
+                className="w-full py-3 sm:py-4 rounded-xl text-white font-semibold text-[14px] sm:text-[19px] uppercase tracking-[0.3em] sm:tracking-[0.5em] transition-all duration-300 flex items-center justify-center gap-3"
                 style={{ background: '#3558A0', boxShadow: '0 4px 20px rgba(53,88,160,0.3)' }}
               >
                 <div className="w-2 h-2 rounded-full bg-white/40" />
@@ -2500,8 +2511,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
       {/* Image Analysis Floating Card */}
       {imageAnalysisResult && uploadedImageUrl && !analyzingImage && (
         <div
-          className="fixed bottom-20 left-4 z-[150] rounded-2xl bg-white/95 backdrop-blur-xl border border-gray-100 shadow-2xl overflow-hidden"
-          style={{ width: 280, animation: 'slideUp 0.4s ease-out' }}
+          className="fixed bottom-16 sm:bottom-20 left-2 sm:left-4 right-2 sm:right-auto z-[150] rounded-2xl bg-white/95 backdrop-blur-xl border border-gray-100 shadow-2xl overflow-hidden"
+          style={{ maxWidth: 280, animation: 'slideUp 0.4s ease-out' }}
         >
           <style>{`
             @keyframes slideUp {
@@ -2569,8 +2580,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
 
       {/* Analyzing overlay */}
       {analyzingImage && (
-        <div className="fixed bottom-20 left-4 z-[150] rounded-2xl bg-white/95 backdrop-blur-xl border border-gray-100 shadow-2xl overflow-hidden"
-          style={{ width: 260, animation: 'slideUp 0.3s ease-out' }}>
+        <div className="fixed bottom-16 sm:bottom-20 left-2 sm:left-4 right-2 sm:right-auto z-[150] rounded-2xl bg-white/95 backdrop-blur-xl border border-gray-100 shadow-2xl overflow-hidden"
+          style={{ maxWidth: 260, animation: 'slideUp 0.3s ease-out' }}>
           <style>{`@keyframes analyzeGlow {
             0%, 100% { opacity: 0.4; }
             50% { opacity: 1; }
@@ -2600,7 +2611,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
 
       {/* Toast notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] px-5 py-3 rounded-xl bg-gray-900/90 backdrop-blur-sm text-white text-[16px] font-medium tracking-wide shadow-xl"
+        <div className="fixed bottom-6 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-[200] px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl bg-gray-900/90 backdrop-blur-sm text-white text-[13px] sm:text-[16px] font-medium tracking-wide shadow-xl text-center"
           style={{ animation: 'fadeIn 0.2s ease-out' }}>
           {toastMessage}
         </div>

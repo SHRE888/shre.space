@@ -690,8 +690,8 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
       {/* ═══ "All" materials — full-width bottom panel ═══ */}
       {showAllMats && selectedMaterials.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 animate-fade-in" onClick={e => e.stopPropagation()}>
-          <div className="w-full px-10 py-6 overflow-x-auto"
-            style={{ background: 'rgba(255,255,255,0.97)', borderTop: `1.5px solid ${dc}10`, boxShadow: '0 -6px 40px rgba(0,0,0,0.06)', backdropFilter: 'blur(8px)' }}>
+          <div className="w-full px-3 sm:px-10 py-4 sm:py-6 overflow-x-auto"
+            style={{ background: 'rgba(255,255,255,0.97)', borderTop: `1.5px solid ${dc}10`, boxShadow: '0 -6px 40px rgba(0,0,0,0.06)', backdropFilter: 'blur(8px)', maxHeight: '60vh', overflowY: 'auto' }}>
 
             {/* Close button */}
             <button className="absolute top-3 right-4 w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-100 transition-all"
@@ -699,12 +699,12 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
               <svg width="10" height="10" viewBox="0 0 8 8" stroke="#999" strokeWidth="1.5"><line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" /></svg>
             </button>
 
-            <div className="flex justify-center gap-12">
+            <div className="flex flex-wrap justify-center gap-6 sm:gap-12">
               {ELEMENTS.filter(el => matsByEl[el].length > 0).map(el => {
                 const mc = MUTED_COLORS[el];
                 const ec = ELEMENT_COLORS[el];
                 return (
-                  <div key={el} className="flex flex-col items-center gap-4 shrink-0">
+                  <div key={el} className="flex flex-col items-center gap-3 sm:gap-4 shrink-0">
                     <div className="flex items-center gap-2">
                       <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ec }} />
                       <span style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.2em', color: mc }}>{el}</span>
@@ -756,8 +756,8 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
         const rawX = Math.cos(a) * (midR + 70);
         const rawY = Math.sin(a) * (midR + 70);
         return (
-          <div className="fixed z-50 animate-fade-in" style={{ left: `calc(50% + ${rawX}px - 130px)`, top: `calc(50% + ${rawY}px - 110px)` }} onClick={e => e.stopPropagation()}>
-            <div className="rounded-2xl shadow-xl border p-3 w-[260px] max-h-[48vh] overflow-y-auto" style={{ background: 'rgba(252,252,250,0.98)', borderColor: `${mc}18` }}>
+          <div className="fixed z-50 animate-fade-in" style={{ left: `clamp(8px, calc(50% + ${rawX}px - 130px), calc(100vw - 270px))`, top: `clamp(60px, calc(50% + ${rawY}px - 110px), calc(100vh - 320px))` }} onClick={e => e.stopPropagation()}>
+            <div className="rounded-2xl shadow-xl border p-3 w-[260px] max-w-[calc(100vw-16px)] max-h-[48vh] overflow-y-auto" style={{ background: 'rgba(252,252,250,0.98)', borderColor: `${mc}18` }}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: mc }} />
@@ -813,8 +813,8 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
         const rawY = Math.sin(a) * (midR + 30);
         const atmoWords = CANONICAL_ATMOSPHERE[atmoPicker] || [];
         return (
-          <div className="fixed z-50 animate-fade-in" style={{ left: `calc(50% + ${rawX}px - 110px)`, top: `calc(50% + ${rawY}px - 80px)` }} onClick={e => e.stopPropagation()}>
-            <div className="rounded-2xl shadow-xl border p-3 w-[230px] max-h-[40vh] overflow-y-auto" style={{ background: 'rgba(252,252,250,0.98)', borderColor: `${mc}18` }}>
+          <div className="fixed z-50 animate-fade-in" style={{ left: `clamp(8px, calc(50% + ${rawX}px - 110px), calc(100vw - 240px))`, top: `clamp(60px, calc(50% + ${rawY}px - 80px), calc(100vh - 260px))` }} onClick={e => e.stopPropagation()}>
+            <div className="rounded-2xl shadow-xl border p-3 w-[230px] max-w-[calc(100vw-16px)] max-h-[40vh] overflow-y-auto" style={{ background: 'rgba(252,252,250,0.98)', borderColor: `${mc}18` }}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: mc }} />
@@ -842,15 +842,15 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
       })()}
 
       {selectedMaterials.length > 0 && (
-        <div className="absolute bottom-5 right-5 z-20 flex items-center gap-2">
-          <button className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all hover:scale-105"
+        <div className="absolute bottom-3 sm:bottom-5 right-2 sm:right-5 z-20 flex items-center gap-1.5 sm:gap-2">
+          <button className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full transition-all hover:scale-105 touch-target-auto"
             style={{ background: showAllMats ? `${dc}10` : 'rgba(252,252,250,0.95)', border: `1px solid ${showAllMats ? `${dc}20` : `${dc}10`}`, color: showAllMats ? dc : '#999' }}
             onClick={e => { e.stopPropagation(); setShowAllMats(!showAllMats); }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
             <span className="text-[11px] uppercase tracking-[0.12em] font-medium">{selectedMaterials.length} materials</span>
           </button>
           {selectedAdjectives.length > 0 && (
-            <button className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all hover:scale-105"
+            <button className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full transition-all hover:scale-105 touch-target-auto"
               style={{ background: 'rgba(252,252,250,0.95)', border: `1px solid ${dc}10`, color: `${dc}80` }}
               onClick={e => { e.stopPropagation(); window.dispatchEvent(new CustomEvent('open-atmo-refs')); }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="9" /><path d="M8 12h8M12 8v8" /></svg>
@@ -861,7 +861,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
       )}
 
       {/* Top-left controls */}
-      <div className="absolute top-4 left-5 z-20 flex items-center gap-2">
+      <div className="absolute top-2 sm:top-4 left-2 sm:left-5 z-20 flex items-center gap-1.5 sm:gap-2">
         {onToggleDiagnostic && <button className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110" style={{ background: 'rgba(252,252,250,0.9)', border: `1px solid ${dc}12` }} onClick={e => { e.stopPropagation(); onToggleDiagnostic(); }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={dc} strokeWidth="1.5" opacity={0.5}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg></button>}
         <button className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110" style={{ background: musicOn ? `${dc}0A` : 'rgba(252,252,250,0.9)', border: `1px solid ${dc}12` }} onClick={e => { e.stopPropagation(); toggleAmbient(); setMusicOn(!musicOn); }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={dc} strokeWidth="1.5" opacity={musicOn ? 0.6 : 0.35}><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg></button>
         <button className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110" style={{ background: !guideDismissed ? `${dc}0A` : 'rgba(252,252,250,0.9)', border: `1px solid ${dc}12` }} onClick={e => { e.stopPropagation(); warmupSpeech(); window.dispatchEvent(new Event('guide-voice-toggle')); }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={dc} strokeWidth="1.5" opacity={!guideDismissed ? 0.6 : 0.35}><circle cx="12" cy="8" r="3.5" /><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7" /></svg></button>
@@ -870,8 +870,8 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
       {/* Top counters removed — bottom buttons are sufficient */}
 
       {selectedMaterials.length === 0 && !matPicker && divePhase === 0 && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-10">
-          <p className="text-[13px] font-light tracking-[0.06em]" style={{ color: `${dc}50` }}>Click an element symbol to add materials · drag nucleus to shift energy</p>
+        <div className="absolute bottom-20 sm:bottom-24 left-1/2 -translate-x-1/2 z-10 max-w-[90vw] text-center px-2">
+          <p className="text-[11px] sm:text-[13px] font-light tracking-[0.04em] sm:tracking-[0.06em]" style={{ color: `${dc}50` }}>Tap an element symbol to add materials · drag nucleus to shift energy</p>
         </div>
       )}
 
@@ -886,8 +886,8 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
         const isViewSelected = selectedMaterials.some(m => m.name === fullMat);
         const circSz = Math.min(window.innerHeight * 0.5, 380);
         return (
-          <div className="fixed inset-0 z-[90] flex items-center justify-center animate-fade-in" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }} onClick={e => { e.stopPropagation(); setFullMat(null); }}>
-            <div className="flex items-center gap-10" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[90] flex items-center justify-center animate-fade-in p-3 sm:p-6 overflow-y-auto" style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }} onClick={e => { e.stopPropagation(); setFullMat(null); }}>
+            <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-10 max-w-full" onClick={e => e.stopPropagation()}>
 
               {/* Left — large material sphere + info card */}
               <div className="flex flex-col items-center gap-5">
@@ -962,20 +962,20 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
       {/* ═══ Atmosphere references panel ═══ */}
       {showAtmoRefs && (
         <div className="fixed bottom-0 left-0 right-0 z-[45] animate-fade-in" onClick={e => e.stopPropagation()}>
-          <div className="w-full px-6 py-5 overflow-x-auto" style={{ background: 'rgba(252,252,250,0.98)', borderTop: `1px solid ${dc}10`, boxShadow: '0 -8px 40px rgba(0,0,0,0.06)' }}>
-            <div className="flex items-center justify-between mb-4 px-2">
+          <div className="w-full px-3 sm:px-6 py-4 sm:py-5 overflow-x-auto" style={{ background: 'rgba(252,252,250,0.98)', borderTop: `1px solid ${dc}10`, boxShadow: '0 -8px 40px rgba(0,0,0,0.06)', maxHeight: '65vh', overflowY: 'auto' }}>
+            <div className="flex items-center justify-between mb-3 sm:mb-4 px-2">
               <span style={{ fontSize: 14, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.2em', color: '#999' }}>Atmosphere References</span>
               <button className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 transition-all" onClick={() => setShowAtmoRefs(false)}>
                 <svg width="10" height="10" viewBox="0 0 8 8" stroke="#bbb" strokeWidth="1.5"><line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" /></svg>
               </button>
             </div>
-            <div className="flex justify-center gap-6">
+            <div className="flex flex-wrap sm:flex-nowrap justify-center gap-4 sm:gap-6">
               {sorted.map(([el, pct]) => {
                 const mc = MUTED_COLORS[el as Element];
                 const refs = ATMO_REFS[el as Element];
                 const topRef = refs[Math.floor((pct as number) % refs.length)] || refs[0];
                 return (
-                  <div key={el} className="flex flex-col items-center shrink-0" style={{ width: 220 }}>
+                  <div key={el} className="flex flex-col items-center shrink-0" style={{ width: 'min(220px, 45vw)' }}>
                     <div className="w-full rounded-xl overflow-hidden mb-3" style={{ background: `linear-gradient(135deg, ${mc}0C, ${mc}05)`, border: `1px solid ${mc}18`, height: 140 }}>
                       {topRef.img ? (
                         <div className="w-full h-full relative">

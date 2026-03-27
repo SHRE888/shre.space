@@ -24,26 +24,26 @@ const Landing = () => {
   }, []);
 
   return (
-    <div className="h-screen bg-[#fafafa] select-none overflow-hidden relative flex flex-col items-center justify-center">
+    <div className="h-screen h-[100dvh] bg-[#fafafa] select-none overflow-hidden relative flex flex-col items-center justify-center">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-gradient-to-br from-gray-100/30 via-transparent to-transparent blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] sm:w-[800px] h-[600px] sm:h-[800px] rounded-full bg-gradient-to-br from-gray-100/30 via-transparent to-transparent blur-3xl" />
       </div>
 
       {/* Top — SHRE branding, centered */}
-      <div className={`absolute top-8 left-1/2 -translate-x-1/2 z-10 text-center transition-all duration-700 ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
-        <p className="text-[13px] uppercase tracking-[0.6em] font-medium" style={{ color: '#b0b0b0' }}>
+      <div className={`absolute top-6 sm:top-8 left-1/2 -translate-x-1/2 z-10 text-center transition-all duration-700 ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
+        <p className="text-[11px] sm:text-[13px] uppercase tracking-[0.4em] sm:tracking-[0.6em] font-medium" style={{ color: '#b0b0b0' }}>
           SHRE ENGINE
         </p>
-        <p className="text-[11px] uppercase tracking-[0.35em] font-light mt-1" style={{ color: '#c0c0c0' }}>
+        <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.25em] sm:tracking-[0.35em] font-light mt-1" style={{ color: '#c0c0c0' }}>
           Spatial Calibration Platform
         </p>
       </div>
 
       {/* Top-right — About link */}
-      <div className={`absolute top-8 right-10 z-10 transition-all duration-700 ease-out ${mounted ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: '400ms' }}>
+      <div className={`absolute top-6 sm:top-8 right-4 sm:right-10 z-10 transition-all duration-700 ease-out ${mounted ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: '400ms' }}>
         <button
           onClick={() => navigate('/about')}
-          className="text-[13px] uppercase tracking-[0.3em] font-light hover:text-gray-700 transition-colors duration-300"
+          className="text-[12px] sm:text-[13px] uppercase tracking-[0.2em] sm:tracking-[0.3em] font-light hover:text-gray-700 transition-colors duration-300"
           style={{ color: '#b0b0b0' }}
         >
           About
@@ -51,13 +51,13 @@ const Landing = () => {
       </div>
 
       {/* Center — Hero text, full width centered */}
-      <div className="relative z-10 flex flex-col items-center justify-center text-center w-full px-6">
+      <div className="relative z-10 flex flex-col items-center justify-center text-center w-full px-4 sm:px-6">
         <h1
           className={`uppercase leading-[1.05] transition-all duration-[1.2s] ease-out text-center ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}
           style={{
-            fontSize: 'clamp(34px, 6.5vw, 82px)',
+            fontSize: 'clamp(26px, 6.5vw, 82px)',
             fontWeight: 300,
-            letterSpacing: '0.32em',
+            letterSpacing: 'clamp(0.15em, 2vw, 0.32em)',
             fontFamily: "'IBM Plex Sans', 'Inter', system-ui, sans-serif",
             color: '#2A2A2A',
             transitionDelay: '100ms',
@@ -67,23 +67,23 @@ const Landing = () => {
         </h1>
 
         <div
-          className={`mt-8 flex items-center justify-center gap-6 transition-all duration-700 ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
+          className={`mt-5 sm:mt-8 flex items-center justify-center gap-3 sm:gap-6 transition-all duration-700 ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
           style={{ transitionDelay: '350ms' }}
         >
-          <div className="w-10 h-px" style={{ background: '#d0d0d0' }} />
-          <p className="text-[13px] tracking-[0.25em] font-light uppercase" style={{ color: '#a0a0a0' }}>
+          <div className="w-6 sm:w-10 h-px" style={{ background: '#d0d0d0' }} />
+          <p className="text-[10px] sm:text-[13px] tracking-[0.15em] sm:tracking-[0.25em] font-light uppercase" style={{ color: '#a0a0a0' }}>
             Four elements · One spatial language
           </p>
-          <div className="w-10 h-px" style={{ background: '#d0d0d0' }} />
+          <div className="w-6 sm:w-10 h-px" style={{ background: '#d0d0d0' }} />
         </div>
 
         <div
-          className={`mt-12 transition-all duration-700 ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
+          className={`mt-8 sm:mt-12 transition-all duration-700 ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
           style={{ transitionDelay: '500ms' }}
         >
           <button
             onClick={() => { whoosh(); clearState(); sessionStorage.removeItem('shre_welcome_shown'); navigate('/survey'); }}
-            className="px-16 py-5 text-[16px] uppercase tracking-[0.5em] font-medium transition-all duration-500 ease-out hover:tracking-[0.6em] active:scale-[0.97] rounded-full"
+            className="px-10 sm:px-16 py-4 sm:py-5 text-[14px] sm:text-[16px] uppercase tracking-[0.3em] sm:tracking-[0.5em] font-medium transition-all duration-500 ease-out hover:tracking-[0.6em] active:scale-[0.97] rounded-full"
             style={{
               background: '#1a1a1a',
               color: '#fafafa',
@@ -97,8 +97,8 @@ const Landing = () => {
       </div>
 
       {/* Bottom center — Studio credit */}
-      <div className={`absolute bottom-8 left-1/2 -translate-x-1/2 z-10 text-center transition-all duration-700 ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`} style={{ transitionDelay: '600ms' }}>
-        <p className="text-[11px] uppercase tracking-[0.3em] font-light" style={{ color: '#c0c0c0' }}>
+      <div className={`absolute bottom-6 sm:bottom-8 left-1/2 -translate-x-1/2 z-10 text-center transition-all duration-700 ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`} style={{ transitionDelay: '600ms' }}>
+        <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.2em] sm:tracking-[0.3em] font-light" style={{ color: '#c0c0c0' }}>
           SHRE Studio · 2025
         </p>
       </div>
@@ -201,7 +201,7 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
     const headline = ENERGY_HEADLINES[domEl][Math.floor(Math.random() * 3)];
     const total = sorted.reduce((s, [, v]) => s + v, 0);
     return (
-      <div className="min-h-[calc(100vh-92px)] flex flex-col items-center justify-center bg-[#fafafa] px-6">
+      <div className="min-h-[calc(100vh-92px)] min-h-[calc(100dvh-92px)] flex flex-col items-center justify-center bg-[#fafafa] px-4 sm:px-6">
         <style>{`
           @keyframes resultFadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
           @keyframes barGrow{from{width:0}to{width:var(--bar-w)}}
@@ -273,9 +273,9 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
   }
 
   return (
-    <div className="min-h-[calc(100vh-92px)] flex flex-col bg-[#fafafa]">
+    <div className="min-h-[calc(100vh-92px)] min-h-[calc(100dvh-92px)] flex flex-col bg-[#fafafa]">
       {/* Numbered step progress */}
-      <div className="pt-6 pb-4 px-4">
+      <div className="pt-4 sm:pt-6 pb-3 sm:pb-4 px-3 sm:px-4">
         <div className="max-w-md mx-auto flex items-center justify-between">
           {stepLabels.map((label, i) => (
             <div key={i} className="flex flex-col items-center gap-1.5 relative" style={{ flex: 1 }}>
@@ -309,23 +309,23 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
       </div>
 
       {/* Question + visual grid — full page */}
-      <div className="flex-grow flex items-center justify-center px-4 sm:px-8 py-4">
+      <div className="flex-grow flex items-center justify-center px-3 sm:px-8 py-2 sm:py-4">
         <div className="max-w-5xl w-full">
           <div className={`transition-all duration-400 ease-out ${transitioning ? 'opacity-0 translate-y-3 scale-[0.98]' : 'opacity-100 translate-y-0 scale-100'}`}>
             {/* Question text */}
-            <div className="text-center mb-8">
-              <h2 className="text-2xl sm:text-3xl font-light tracking-tight text-black leading-snug">
+            <div className="text-center mb-4 sm:mb-8">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-light tracking-tight text-black leading-snug">
                 {q.text}
               </h2>
               {q.subtitle && (
-                <p className="mt-3 text-[16px] uppercase tracking-[0.35em] text-gray-300 font-light">
+                <p className="mt-2 sm:mt-3 text-[11px] sm:text-[16px] uppercase tracking-[0.2em] sm:tracking-[0.35em] text-gray-300 font-light">
                   {q.subtitle}
                 </p>
               )}
             </div>
 
             {/* Visual image grid — 2×2, compact */}
-            <div className="grid grid-cols-2 gap-2.5 sm:gap-3 max-w-2xl mx-auto">
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 md:gap-3 max-w-2xl mx-auto">
               {q.options.map((opt, i) => {
                 const isSelected = answers[q.id] === i;
                 const isHovered = hoveredOption === i;
@@ -430,22 +430,22 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
           </div>
 
           {/* Bottom actions */}
-          <div className="mt-6 flex flex-col items-center gap-3">
+          <div className="mt-4 sm:mt-6 flex flex-col items-center gap-2 sm:gap-3 pb-2 sm:pb-0">
             <button
               onClick={() => { chime(); navigate('/core'); setTimeout(() => window.dispatchEvent(new Event('toggle-deep-dive')), 500); }}
-              className="flex items-center gap-2.5 px-6 py-2.5 rounded-full transition-all duration-300 hover:bg-gray-100 active:scale-[0.97] group"
+              className="flex items-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-2 sm:py-2.5 rounded-full transition-all duration-300 hover:bg-gray-100 active:scale-[0.97] group touch-target-auto"
               style={{ border: '1.5px solid rgba(0,0,0,0.12)' }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="1.5" strokeLinecap="round" className="opacity-70 group-hover:opacity-100 transition-opacity">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="1.5" strokeLinecap="round" className="opacity-70 group-hover:opacity-100 transition-opacity sm:w-4 sm:h-4">
                 <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="#555" fillOpacity="0.15"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
               </svg>
-              <span className="text-[13px] uppercase tracking-[0.25em] font-medium text-gray-600 group-hover:text-black transition-colors">
+              <span className="text-[12px] sm:text-[13px] uppercase tracking-[0.15em] sm:tracking-[0.25em] font-medium text-gray-600 group-hover:text-black transition-colors">
                 Deep Dive Test
               </span>
             </button>
             <button
               onClick={() => navigate('/core')}
-              className="text-[11px] uppercase tracking-[0.35em] text-gray-300 hover:text-gray-500 font-light transition-colors"
+              className="text-[11px] uppercase tracking-[0.2em] sm:tracking-[0.35em] text-gray-300 hover:text-gray-500 font-light transition-colors touch-target-auto"
             >
               Skip to workspace
             </button>
@@ -968,7 +968,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   // --- ERROR STATE ---
   if (genError) {
     return (
-      <div className="h-[calc(100vh-92px)] flex flex-col items-center justify-center bg-[#fafafa] relative overflow-hidden">
+      <div className="h-[calc(100vh-92px)] h-[calc(100dvh-92px)] flex flex-col items-center justify-center bg-[#fafafa] relative overflow-hidden px-4">
         <div className="relative z-10 flex flex-col items-center max-w-md px-6">
           <div className="w-14 h-14 rounded-full flex items-center justify-center mb-6" style={{ background: `${domColor}10`, border: `1.5px solid ${domColor}25` }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={domColor} strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -1002,7 +1002,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
   if (loading) {
     return (
-      <div className="h-[calc(100vh-92px)] flex flex-col items-center justify-center bg-[#fafafa] relative overflow-hidden">
+      <div className="h-[calc(100vh-92px)] h-[calc(100dvh-92px)] flex flex-col items-center justify-center bg-[#fafafa] relative overflow-hidden px-4">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-[0.04]" style={{ background: `radial-gradient(circle, ${domColor}, transparent 70%)` }} />
           <div className="absolute top-0 left-0 right-0 h-px bg-gray-100" />
@@ -1059,10 +1059,10 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
   // --- RESULTS VIEW ---
   return (
-    <div className="h-[calc(100vh-92px)] flex flex-col overflow-hidden bg-[#fafafa] relative">
+    <div className="h-[calc(100vh-92px)] h-[calc(100dvh-92px)] flex flex-col overflow-hidden bg-[#fafafa] relative">
 
       {/* ═══ MAIN AREA — image + sidebar ═══ */}
-      <div className="flex-1 flex overflow-hidden relative min-h-0">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
 
         {/* ── HERO IMAGE + HOTSPOTS ── */}
         <div className={`relative flex flex-col overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] min-w-0 ${isRevealed ? 'opacity-100' : 'opacity-0 scale-[1.02]'}`}
@@ -1159,39 +1159,39 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
           {/* Concept Brief strip — compact inline */}
           {isComplete && (
-            <div className="flex-shrink-0 px-3 py-1.5 transition-all duration-700 ease-out"
+            <div className="flex-shrink-0 px-2 sm:px-3 py-1.5 transition-all duration-700 ease-out"
               style={{ transitionDelay: '400ms' }}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2 sm:gap-3">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
                   <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: domColor, opacity: 0.7 }} />
-                  <span className="text-[11px] uppercase tracking-[0.2em] text-gray-600 font-semibold flex-shrink-0">{spaceType}</span>
-                  <span className="text-gray-200 text-[10px] flex-shrink-0">·</span>
-                  <span className="text-[10px] uppercase tracking-[0.1em] text-gray-400 font-light flex-shrink-0">{domain}</span>
+                  <span className="text-[10px] sm:text-[11px] uppercase tracking-[0.15em] sm:tracking-[0.2em] text-gray-600 font-semibold flex-shrink-0">{spaceType}</span>
+                  <span className="text-gray-200 text-[10px] flex-shrink-0 hidden sm:inline">·</span>
+                  <span className="text-[10px] uppercase tracking-[0.1em] text-gray-400 font-light flex-shrink-0 hidden sm:inline">{domain}</span>
                   {(() => {
                     const conceptText = activeHistoryEntry && activeHistoryEntry.id !== 'current' ? activeHistoryEntry.concept : story;
                     return conceptText ? (
                       <>
-                        <span className="text-gray-200 text-[10px] flex-shrink-0">—</span>
-                        <span className="text-[10px] text-gray-400 font-light truncate">{conceptText}</span>
+                        <span className="text-gray-200 text-[10px] flex-shrink-0 hidden md:inline">—</span>
+                        <span className="text-[10px] text-gray-400 font-light truncate hidden md:inline">{conceptText}</span>
                       </>
                     ) : null;
                   })()}
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
+                <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
                   <button onClick={() => setBudgetOpen(true)}
-                    className="px-2.5 py-0.5 border text-[8px] uppercase tracking-[0.2em] font-semibold rounded transition-all flex items-center gap-1"
+                    className="px-2 sm:px-2.5 py-0.5 border text-[8px] uppercase tracking-[0.15em] sm:tracking-[0.2em] font-semibold rounded transition-all flex items-center gap-1 touch-target-auto"
                     style={{ borderColor: `${domColor}30`, color: domColor, background: `${domColor}06` }}
                     onMouseEnter={e => { e.currentTarget.style.borderColor = `${domColor}60`; e.currentTarget.style.background = `${domColor}10`; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = `${domColor}30`; e.currentTarget.style.background = `${domColor}06`; }}>
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
-                    Budget
+                    <span className="hidden sm:inline">Budget</span>
                   </button>
                   <button onClick={() => window.print()}
-                    className="px-2 py-0.5 border border-gray-200 text-[8px] uppercase tracking-[0.2em] font-medium text-gray-400 hover:border-gray-400 hover:text-gray-600 rounded transition-all bg-white/60">
+                    className="px-1.5 sm:px-2 py-0.5 border border-gray-200 text-[8px] uppercase tracking-[0.15em] sm:tracking-[0.2em] font-medium text-gray-400 hover:border-gray-400 hover:text-gray-600 rounded transition-all bg-white/60 touch-target-auto">
                     Export
                   </button>
                   <button onClick={() => navigate('/core')}
-                    className="px-2 py-0.5 border border-gray-200 text-[8px] uppercase tracking-[0.2em] font-medium text-gray-400 hover:border-gray-400 hover:text-gray-600 rounded transition-all bg-white/60">
+                    className="px-1.5 sm:px-2 py-0.5 border border-gray-200 text-[8px] uppercase tracking-[0.15em] sm:tracking-[0.2em] font-medium text-gray-400 hover:border-gray-400 hover:text-gray-600 rounded transition-all bg-white/60 touch-target-auto hidden sm:inline-flex">
                     Re-calibrate
                   </button>
                 </div>
@@ -1201,23 +1201,24 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
         </div>
 
         {/* ── MATERIAL DNA SIDEBAR ── */}
-        <div className={`bg-white border-l border-gray-100/60 flex flex-col overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
-          sidebarOpen ? 'w-[400px]' : 'w-[44px]'
+        <div className={`bg-white border-l md:border-l border-t md:border-t-0 border-gray-100/60 flex flex-col overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
+          sidebarOpen ? 'w-full md:w-[400px] max-h-[45vh] md:max-h-none' : 'w-full md:w-[44px] max-h-[44px] md:max-h-none'
         } ${isRevealed ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}
           style={{ transitionDelay: isRevealed ? '300ms' : '0ms' }}>
 
           {/* Collapsed state */}
           {!sidebarOpen && (
             <button onClick={() => setSidebarOpen(true)}
-              className="flex-1 flex flex-col items-center justify-center gap-3 py-6 group transition-all hover:bg-gray-50/50">
-              <div className="w-6 h-6 rounded-full flex items-center justify-center shadow-sm"
+              className="flex-1 flex md:flex-col flex-row items-center justify-center gap-2 md:gap-3 py-2 md:py-6 px-4 md:px-0 group transition-all hover:bg-gray-50/50 touch-target-auto">
+              <div className="w-6 h-6 rounded-full flex items-center justify-center shadow-sm flex-shrink-0"
                 style={{ background: `radial-gradient(circle at 35% 35%, ${domColor}30, ${domColor}70)`, border: `1px solid ${domColor}40` }}>
                 <span className="text-white text-[11px] font-semibold">{dnaMaterials.length}</span>
               </div>
-              <div className="flex flex-col items-center" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
+              <div className="hidden md:flex flex-col items-center" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
                 <span className="text-[11px] uppercase tracking-[0.3em] text-gray-400 font-medium group-hover:text-gray-600 transition-colors">Material DNA</span>
               </div>
-              <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round" className="mt-1 group-hover:stroke-gray-600 transition-colors">
+              <span className="md:hidden text-[11px] uppercase tracking-[0.2em] text-gray-400 font-medium group-hover:text-gray-600 transition-colors">Material DNA</span>
+              <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round" className="md:mt-1 group-hover:stroke-gray-600 transition-colors md:rotate-0 -rotate-90">
                 <path d="M8 3 L5 6 L8 9" />
               </svg>
             </button>
@@ -1816,7 +1817,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
         };
         return (
           <div
-            className="fixed inset-0 z-[200] bg-black/85 flex items-center justify-center p-6 lg:p-10"
+            className="fixed inset-0 z-[200] bg-black/85 flex items-center justify-center p-2 sm:p-6 lg:p-10"
             onClick={() => setZoomedImage(null)}
             onKeyDown={(e) => {
               if (e.key === 'Escape') setZoomedImage(null);
@@ -1843,7 +1844,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 key={zoomedImage}
                 src={zoomedImage}
                 alt="Zoomed view"
-                className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl animate-fade-in"
+                className="max-w-full max-h-[80vh] max-h-[80dvh] object-contain rounded-lg sm:rounded-xl shadow-2xl animate-fade-in"
                 style={{ animation: 'fadeIn 0.3s ease-out' }}
               />
             </div>
@@ -1889,7 +1890,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
         return (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-sm animate-fade-in"
             onClick={() => setBudgetOpen(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-[520px] max-w-[92vw] max-h-[85vh] overflow-hidden animate-fade-in-up"
+            <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl w-[520px] max-w-[94vw] max-h-[88vh] max-h-[88dvh] overflow-hidden overflow-y-auto animate-fade-in-up"
               onClick={e => e.stopPropagation()} style={{ animationDuration: '0.3s' }}>
 
               {/* Header */}

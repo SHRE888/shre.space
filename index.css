@@ -7,12 +7,21 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #root {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Safe area insets for notched devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-top { padding-top: env(safe-area-inset-top); }
 }
 
 /* Focus-visible: accessible keyboard focus ring */
@@ -49,6 +58,32 @@ button, a, [role="button"] {
 }
 .custom-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.16);
+}
+
+/* Disable custom cursors on touch devices */
+@media (pointer: coarse) {
+  .layout-root,
+  .layout-root button,
+  .layout-root a,
+  .layout-root [role="button"],
+  .layout-root label[for],
+  .layout-root .cursor-pointer,
+  .layout-root [class*="cursor-grab"],
+  .layout-root .cursor-grab,
+  .layout-root [class*="cursor-grabbing"],
+  .layout-root .cursor-grabbing,
+  .cursor-tri-up, .cursor-tri-down, .cursor-tri-left, .cursor-tri-right,
+  .cursor-tri-w-up, .cursor-tri-w-down, .cursor-tri-w-left, .cursor-tri-w-right,
+  .layout-root .cursor-ew-resize,
+  .layout-root input[type="range"],
+  .layout-root input[type="text"],
+  .layout-root input[type="number"],
+  .layout-root textarea,
+  .layout-root [contenteditable="true"],
+  .layout-root [disabled],
+  .layout-root .cursor-not-allowed {
+    cursor: auto !important;
+  }
 }
 
 /* ── Custom Cursor System — 4-element gradient ── */
@@ -590,4 +625,35 @@ input[type="range"]::-moz-range-thumb {
 .workspace-content-reveal {
   animation: fadeInUp 1s cubic-bezier(0.22, 0.61, 0.36, 1) both;
   animation-delay: 2.4s;
+}
+
+/* ── Responsive mobile utilities ── */
+
+/* Mobile-friendly touch targets */
+@media (pointer: coarse) {
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* Exception for tiny inline elements like dots, chips, etc. */
+  .touch-target-auto { min-height: auto; min-width: auto; }
+}
+
+/* Mobile sidebar overlay */
+@media (max-width: 767px) {
+  .mobile-sidebar-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    z-index: 50 !important;
+    transform: none !important;
+  }
+}
+
+/* Prevent horizontal overflow on mobile */
+@media (max-width: 639px) {
+  html, body {
+    overflow-x: hidden;
+  }
 }
