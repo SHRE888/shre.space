@@ -783,7 +783,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
   return (
     <div className={`flex h-[calc(100vh-72px)] h-[calc(100dvh-72px)] overflow-hidden relative transition-opacity duration-700 ${mounted ? 'opacity-100' : 'opacity-0'}`} style={{ background: '#f4f7fc' }}>
       {/* Workspace Area */}
-      <div className={`flex-1 flex flex-col relative overflow-hidden transition-all duration-700 ease-out ${activeSidePanel || isMatrixOpen ? 'lg:mr-[300px]' : ''} ${isDomainPanelOpen ? 'lg:ml-[280px]' : ''}`}>
+      <div className={`flex-1 flex flex-col relative overflow-hidden transition-all duration-700 ease-out ${activeSidePanel || isMatrixOpen ? 'lg:mr-[300px]' : ''} ${isDomainPanelOpen ? 'lg:ml-[280px]' : ''}`} style={{ minHeight: 0 }}>
 
         {/* Keyframe styles for Generate + Brilliant */}
         <style>{`
@@ -1189,7 +1189,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
         })()}
 
         {/* Central Core Diagram */}
-        <div className="flex-grow flex items-center justify-center transition-all duration-500 pt-2 pb-4">
+        <div className="flex-grow flex items-center justify-center transition-all duration-500 pt-1 sm:pt-2 pb-2 sm:pb-4" style={{ minHeight: 0 }}>
           <div className="flex-1 flex items-center justify-center w-full h-full min-h-0">
           <CoreDiagram
             distribution={state.refinement.refinedPercentages}
@@ -1246,19 +1246,19 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
               }}
               onClick={() => { setWelcomeFading(true); setTimeout(() => setWelcomeVisible(false), 2500); }}
             >
-              <div className="text-center max-w-lg px-6" style={{ animation: 'fadeIn 1s ease-out both' }}>
+              <div className="text-center max-w-lg px-4 sm:px-6" style={{ animation: 'fadeIn 1s ease-out both' }}>
                 {/* Top label */}
                 <div style={{
-                  fontSize: '13px', letterSpacing: '0.6em', textTransform: 'uppercase',
+                  fontSize: 'clamp(10px, 2.5vw, 13px)', letterSpacing: '0.4em', textTransform: 'uppercase',
                   color: 'rgba(0,0,0,0.2)', fontWeight: 400, fontFamily: "'IBM Plex Mono', monospace",
-                  marginBottom: '20px',
+                  marginBottom: '16px',
                 }}>
                   Based on your survey answers
                 </div>
 
                 {/* Element symbol */}
                 <div style={{
-                  fontSize: '42px', color: ELEMENT_COLORS[el], marginBottom: '12px',
+                  fontSize: 'clamp(32px, 8vw, 42px)', color: ELEMENT_COLORS[el], marginBottom: '10px',
                   textShadow: `0 0 40px ${ELEMENT_COLORS[el]}50`,
                   animation: 'fadeIn 1.2s ease-out 0.3s both',
                 }}>
@@ -1267,7 +1267,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
 
                 {/* Main element name */}
                 <div style={{
-                  fontSize: '36px', fontWeight: 200, letterSpacing: '0.25em', textTransform: 'uppercase',
+                  fontSize: 'clamp(26px, 7vw, 36px)', fontWeight: 200, letterSpacing: '0.2em', textTransform: 'uppercase',
                   color: '#1a1a1a', fontFamily: "'IBM Plex Sans', sans-serif", marginBottom: '6px',
                   animation: 'fadeIn 1s ease-out 0.5s both',
                 }}>
@@ -1276,9 +1276,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
 
                 {/* Subtitle */}
                 <div style={{
-                  fontSize: '16px', letterSpacing: '0.3em', textTransform: 'uppercase',
+                  fontSize: 'clamp(12px, 3vw, 16px)', letterSpacing: '0.2em', textTransform: 'uppercase',
                   color: ELEMENT_COLORS[el], fontWeight: 500,
-                  fontFamily: "'IBM Plex Mono', monospace", marginBottom: '24px',
+                  fontFamily: "'IBM Plex Mono', monospace", marginBottom: '20px',
                   animation: 'fadeIn 1s ease-out 0.7s both',
                 }}>
                   {isCloseCall ? 'Your leading energy' : 'Your dominant energy'}
@@ -1286,9 +1286,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
 
                 {/* Description */}
                 <div style={{
-                  fontSize: '13px', fontWeight: 300, letterSpacing: '0.03em',
+                  fontSize: 'clamp(12px, 2.8vw, 13px)', fontWeight: 300, letterSpacing: '0.03em',
                   color: 'rgba(0,0,0,0.45)', fontFamily: "'IBM Plex Sans', sans-serif",
-                  lineHeight: 1.8, maxWidth: '360px', margin: '0 auto 28px',
+                  lineHeight: 1.8, maxWidth: '360px', margin: '0 auto 24px',
                   animation: 'fadeIn 1s ease-out 0.9s both',
                 }}>
                   {ELEMENT_MSGS[el]}
@@ -1297,10 +1297,10 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 {/* Close-call advisory */}
                 {isCloseCall && (
                   <div style={{
-                    fontSize: '16px', fontWeight: 400, letterSpacing: '0.02em',
+                    fontSize: 'clamp(13px, 3.2vw, 16px)', fontWeight: 400, letterSpacing: '0.02em',
                     color: 'rgba(0,0,0,0.5)', fontFamily: "'IBM Plex Sans', sans-serif",
-                    lineHeight: 1.7, maxWidth: '380px', margin: '0 auto 24px',
-                    padding: '14px 20px', borderRadius: '12px',
+                    lineHeight: 1.7, maxWidth: '380px', margin: '0 auto 20px',
+                    padding: '12px 16px', borderRadius: '12px',
                     background: `linear-gradient(135deg, ${ELEMENT_COLORS[topTwo[0]]}08, ${ELEMENT_COLORS[topTwo[1]]}08)`,
                     border: `1px solid ${ELEMENT_COLORS[el]}15`,
                     animation: 'fadeIn 1s ease-out 1s both',
@@ -1312,7 +1312,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
 
                 {/* Bar chart of all 4 elements with percentages */}
                 <div style={{
-                  display: 'flex', gap: '14px', justifyContent: 'center', alignItems: 'flex-end',
+                  display: 'flex', gap: 'clamp(8px, 2vw, 14px)', justifyContent: 'center', alignItems: 'flex-end',
                   marginBottom: '16px', animation: 'fadeIn 1s ease-out 1.1s both',
                 }}>
                   {(['earth', 'fire', 'water', 'air'] as Element[]).map(e => {
@@ -1320,7 +1320,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                     const isPrimary = e === el;
                     const isSecondary = e === sec;
                     return (
-                      <div key={e} style={{ textAlign: 'center', width: '52px' }}>
+                      <div key={e} style={{ textAlign: 'center', width: 'clamp(40px, 10vw, 52px)' }}>
                         <div style={{
                           fontSize: '13px', fontWeight: isPrimary ? 700 : isSecondary ? 500 : 300,
                           color: isPrimary ? ELEMENT_COLORS[e] : isSecondary ? `${ELEMENT_COLORS[e]}BB` : 'rgba(0,0,0,0.18)',
@@ -1354,19 +1354,19 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
 
                 {/* Distribution explanation */}
                 <div style={{
-                  fontSize: '16px', fontWeight: 300, color: 'rgba(0,0,0,0.3)',
+                  fontSize: 'clamp(13px, 3vw, 16px)', fontWeight: 300, color: 'rgba(0,0,0,0.3)',
                   fontFamily: "'IBM Plex Sans', sans-serif", marginBottom: '12px',
                   animation: 'fadeIn 1s ease-out 1.3s both', lineHeight: 1.6,
                 }}>
                   This is your energy distribution based on the survey.
-                  <br />It is now applied to the core diagram — rotate the rings to refine it.
+                  <br />Rotate the rings on the core diagram to refine it.
                 </div>
 
                 {/* Secondary element note */}
                 {sec && sec !== el && (
                   <div style={{
-                    fontSize: '16px', fontWeight: 300, color: 'rgba(0,0,0,0.25)',
-                    fontFamily: "'IBM Plex Sans', sans-serif", marginBottom: '20px',
+                    fontSize: 'clamp(13px, 3vw, 16px)', fontWeight: 300, color: 'rgba(0,0,0,0.25)',
+                    fontFamily: "'IBM Plex Sans', sans-serif", marginBottom: '16px',
                     animation: 'fadeIn 1s ease-out 1.4s both',
                   }}>
                     with <span style={{ color: ELEMENT_COLORS[sec], fontWeight: 500 }}>{ELEMENT_NAMES[sec]}</span> as your secondary influence
@@ -1375,11 +1375,11 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
 
                 {/* CTA */}
                 <div style={{
-                  fontSize: '13px', letterSpacing: '0.5em', textTransform: 'uppercase',
+                  fontSize: 'clamp(10px, 2.5vw, 13px)', letterSpacing: '0.3em', textTransform: 'uppercase',
                   color: 'rgba(0,0,0,0.15)', fontWeight: 400, fontFamily: "'IBM Plex Mono', monospace",
                   animation: 'fadeIn 1s ease-out 1.6s both',
                 }}>
-                  Click anywhere to begin
+                  Tap anywhere to begin
                 </div>
               </div>
             </div>
@@ -1387,14 +1387,14 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
         })()}
 
         {/* Generate + Brilliant — bottom center on mobile, left side on desktop */}
-        <div ref={diagRef} className="absolute bottom-4 sm:bottom-8 z-20 workspace-content-reveal flex flex-col items-center left-1/2 -translate-x-1/2 sm:left-[44px] sm:translate-x-0 w-[200px] sm:w-[180px]" style={{ opacity: coreTutorialDone ? 1 : 0, pointerEvents: coreTutorialDone ? 'auto' : 'none', transition: 'opacity 0.8s ease' }}>
+        <div ref={diagRef} className="absolute bottom-2 sm:bottom-8 z-20 workspace-content-reveal flex flex-col items-center left-1/2 -translate-x-1/2 sm:left-[44px] sm:translate-x-0 w-[180px] sm:w-[180px]" style={{ opacity: coreTutorialDone ? 1 : 0, pointerEvents: coreTutorialDone ? 'auto' : 'none', transition: 'opacity 0.8s ease' }}>
           {/* Brilliant explanation panel — appears above on click */}
           {showDiagnosticPanel && (
-            <div className="mb-2 w-[240px] sm:w-[260px] rounded-2xl border backdrop-blur-xl shadow-lg overflow-hidden animate-scale-in" style={{ background: 'rgba(255,255,255,0.65)', borderColor: brilliant ? 'rgba(53,88,160,0.15)' : 'rgba(230,230,230,0.5)', maxHeight: 'calc(100vh - 200px)', maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' }}>
-              <div className="px-4 py-3 flex items-center justify-between border-b" style={{ borderColor: brilliant ? 'rgba(53,88,160,0.12)' : '#f5f5f5' }}>
+            <div className="mb-2 w-[260px] max-w-[calc(100vw-24px)] rounded-2xl border backdrop-blur-xl shadow-lg overflow-hidden animate-scale-in fixed sm:relative bottom-auto sm:bottom-auto left-1/2 sm:left-auto -translate-x-1/2 sm:translate-x-0 top-16 sm:top-auto z-[60] sm:z-auto" style={{ background: 'rgba(255,255,255,0.92)', borderColor: brilliant ? 'rgba(53,88,160,0.15)' : 'rgba(230,230,230,0.5)', maxHeight: 'calc(100dvh - 140px)', overflowY: 'auto' }}>
+              <div className="px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between border-b" style={{ borderColor: brilliant ? 'rgba(53,88,160,0.12)' : '#f5f5f5' }}>
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full transition-colors ${brilliant ? '' : 'bg-gray-300'}`} style={brilliant ? { background: '#5B8AD0' } : {}} />
-                  <span className={`text-[16px] uppercase tracking-[0.25em] font-semibold transition-colors ${brilliant ? '' : 'text-gray-500'}`} style={brilliant ? { color: '#3558A0' } : {}}>
+                  <span className={`text-[13px] sm:text-[16px] uppercase tracking-[0.2em] sm:tracking-[0.25em] font-semibold transition-colors ${brilliant ? '' : 'text-gray-500'}`} style={brilliant ? { color: '#3558A0' } : {}}>
                     Brilliant Mode
                   </span>
                 </div>
@@ -1406,15 +1406,15 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                   <div className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-all duration-300 ${brilliant ? 'left-[16px]' : 'left-[2px]'}`} />
                 </button>
               </div>
-              <div className="px-4 py-3">
-                <p className="text-[16px] leading-[1.7] text-gray-500 font-light" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+              <div className="px-3 sm:px-4 py-2.5 sm:py-3">
+                <p className="text-[13px] sm:text-[16px] leading-[1.6] sm:leading-[1.7] text-gray-500 font-light" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
                   Brilliant mode detects when your element balance enters a harmonious zone — a specific ratio where dominant, reinforcing, and supporting energies create an exceptional spatial composition.
                 </p>
               </div>
               {brilliantZone && brilliant && (
                 <div className="px-4 pb-3 border-t" style={{ borderColor: 'rgba(53,88,160,0.12)' }}>
                   <div className="pt-3">
-                    <p className="text-[16px] font-medium text-gray-800 tracking-wide leading-snug mb-2">
+                    <p className="text-[14px] sm:text-[16px] font-medium text-gray-800 tracking-wide leading-snug mb-2">
                       {brilliantZone.name}
                     </p>
                     {brilliantZone.dominant && (
@@ -1431,7 +1431,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                         ))}
                       </div>
                     )}
-                    <p className="text-[13px] leading-[1.7] text-gray-400 font-light" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
+                    <p className="text-[12px] sm:text-[13px] leading-[1.6] sm:leading-[1.7] text-gray-400 font-light" style={{ fontFamily: "'IBM Plex Sans', sans-serif" }}>
                       {brilliantZone.prompt}
                     </p>
                   </div>
@@ -1447,21 +1447,22 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
             const fixedOrder: Element[] = ['earth', 'fire', 'water', 'air'];
             return (
               <>
-                <div className="flex items-center justify-center gap-3 mb-5 w-full">
+                <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3 sm:mb-5 w-full">
                   {fixedOrder.map(el => {
                     const val = dist[el];
                     const mc = MUTED_EL[el];
                     const isDom = el === domEl;
-                    const sz = isDom ? 38 : 28;
+                    const sz = isDom ? 32 : 24;
+                    const szLg = isDom ? 38 : 28;
                     return (
-                      <div key={el} className="flex flex-col items-center gap-1" style={{ transition: 'all 0.4s ease' }}>
-                        <button className="flex items-center justify-center transition-all hover:scale-125 active:scale-90"
+                      <div key={el} className="flex flex-col items-center gap-0.5 sm:gap-1" style={{ transition: 'all 0.4s ease' }}>
+                        <button className="flex items-center justify-center transition-all hover:scale-125 active:scale-90 touch-target-auto"
                           style={{ width: 20, height: 16, color: mc, opacity: 0.55 }}
                           onClick={e => { e.stopPropagation(); handleDistributionChange(el, Math.min(65, val + 5)); }}>
                           <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 5 L5 1 L9 5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                         </button>
-                        <div className="rounded-full relative transition-all duration-400" style={{
-                          width: sz, height: sz,
+                        <div className="rounded-full relative transition-all duration-400 hidden sm:block" style={{
+                          width: szLg, height: szLg,
                           background: `radial-gradient(circle at 35% 28%, ${mc}E0, ${mc}80)`,
                           boxShadow: isDom ? `0 2px 14px ${mc}40, 0 0 0 2px ${mc}20` : `0 1px 6px ${mc}18`,
                         }}>
@@ -1473,7 +1474,20 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                             }}>{Math.round(val)}</span>
                           </div>
                         </div>
-                        <button className="flex items-center justify-center transition-all hover:scale-125 active:scale-90"
+                        <div className="rounded-full relative transition-all duration-400 sm:hidden" style={{
+                          width: sz, height: sz,
+                          background: `radial-gradient(circle at 35% 28%, ${mc}E0, ${mc}80)`,
+                          boxShadow: isDom ? `0 2px 10px ${mc}40, 0 0 0 2px ${mc}20` : `0 1px 4px ${mc}18`,
+                        }}>
+                          <div className="absolute inset-0 rounded-full flex items-center justify-center">
+                            <span className="text-white font-semibold tabular-nums" style={{
+                              fontSize: isDom ? 12 : 10,
+                              textShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                              fontFamily: "'IBM Plex Mono', monospace",
+                            }}>{Math.round(val)}</span>
+                          </div>
+                        </div>
+                        <button className="flex items-center justify-center transition-all hover:scale-125 active:scale-90 touch-target-auto"
                           style={{ width: 20, height: 16, color: mc, opacity: 0.55 }}
                           onClick={e => { e.stopPropagation(); handleDistributionChange(el, Math.max(5, val - 5)); }}>
                           <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1 L5 5 L9 1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -1484,14 +1498,14 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 </div>
                 <div className="relative w-full">
                   {brilliantZone && brilliant && (
-                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-10 cursor-pointer flex items-center gap-1.5 whitespace-nowrap transition-transform duration-300 hover:scale-[1.15]" onClick={() => setShowDiagnosticPanel(p => !p)}>
-                      <div className="w-[6px] h-[6px] rounded-full" style={{ background: '#4A80D0', boxShadow: '0 0 10px rgba(60,110,200,0.7)', animation: 'brilliantDot 2s ease-in-out infinite' }} />
-                      <span className="text-[13px] uppercase tracking-[0.2em] font-semibold" style={{ color: '#3A6BBF', animation: 'brilliantBreathe 3s ease-in-out infinite' }}>Brilliant Zone</span>
+                    <div className="absolute -top-6 sm:-top-7 left-1/2 -translate-x-1/2 z-10 cursor-pointer flex items-center gap-1 sm:gap-1.5 whitespace-nowrap transition-transform duration-300 hover:scale-[1.15] touch-target-auto" onClick={() => setShowDiagnosticPanel(p => !p)}>
+                      <div className="w-[5px] h-[5px] sm:w-[6px] sm:h-[6px] rounded-full" style={{ background: '#4A80D0', boxShadow: '0 0 10px rgba(60,110,200,0.7)', animation: 'brilliantDot 2s ease-in-out infinite' }} />
+                      <span className="text-[11px] sm:text-[13px] uppercase tracking-[0.15em] sm:tracking-[0.2em] font-semibold" style={{ color: '#3A6BBF', animation: 'brilliantBreathe 3s ease-in-out infinite' }}>Brilliant Zone</span>
                     </div>
                   )}
                   <button
                     onClick={handleInitiateGeneration}
-                    className="w-full py-3.5 rounded-full text-[16px] uppercase tracking-[0.35em] font-medium transition-all duration-500 hover:scale-[1.03] active:scale-[0.97] text-white text-center"
+                    className="w-full py-2.5 sm:py-3.5 rounded-full text-[14px] sm:text-[16px] uppercase tracking-[0.25em] sm:tracking-[0.35em] font-medium transition-all duration-500 hover:scale-[1.03] active:scale-[0.97] text-white text-center touch-target-auto"
                     style={{
                       background: brilliantZone && brilliant
                         ? 'linear-gradient(135deg, #1E3F7A 0%, #2D5AAE 40%, #4080D4 100%)'
@@ -1507,7 +1521,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 </div>
                 <button
                   onClick={() => setIsDeepDiveOpen(true)}
-                  className="w-full py-2 rounded-full text-[11px] uppercase tracking-[0.3em] font-light transition-all duration-300 hover:bg-gray-50 mt-2"
+                  className="w-full py-1.5 sm:py-2 rounded-full text-[10px] sm:text-[11px] uppercase tracking-[0.2em] sm:tracking-[0.3em] font-light transition-all duration-300 hover:bg-gray-50 mt-1.5 sm:mt-2 touch-target-auto"
                   style={{ color: '#8899b3', border: '1px solid rgba(136,153,179,0.15)' }}>
                   Deep Dive Test
                 </button>
@@ -1522,8 +1536,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
       {!isDomainPanelOpen && coreTutorialDone && (
         <button
           onClick={() => setIsDomainPanelOpen(true)}
-          className="fixed left-0 top-1/2 -translate-y-1/2 z-30 rounded-r-lg transition-all duration-300 opacity-50 hover:opacity-100 touch-target-auto"
-          style={{ background: 'rgba(255,255,255,0.85)', boxShadow: '2px 0 12px rgba(0,0,0,0.05)', padding: '16px 6px' }}
+          className="fixed left-0 top-[35%] sm:top-1/2 -translate-y-1/2 z-30 rounded-r-lg transition-all duration-300 opacity-60 hover:opacity-100 touch-target-auto"
+          style={{ background: 'rgba(255,255,255,0.88)', boxShadow: '2px 0 12px rgba(0,0,0,0.06)', padding: '14px 7px' }}
         >
           <span className="text-[10px] sm:text-[11px] font-semibold uppercase" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.25em', color: '#8899b3' }}>
             Space
@@ -1792,8 +1806,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
       {!isMatrixOpen && !activeSidePanel && coreTutorialDone && (
         <button
           onClick={() => setIsMatrixOpen(true)}
-          className="fixed right-0 top-1/2 -translate-y-1/2 z-30 rounded-l-lg transition-all duration-300 opacity-40 hover:opacity-90 touch-target-auto"
-          style={{ animation: 'matrixBreathe 4s ease-in-out infinite', background: 'rgba(255,255,255,0.88)', boxShadow: '-2px 0 10px rgba(0,0,0,0.03)', padding: '16px 6px' }}
+          className="fixed right-0 top-[35%] sm:top-1/2 -translate-y-1/2 z-30 rounded-l-lg transition-all duration-300 opacity-50 hover:opacity-90 touch-target-auto"
+          style={{ animation: 'matrixBreathe 4s ease-in-out infinite', background: 'rgba(255,255,255,0.88)', boxShadow: '-2px 0 10px rgba(0,0,0,0.04)', padding: '14px 7px' }}
         >
           <span className="text-[10px] font-medium uppercase [writing-mode:vertical-lr] rotate-180" style={{ letterSpacing: '0.3em', color: '#aab4c2' }}>
             Matrix
@@ -1956,12 +1970,12 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
             <svg width="8" height="12" viewBox="0 0 8 12" fill="none" stroke="#7a8faa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="2 1.5 6.5 6 2 10.5" /></svg>
           </button>
         )}
-        <header className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+        <header className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-gray-50 flex items-center justify-between">
           <div>
-            <span className="text-[16px] uppercase tracking-[0.4em] font-semibold text-black block">
+            <span className="text-[14px] sm:text-[16px] uppercase tracking-[0.3em] sm:tracking-[0.4em] font-semibold text-black block">
               {activeSidePanel === 'materials' ? 'Materials' : 'Atmosphere'}
             </span>
-            <span className="text-[11px] uppercase tracking-[0.2em] text-gray-400 font-light mt-0.5 block">
+            <span className="text-[10px] sm:text-[11px] uppercase tracking-[0.15em] sm:tracking-[0.2em] text-gray-400 font-light mt-0.5 block">
               Select up to 6
             </span>
           </div>
@@ -1984,12 +1998,12 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
             : state.refinement.selectedAdjectives;
           if (selectedItems.length === 0) return null;
           return (
-            <div className="px-6 py-4 bg-gray-50/60 border-b border-gray-100">
-              <div className="flex items-center justify-between mb-3">
-                <span className="system-label text-[13px]">
+            <div className="px-3 sm:px-6 py-3 sm:py-4 bg-gray-50/60 border-b border-gray-100">
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <span className="system-label text-[12px] sm:text-[13px]">
                   Selected ({selectedItems.length}/6)
                 </span>
-                <span className="system-label text-[13px]">
+                <span className="system-label text-[12px] sm:text-[13px]">
                   {6 - selectedItems.length} remaining
                 </span>
               </div>
@@ -2110,7 +2124,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
 
             {/* Modal card */}
             <div className="relative bg-white rounded-xl sm:rounded-2xl overflow-hidden flex flex-col mx-2 sm:mx-0"
-              style={{ width: '860px', maxWidth: 'calc(100vw - 16px)', maxHeight: '90vh', maxHeight: '90dvh', boxShadow: '0 8px 60px rgba(45,75,140,0.12), 0 2px 8px rgba(0,0,0,0.04)', animation: 'conceptScale 0.35s ease-out' }}>
+              style={{ width: '860px', maxWidth: 'calc(100vw - 16px)', maxHeight: '90dvh', boxShadow: '0 8px 60px rgba(45,75,140,0.12), 0 2px 8px rgba(0,0,0,0.04)', animation: 'conceptScale 0.35s ease-out' }}>
 
               {/* Accent line */}
               <div className="h-[2px] w-full shrink-0" style={{ background: `linear-gradient(90deg, ${domColor}60, ${domMc}60, ${domColor}60)` }} />
@@ -2449,16 +2463,16 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
 
               {/* Element roles */}
               {showGenerateModal.dominant && (
-                <div className="flex items-center gap-4 mb-6">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-4 sm:mb-6">
                   {[
                     { el: showGenerateModal.dominant, role: 'Dominant' },
                     ...(showGenerateModal.reinforcer ? [{ el: showGenerateModal.reinforcer, role: 'Reinforcer' }] : []),
                     ...(showGenerateModal.supporter ? [{ el: showGenerateModal.supporter, role: 'Supporter' }] : []),
                   ].map(({ el, role }) => (
-                    <div key={role} className="flex items-center gap-1.5">
+                    <div key={role} className="flex items-center gap-1 sm:gap-1.5">
                       <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ELEMENT_COLORS[el] }} />
-                      <span className="text-[13px] uppercase tracking-[0.2em] text-gray-500">{el}</span>
-                      <span className="text-[13px] uppercase tracking-[0.15em] text-gray-400 ml-0.5">{role}</span>
+                      <span className="text-[11px] sm:text-[13px] uppercase tracking-[0.15em] sm:tracking-[0.2em] text-gray-500">{el}</span>
+                      <span className="text-[11px] sm:text-[13px] uppercase tracking-[0.1em] sm:tracking-[0.15em] text-gray-400 ml-0.5">{role}</span>
                     </div>
                   ))}
                 </div>

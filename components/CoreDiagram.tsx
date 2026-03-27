@@ -206,6 +206,19 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
   const symOrbR = nR + 50;
   const matOrbR = nR + 140;
   const atmoOrbR = nR + 250;
+  const canvasSize = atmoOrbR * 2 + 80; // 816
+
+  const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: 1200, h: 800 });
+  useEffect(() => {
+    const el = cRef.current;
+    if (!el) return;
+    const update = () => setContainerSize({ w: el.clientWidth, h: el.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const diagramScale = Math.min(1, containerSize.w / canvasSize, containerSize.h / canvasSize);
 
   const nColors = useMemo(() => sorted.map(([el]) => MUTED_COLORS[el as Element]), [sorted]);
   const nGrad = useMemo(() => `radial-gradient(circle at 36% 32%, ${dc}D0 0%, ${dc}80 30%, ${nColors[1]}50 55%, ${nColors[2]}28 78%, ${nColors[3]}12 100%)`, [dc, nColors]);
@@ -295,46 +308,46 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
       style={{ background: bgGrad, opacity: mounted ? 1 : 0, transition: 'opacity 0.8s ease' }}
       onClick={() => { warmupSpeech(); setMatPicker(null); setAtmoPicker(null); setExpMat(null); setShowAllMats(false); setFullMat(null); setShowAtmoRefs(false); setNucleusTooltip(false); setExpandedRing(null); }}
     >
-      {/* ═══ SVG orbit rings + sector guides ═══ */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none orbit-svg" preserveAspectRatio="xMidYMid meet" viewBox="-600 -600 1200 1200">
-        {/* Faint sector divider lines — 4 sectors at 45°/135°/225°/315° */}
-        {[45, 135, 225, 315].map(deg => {
-          const rad = deg * Math.PI / 180;
-          const r1 = nR + 20, r2 = atmoOrbR + 10;
-          return <line key={deg} x1={Math.cos(rad) * r1} y1={Math.sin(rad) * r1} x2={Math.cos(rad) * r2} y2={Math.sin(rad) * r2} stroke={dc} strokeWidth="0.5" opacity={0.08} />;
-        })}
+      {/* ═══ Outer scene container — scales to fit viewport ═══ */}
+      <div className="relative" style={{ width: canvasSize, height: canvasSize, transform: diagramScale < 1 ? `scale(${diagramScale})` : undefined, transformOrigin: 'center center', flexShrink: 0 }}>
 
-        {/* Faint sector zone fills — 4 element zones */}
-        {ELEMENTS.map(el => {
-          const mc = MUTED_COLORS[el];
-          const baseA = EL_ANGLE[el] * Math.PI / 180;
-          const a1 = baseA - Math.PI / 4;
-          const a2 = baseA + Math.PI / 4;
-          const ri = nR + 20;
-          const ro = atmoOrbR - 10;
-          const largeArc = 0;
-          const d = [
-            `M ${Math.cos(a1) * ri} ${Math.sin(a1) * ri}`,
-            `A ${ri} ${ri} 0 ${largeArc} 1 ${Math.cos(a2) * ri} ${Math.sin(a2) * ri}`,
-            `L ${Math.cos(a2) * ro} ${Math.sin(a2) * ro}`,
-            `A ${ro} ${ro} 0 ${largeArc} 0 ${Math.cos(a1) * ro} ${Math.sin(a1) * ro}`,
-            'Z',
-          ].join(' ');
-          return <path key={`zone-${el}`} d={d} fill={mc} opacity={0.03} />;
-        })}
+        {/* ═══ SVG orbit rings + sector guides ═══ */}
+        <svg className="absolute inset-0 w-full h-full pointer-events-none orbit-svg" viewBox={`${-canvasSize/2} ${-canvasSize/2} ${canvasSize} ${canvasSize}`}>
+          {/* Faint sector divider lines — 4 sectors at 45°/135°/225°/315° */}
+          {[45, 135, 225, 315].map(deg => {
+            const rad = deg * Math.PI / 180;
+            const r1 = nR + 20, r2 = atmoOrbR + 10;
+            return <line key={deg} x1={Math.cos(rad) * r1} y1={Math.sin(rad) * r1} x2={Math.cos(rad) * r2} y2={Math.sin(rad) * r2} stroke={dc} strokeWidth="0.5" opacity={0.08} />;
+          })}
 
-        {/* Nucleus boundary ring */}
-        <circle cx="0" cy="0" r={nR + 4} fill="none" stroke={dc} strokeWidth="0.6" opacity={0.18} />
+          {/* Faint sector zone fills — 4 element zones */}
+          {ELEMENTS.map(el => {
+            const mc = MUTED_COLORS[el];
+            const baseA = EL_ANGLE[el] * Math.PI / 180;
+            const a1 = baseA - Math.PI / 4;
+            const a2 = baseA + Math.PI / 4;
+            const ri = nR + 20;
+            const ro = atmoOrbR - 10;
+            const largeArc = 0;
+            const d = [
+              `M ${Math.cos(a1) * ri} ${Math.sin(a1) * ri}`,
+              `A ${ri} ${ri} 0 ${largeArc} 1 ${Math.cos(a2) * ri} ${Math.sin(a2) * ri}`,
+              `L ${Math.cos(a2) * ro} ${Math.sin(a2) * ro}`,
+              `A ${ro} ${ro} 0 ${largeArc} 0 ${Math.cos(a1) * ro} ${Math.sin(a1) * ro}`,
+              'Z',
+            ].join(' ');
+            return <path key={`zone-${el}`} d={d} fill={mc} opacity={0.03} />;
+          })}
 
-        {/* Material orbit ring */}
-        <circle cx="0" cy="0" r={matOrbR} fill="none" stroke={dc} strokeWidth="1" opacity={0.16} />
+          {/* Nucleus boundary ring */}
+          <circle cx="0" cy="0" r={nR + 4} fill="none" stroke={dc} strokeWidth="0.6" opacity={0.18} />
 
-        {/* Atmosphere orbit ring */}
-        <circle cx="0" cy="0" r={atmoOrbR} fill="none" stroke={dc} strokeWidth="0.8" opacity={0.12} />
-      </svg>
+          {/* Material orbit ring */}
+          <circle cx="0" cy="0" r={matOrbR} fill="none" stroke={dc} strokeWidth="1" opacity={0.16} />
 
-      {/* ═══ Outer scene container ═══ */}
-      <div className="relative" style={{ width: atmoOrbR * 2 + 80, height: atmoOrbR * 2 + 80 }}>
+          {/* Atmosphere orbit ring */}
+          <circle cx="0" cy="0" r={atmoOrbR} fill="none" stroke={dc} strokeWidth="0.8" opacity={0.12} />
+        </svg>
 
         {/* ═══ Orbit rings — interactive: hover glow + click to expand ═══ */}
         <div className="absolute rounded-full"
