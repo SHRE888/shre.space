@@ -320,40 +320,87 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
 
         {/* ═══ SVG orbit rings + sector guides ═══ */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none orbit-svg" viewBox={`${-canvasSize/2} ${-canvasSize/2} ${canvasSize} ${canvasSize}`}>
-          {/* Sector divider lines — 4 sectors at 45°/135°/225°/315° */}
-          {[45, 135, 225, 315].map(deg => {
-            const rad = deg * Math.PI / 180;
-            const r1 = nR + 12, r2 = atmoOrbR + 30;
-            return <line key={deg} x1={Math.cos(rad) * r1} y1={Math.sin(rad) * r1} x2={Math.cos(rad) * r2} y2={Math.sin(rad) * r2} stroke={dc} strokeWidth="1" opacity={0.22} strokeDasharray="6 4" />;
-          })}
+          <defs>
+            {/* Gradient for each orbit ring — blends element colors around the circle */}
+            {['mat', 'atmo', 'nuc'].map(ringId => (
+              <React.Fragment key={ringId}>
+                {ELEMENTS.map((el, idx) => {
+                  const mc = MUTED_COLORS[el];
+                  const baseA = EL_ANGLE[el];
+                  const pct = distribution[el] / 100;
+                  const gradId = `${ringId}-grad-${el}`;
+                  const rad = baseA * Math.PI / 180;
+                  const x1n = 0.5 + Math.cos(rad) * 0.35;
+                  const y1n = 0.5 + Math.sin(rad) * 0.35;
+                  return (
+                    <radialGradient key={gradId} id={gradId} cx={x1n} cy={y1n} r="0.6" gradientUnits="objectBoundingBox">
+                      <stop offset="0%" stopColor={mc} stopOpacity={Math.min(0.18, pct * 0.25)} />
+                      <stop offset="100%" stopColor={mc} stopOpacity={0} />
+                    </radialGradient>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+            {/* Sector radial gradients for zone fills */}
+            {ELEMENTS.map(el => {
+              const mc = MUTED_COLORS[el];
+              const pct = distribution[el] / 100;
+              return (
+                <radialGradient key={`zone-grad-${el}`} id={`zone-grad-${el}`} cx="50%" cy="50%" r="50%">
+                  <stop offset="30%" stopColor={mc} stopOpacity={pct * 0.12} />
+                  <stop offset="85%" stopColor={mc} stopOpacity={pct * 0.04} />
+                  <stop offset="100%" stopColor={mc} stopOpacity={0} />
+                </radialGradient>
+              );
+            })}
+          </defs>
 
-          {/* Faint sector zone fills — 4 element zones */}
+          {/* Sector zone fills — opacity scales with element percentage, soft gradient edges */}
           {ELEMENTS.map(el => {
-            const mc = MUTED_COLORS[el];
             const baseA = EL_ANGLE[el] * Math.PI / 180;
+            const pct = distribution[el] / 100;
             const a1 = baseA - Math.PI / 4;
             const a2 = baseA + Math.PI / 4;
-            const ri = nR + 20;
-            const ro = atmoOrbR - 10;
-            const largeArc = 0;
+            const ri = nR + 14;
+            const ro = atmoOrbR + 10;
             const d = [
               `M ${Math.cos(a1) * ri} ${Math.sin(a1) * ri}`,
-              `A ${ri} ${ri} 0 ${largeArc} 1 ${Math.cos(a2) * ri} ${Math.sin(a2) * ri}`,
+              `A ${ri} ${ri} 0 0 1 ${Math.cos(a2) * ri} ${Math.sin(a2) * ri}`,
               `L ${Math.cos(a2) * ro} ${Math.sin(a2) * ro}`,
-              `A ${ro} ${ro} 0 ${largeArc} 0 ${Math.cos(a1) * ro} ${Math.sin(a1) * ro}`,
+              `A ${ro} ${ro} 0 0 0 ${Math.cos(a1) * ro} ${Math.sin(a1) * ro}`,
               'Z',
             ].join(' ');
-            return <path key={`zone-${el}`} d={d} fill={mc} opacity={0.06} />;
+            return <path key={`zone-${el}`} d={d} fill={`url(#zone-grad-${el})`} style={{ transition: 'opacity 0.6s ease' }} />;
           })}
 
-          {/* Nucleus boundary ring */}
-          <circle cx="0" cy="0" r={nR + 4} fill="none" stroke={dc} strokeWidth="0.6" opacity={0.18} />
+          {/* Nucleus boundary ring — very subtle */}
+          <circle cx="0" cy="0" r={nR + 4} fill="none" stroke={dc} strokeWidth="0.5" opacity={0.1} />
 
-          {/* Material orbit ring */}
-          <circle cx="0" cy="0" r={matOrbR} fill="none" stroke={dc} strokeWidth="1" opacity={0.18} />
-
-          {/* Atmosphere orbit ring */}
-          <circle cx="0" cy="0" r={atmoOrbR} fill="none" stroke={dc} strokeWidth="1" opacity={0.16} />
+          {/* Orbit rings — gradient-colored arcs per element sector */}
+          {[matOrbR, atmoOrbR].map((ringR, ri) => (
+            <React.Fragment key={`ring-${ri}`}>
+              {ELEMENTS.map(el => {
+                const mc = MUTED_COLORS[el];
+                const pct = distribution[el] / 100;
+                const baseA = EL_ANGLE[el] * Math.PI / 180;
+                const a1 = baseA - Math.PI / 4;
+                const a2 = baseA + Math.PI / 4;
+                const x1 = Math.cos(a1) * ringR;
+                const y1 = Math.sin(a1) * ringR;
+                const x2 = Math.cos(a2) * ringR;
+                const y2 = Math.sin(a2) * ringR;
+                return (
+                  <path key={`ring-${ri}-${el}`}
+                    d={`M ${x1} ${y1} A ${ringR} ${ringR} 0 0 1 ${x2} ${y2}`}
+                    fill="none" stroke={mc}
+                    strokeWidth={ri === 0 ? 0.8 : 0.6}
+                    opacity={0.06 + pct * 0.16}
+                    style={{ transition: 'opacity 0.6s ease' }}
+                  />
+                );
+              })}
+            </React.Fragment>
+          ))}
         </svg>
 
         {/* ═══ Orbit rings — interactive: hover glow + click to expand ═══ */}
