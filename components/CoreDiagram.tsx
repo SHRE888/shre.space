@@ -139,9 +139,14 @@ function evenCircle(idx: number, total: number, orbit: number, startAngle = -Mat
 
 function sectorPos(el: Element, idx: number, total: number, orbit: number) {
   const baseAngle = EL_ANGLE[el] * Math.PI / 180;
-  const spreadPerItem = 0.32;
-  const spreadAngle = Math.min(total - 1, 6) * spreadPerItem;
-  const offset = total <= 1 ? 0 : ((idx / (total - 1)) - 0.5) * spreadAngle * 2;
+  const sectorHalf = Math.PI / 4;     // 45° — each sector is 90° wide
+  const padding = Math.PI / 30;        // 6° inset from boundary
+  const usable = sectorHalf - padding; // ±39° usable from center
+  if (total <= 1) {
+    return { x: Math.cos(baseAngle) * orbit, y: Math.sin(baseAngle) * orbit };
+  }
+  const step = (usable * 2) / (total + 1);
+  const offset = -usable + step * (idx + 1);
   const a = baseAngle + offset;
   return { x: Math.cos(a) * orbit, y: Math.sin(a) * orbit };
 }
@@ -313,11 +318,11 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
 
         {/* ═══ SVG orbit rings + sector guides ═══ */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none orbit-svg" viewBox={`${-canvasSize/2} ${-canvasSize/2} ${canvasSize} ${canvasSize}`}>
-          {/* Faint sector divider lines — 4 sectors at 45°/135°/225°/315° */}
+          {/* Sector divider lines — 4 sectors at 45°/135°/225°/315° */}
           {[45, 135, 225, 315].map(deg => {
             const rad = deg * Math.PI / 180;
-            const r1 = nR + 20, r2 = atmoOrbR + 10;
-            return <line key={deg} x1={Math.cos(rad) * r1} y1={Math.sin(rad) * r1} x2={Math.cos(rad) * r2} y2={Math.sin(rad) * r2} stroke={dc} strokeWidth="0.5" opacity={0.08} />;
+            const r1 = nR + 12, r2 = atmoOrbR + 30;
+            return <line key={deg} x1={Math.cos(rad) * r1} y1={Math.sin(rad) * r1} x2={Math.cos(rad) * r2} y2={Math.sin(rad) * r2} stroke={dc} strokeWidth="1" opacity={0.22} strokeDasharray="6 4" />;
           })}
 
           {/* Faint sector zone fills — 4 element zones */}
@@ -336,17 +341,17 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
               `A ${ro} ${ro} 0 ${largeArc} 0 ${Math.cos(a1) * ro} ${Math.sin(a1) * ro}`,
               'Z',
             ].join(' ');
-            return <path key={`zone-${el}`} d={d} fill={mc} opacity={0.03} />;
+            return <path key={`zone-${el}`} d={d} fill={mc} opacity={0.06} />;
           })}
 
           {/* Nucleus boundary ring */}
           <circle cx="0" cy="0" r={nR + 4} fill="none" stroke={dc} strokeWidth="0.6" opacity={0.18} />
 
           {/* Material orbit ring */}
-          <circle cx="0" cy="0" r={matOrbR} fill="none" stroke={dc} strokeWidth="1" opacity={0.16} />
+          <circle cx="0" cy="0" r={matOrbR} fill="none" stroke={dc} strokeWidth="1" opacity={0.18} />
 
           {/* Atmosphere orbit ring */}
-          <circle cx="0" cy="0" r={atmoOrbR} fill="none" stroke={dc} strokeWidth="0.8" opacity={0.12} />
+          <circle cx="0" cy="0" r={atmoOrbR} fill="none" stroke={dc} strokeWidth="1" opacity={0.16} />
         </svg>
 
         {/* ═══ Orbit rings — interactive: hover glow + click to expand ═══ */}
@@ -590,6 +595,47 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
         >
           <div className="absolute pointer-events-none nucleus-shadow" style={{ width: nR * 1.2, height: nR * 0.12, bottom: -nR * 0.2, left: '50%', transform: 'translateX(-50%)', borderRadius: '50%', background: `radial-gradient(ellipse, ${dc}12 0%, transparent 70%)`, opacity: 0.5 }} />
           <div className="absolute rounded-full pointer-events-none halo-breathe" style={{ inset: -20, background: `radial-gradient(circle, ${dc}0A 0%, ${dc}04 50%, transparent 70%)` }} />
+
+          {/* ═══ Rotation indicator — tick marks + curved arrow ═══ */}
+          <svg className="absolute pointer-events-none" style={{ inset: -14, width: 'calc(100% + 28px)', height: 'calc(100% + 28px)', opacity: dragging ? 0.5 : 0.2, transition: 'opacity 0.3s ease' }}
+            viewBox={`0 0 ${nR * 2 + 28} ${nR * 2 + 28}`}>
+            {(() => {
+              const c = nR + 14;
+              const r = nR + 6;
+              const ticks: React.ReactElement[] = [];
+              for (let i = 0; i < 24; i++) {
+                const ang = (i / 24) * Math.PI * 2 - Math.PI / 2;
+                const isMajor = i % 6 === 0;
+                const len = isMajor ? 6 : 3;
+                const x1 = c + Math.cos(ang) * (r - len);
+                const y1 = c + Math.sin(ang) * (r - len);
+                const x2 = c + Math.cos(ang) * r;
+                const y2 = c + Math.sin(ang) * r;
+                ticks.push(<line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={dc} strokeWidth={isMajor ? 1 : 0.5} opacity={isMajor ? 0.6 : 0.35} />);
+              }
+              const arrowR = r - 1;
+              const aStart = -20 * Math.PI / 180;
+              const aEnd = 50 * Math.PI / 180;
+              const ax1 = c + Math.cos(aStart) * arrowR;
+              const ay1 = c + Math.sin(aStart) * arrowR;
+              const ax2 = c + Math.cos(aEnd) * arrowR;
+              const ay2 = c + Math.sin(aEnd) * arrowR;
+              const tipAng = aEnd + 0.08;
+              const tipLen = 5;
+              const t1x = ax2 + Math.cos(tipAng + 2.4) * tipLen;
+              const t1y = ay2 + Math.sin(tipAng + 2.4) * tipLen;
+              const t2x = ax2 + Math.cos(tipAng + 0.6) * tipLen;
+              const t2y = ay2 + Math.sin(tipAng + 0.6) * tipLen;
+              return (
+                <>
+                  {ticks}
+                  <path d={`M ${ax1} ${ay1} A ${arrowR} ${arrowR} 0 0 1 ${ax2} ${ay2}`} fill="none" stroke={dc} strokeWidth="1" opacity="0.45" strokeLinecap="round" />
+                  <polyline points={`${t1x},${t1y} ${ax2},${ay2} ${t2x},${t2y}`} fill="none" stroke={dc} strokeWidth="1" opacity="0.45" strokeLinecap="round" strokeLinejoin="round" />
+                </>
+              );
+            })()}
+          </svg>
+
           <div className="absolute inset-0 rounded-full overflow-hidden" style={{ boxShadow: `0 4px 28px ${dc}20, 0 0 48px ${dc}0C`, contain: 'paint' }}>
             <div className="absolute inset-0" style={{ background: nGrad }} />
             <div className="absolute grad-blob-1 pointer-events-none" style={{ width: '130%', height: '130%', top: '-15%', left: '-15%', background: `radial-gradient(ellipse at 38% 32%, ${nColors[0]}70 0%, ${nColors[0]}18 40%, transparent 68%)`, opacity: 0.5 }} />

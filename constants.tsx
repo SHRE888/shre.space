@@ -16,9 +16,9 @@ export const ELEMENT_COLORS: Record<Element, string> = {
 // Muted tones for orbital rings, sphere borders, subtle backgrounds
 export const ELEMENT_COLORS_MUTED: Record<Element, string> = {
   earth: '#A08860',
-  fire: '#C48468',
-  water: '#6C9EAE',
-  air: '#8A9DB0',
+  fire: '#C4705A',
+  water: '#4E97AB',
+  air: '#9492B8',
 };
 
 // Placeholder utility (also used for material thumbnails)
