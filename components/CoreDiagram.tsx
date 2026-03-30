@@ -35,6 +35,8 @@ ANIM_STYLE.textContent = `
   @keyframes tooltipPop{from{opacity:0;transform:translateX(-50%) translateY(6px) scale(0.95)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
   @keyframes nucleusSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
   @keyframes nucleusFadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes btnShimmer{0%{background-position:200% center}100%{background-position:-200% center}}
+  @keyframes softGlow{0%,100%{box-shadow:0 0 12px var(--gc30),0 0 24px var(--gc15)}50%{box-shadow:0 0 20px var(--gc40),0 0 40px var(--gc20)}}
 `;
 if (!document.getElementById('core-diagram-anims')) {
   ANIM_STYLE.id = 'core-diagram-anims';
@@ -139,14 +141,11 @@ function evenCircle(idx: number, total: number, orbit: number, startAngle = -Mat
 
 function sectorPos(el: Element, idx: number, total: number, orbit: number) {
   const baseAngle = EL_ANGLE[el] * Math.PI / 180;
-  const sectorHalf = Math.PI / 4;     // 45° — each sector is 90° wide
-  const padding = Math.PI / 30;        // 6° inset from boundary
-  const usable = sectorHalf - padding; // ±39° usable from center
+  const maxSpread = Math.PI / 4 - Math.PI / 36; // ±40° from center
   if (total <= 1) {
     return { x: Math.cos(baseAngle) * orbit, y: Math.sin(baseAngle) * orbit };
   }
-  const step = (usable * 2) / (total + 1);
-  const offset = -usable + step * (idx + 1);
+  const offset = ((idx / (total - 1)) - 0.5) * 2 * maxSpread;
   const a = baseAngle + offset;
   return { x: Math.cos(a) * orbit, y: Math.sin(a) * orbit };
 }
@@ -227,8 +226,8 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
   const diagramScale = Math.min(1, containerSize.w / canvasSize, containerSize.h / canvasSize);
 
   const nColors = useMemo(() => sorted.map(([el]) => MUTED_COLORS[el as Element]), [sorted]);
-  const nGrad = useMemo(() => `radial-gradient(circle at 36% 32%, ${dc}D0 0%, ${dc}80 30%, ${nColors[1]}50 55%, ${nColors[2]}28 78%, ${nColors[3]}12 100%)`, [dc, nColors]);
-  const bgGrad = useMemo(() => `radial-gradient(ellipse at center, ${dc}06 0%, ${dc}03 35%, #FAFAFA 65%, #F7F7F5 100%)`, [dc]);
+  const nGrad = useMemo(() => `radial-gradient(circle at 36% 32%, ${dc}E0 0%, ${dc}A0 30%, ${nColors[1]}60 55%, ${nColors[2]}35 78%, ${nColors[3]}18 100%)`, [dc, nColors]);
+  const bgGrad = useMemo(() => `radial-gradient(ellipse at center, ${dc}0A 0%, ${dc}05 30%, #FAFBFC 60%, #F8F8F7 100%)`, [dc]);
 
   const matsByEl = useMemo(() => {
     const g: Record<Element, MaterialDef[]> = { earth: [], fire: [], water: [], air: [] };
@@ -341,14 +340,14 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 })}
               </React.Fragment>
             ))}
-            {/* Sector radial gradients for zone fills */}
+            {/* Sector radial gradients for zone fills — luminous */}
             {ELEMENTS.map(el => {
               const mc = MUTED_COLORS[el];
               const pct = distribution[el] / 100;
               return (
                 <radialGradient key={`zone-grad-${el}`} id={`zone-grad-${el}`} cx="50%" cy="50%" r="50%">
-                  <stop offset="30%" stopColor={mc} stopOpacity={pct * 0.12} />
-                  <stop offset="85%" stopColor={mc} stopOpacity={pct * 0.04} />
+                  <stop offset="20%" stopColor={mc} stopOpacity={pct * 0.18} />
+                  <stop offset="60%" stopColor={mc} stopOpacity={pct * 0.08} />
                   <stop offset="100%" stopColor={mc} stopOpacity={0} />
                 </radialGradient>
               );
@@ -376,7 +375,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           {/* Nucleus boundary ring — very subtle */}
           <circle cx="0" cy="0" r={nR + 4} fill="none" stroke={dc} strokeWidth="0.5" opacity={0.1} />
 
-          {/* Orbit rings — gradient-colored arcs per element sector */}
+          {/* Orbit rings — gradient-colored arcs per element sector, with glow */}
           {[matOrbR, atmoOrbR].map((ringR, ri) => (
             <React.Fragment key={`ring-${ri}`}>
               {ELEMENTS.map(el => {
@@ -389,14 +388,12 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 const y1 = Math.sin(a1) * ringR;
                 const x2 = Math.cos(a2) * ringR;
                 const y2 = Math.sin(a2) * ringR;
+                const arcD = `M ${x1} ${y1} A ${ringR} ${ringR} 0 0 1 ${x2} ${y2}`;
                 return (
-                  <path key={`ring-${ri}-${el}`}
-                    d={`M ${x1} ${y1} A ${ringR} ${ringR} 0 0 1 ${x2} ${y2}`}
-                    fill="none" stroke={mc}
-                    strokeWidth={ri === 0 ? 0.8 : 0.6}
-                    opacity={0.06 + pct * 0.16}
-                    style={{ transition: 'opacity 0.6s ease' }}
-                  />
+                  <React.Fragment key={`ring-${ri}-${el}`}>
+                    <path d={arcD} fill="none" stroke={mc} strokeWidth={ri === 0 ? 3 : 2.5} opacity={pct * 0.06} style={{ transition: 'opacity 0.6s ease', filter: 'blur(2px)' }} />
+                    <path d={arcD} fill="none" stroke={mc} strokeWidth={ri === 0 ? 0.8 : 0.6} opacity={0.08 + pct * 0.22} style={{ transition: 'opacity 0.6s ease' }} />
+                  </React.Fragment>
                 );
               })}
             </React.Fragment>
@@ -643,7 +640,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           onPointerDown={handleNucleusPointerDown} onPointerMove={handleNucleusPointerMove} onPointerUp={handleNucleusPointerUp} onPointerCancel={handleNucleusPointerUp}
         >
           <div className="absolute pointer-events-none nucleus-shadow" style={{ width: nR * 1.2, height: nR * 0.12, bottom: -nR * 0.2, left: '50%', transform: 'translateX(-50%)', borderRadius: '50%', background: `radial-gradient(ellipse, ${dc}12 0%, transparent 70%)`, opacity: 0.5 }} />
-          <div className="absolute rounded-full pointer-events-none halo-breathe" style={{ inset: -20, background: `radial-gradient(circle, ${dc}0A 0%, ${dc}04 50%, transparent 70%)` }} />
+          <div className="absolute rounded-full pointer-events-none halo-breathe" style={{ inset: -28, background: `radial-gradient(circle, ${dc}18 0%, ${dc}0A 40%, ${dc}04 65%, transparent 85%)` }} />
 
           {/* ═══ Rotation indicator — tick marks + curved arrow ═══ */}
           <svg className="absolute pointer-events-none" style={{ inset: -14, width: 'calc(100% + 28px)', height: 'calc(100% + 28px)', opacity: dragging ? 0.55 : 0.18, transition: 'opacity 0.3s ease', transform: dragging ? `rotate(${dragAngle}deg)` : 'rotate(0deg)', transformOrigin: 'center center' }}
@@ -685,13 +682,13 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
             })()}
           </svg>
 
-          <div className="absolute inset-0 rounded-full overflow-hidden" style={{ boxShadow: `0 4px 28px ${dc}20, 0 0 48px ${dc}0C`, contain: 'paint' }}>
+          <div className="absolute inset-0 rounded-full overflow-hidden" style={{ boxShadow: `0 4px 32px ${dc}35, 0 0 60px ${dc}18, 0 0 100px ${dc}08`, contain: 'paint' }}>
             <div className="absolute inset-0" style={{ background: nGrad }} />
-            <div className="absolute grad-blob-1 pointer-events-none" style={{ width: '130%', height: '130%', top: '-15%', left: '-15%', background: `radial-gradient(ellipse at 38% 32%, ${nColors[0]}70 0%, ${nColors[0]}18 40%, transparent 68%)`, opacity: 0.5 }} />
-            <div className="absolute grad-blob-2 pointer-events-none" style={{ width: '110%', height: '110%', top: '-5%', left: '-5%', background: `radial-gradient(ellipse at 62% 65%, ${nColors[1]}50 0%, ${nColors[1]}12 35%, transparent 62%)`, opacity: 0.5 }} />
-            <div className="absolute sphere-pulse pointer-events-none" style={{ inset: 0, background: `radial-gradient(circle, ${nColors[0]}10 0%, transparent 55%)` }} />
+            <div className="absolute grad-blob-1 pointer-events-none" style={{ width: '130%', height: '130%', top: '-15%', left: '-15%', background: `radial-gradient(ellipse at 38% 32%, ${nColors[0]}90 0%, ${nColors[0]}28 40%, transparent 68%)`, opacity: 0.6 }} />
+            <div className="absolute grad-blob-2 pointer-events-none" style={{ width: '110%', height: '110%', top: '-5%', left: '-5%', background: `radial-gradient(ellipse at 62% 65%, ${nColors[1]}70 0%, ${nColors[1]}18 35%, transparent 62%)`, opacity: 0.6 }} />
+            <div className="absolute sphere-pulse pointer-events-none" style={{ inset: 0, background: `radial-gradient(circle, ${nColors[0]}18 0%, transparent 55%)` }} />
           </div>
-          <div className="absolute rounded-full pointer-events-none specular-drift" style={{ width: '44%', height: '42%', top: '9%', left: '14%', background: 'radial-gradient(ellipse at 42% 35%, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.04) 50%, transparent 100%)' }} />
+          <div className="absolute rounded-full pointer-events-none specular-drift" style={{ width: '44%', height: '42%', top: '9%', left: '14%', background: 'radial-gradient(ellipse at 42% 35%, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.08) 50%, transparent 100%)' }} />
           {/* Center content — triangle + label OR spin-to-generate overlay */}
           <div className="absolute inset-0 flex flex-col items-center justify-center z-10"
             onClick={e => {
@@ -776,15 +773,18 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                   : 'select materials'}
               </span>
 
-              {/* Generate button */}
+              {/* Generate button — glowing gradient shimmer */}
               {selectedMaterials.length > 0 && (
-                <button className="mt-4 uppercase transition-all hover:scale-105 active:scale-95"
+                <button className="mt-4 uppercase transition-all hover:scale-110 active:scale-95"
                   style={{
-                    fontSize: 9, letterSpacing: '0.35em', fontWeight: 600, padding: '6px 20px',
-                    borderRadius: 20, color: 'rgba(255,255,255,0.85)',
-                    background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
-                    backdropFilter: 'blur(4px)',
-                    animation: nucleusTooltip ? 'nucleusFadeUp 0.4s ease-out 0.4s both' : 'none',
+                    fontSize: 9, letterSpacing: '0.35em', fontWeight: 600, padding: '7px 22px',
+                    borderRadius: 20, color: '#fff',
+                    background: `linear-gradient(90deg, ${nColors[0]}90 0%, rgba(255,255,255,0.25) 25%, ${nColors[1] || nColors[0]}80 50%, rgba(255,255,255,0.25) 75%, ${nColors[0]}90 100%)`,
+                    backgroundSize: '400% 100%',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    backdropFilter: 'blur(6px)',
+                    boxShadow: `0 0 16px ${nColors[0]}50, 0 0 32px ${nColors[0]}20, 0 2px 8px rgba(0,0,0,0.1)`,
+                    animation: nucleusTooltip ? 'nucleusFadeUp 0.4s ease-out 0.4s both, btnShimmer 3s ease-in-out infinite' : 'none',
                   }}
                   onClick={e => { e.stopPropagation(); setNucleusTooltip(false); handleGenerate(); }}>
                   Generate
