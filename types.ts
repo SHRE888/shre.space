@@ -142,6 +142,8 @@ export interface UserState {
     budgetLevel?: BudgetLevel;
     referenceImage?: File;
     architecturalPlan?: File;
+    spacePhoto?: File;
+    spaceNote?: string;
   };
   shortSurveyAnswers: Record<string, number>;
   deepSurveyAnswers: Record<string, number>;
@@ -176,9 +178,13 @@ export interface PromptInput {
   reference: {
     photoUploaded: boolean;
     planUploaded: boolean;
+    spacePhotoUploaded: boolean;
     photoUrl?: string;
     planUrl?: string;
+    spacePhotoUrl?: string;
   };
+  /** User's description of their specific space (context for generation) */
+  spaceNote?: string;
   constraints?: {
     ceilingHeightM?: number;
     naturalLight?: "low" | "medium" | "high";

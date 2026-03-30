@@ -17,6 +17,7 @@ export const getInitialSelection = (percentages: Record<Element, number>): { adj
   const materials: MaterialDef[] = [];
 
   sortedElements.forEach(el => {
+    if (percentages[el] < 5) return;
     const topAdj = ADJECTIVES_DB.find(a => a.element === el);
     if (topAdj) adjectives.push(topAdj);
 
@@ -35,11 +36,12 @@ export const getSelectionFromPercentages = (percentages: Record<Element, number>
   const adjCounts: Record<Element, number> = { air: 0, fire: 0, water: 0, earth: 0 };
   const matCounts: Record<Element, number> = { air: 0, fire: 0, water: 0, earth: 0 };
   
-  // Distribute adjectives proportionally
+  // Distribute adjectives proportionally (elements below 5% get nothing)
   let adjTotal = 0;
   ELEMENTS.forEach(el => {
+    if (percentages[el] < 5) { adjCounts[el] = 0; return; }
     const count = Math.round((percentages[el] / 100) * maxAdjectives);
-    adjCounts[el] = Math.max(1, Math.min(count, maxAdjectives)); // At least 1 per element
+    adjCounts[el] = Math.max(1, Math.min(count, maxAdjectives));
     adjTotal += adjCounts[el];
   });
   
@@ -58,11 +60,12 @@ export const getSelectionFromPercentages = (percentages: Record<Element, number>
     if (!reduced) break; // all at minimum, can't reduce further
   }
   
-  // Distribute materials proportionally
+  // Distribute materials proportionally (elements below 5% get nothing)
   let matTotal = 0;
   ELEMENTS.forEach(el => {
+    if (percentages[el] < 5) { matCounts[el] = 0; return; }
     const count = Math.round((percentages[el] / 100) * maxMaterials);
-    matCounts[el] = Math.max(1, Math.min(count, maxMaterials)); // At least 1 per element
+    matCounts[el] = Math.max(1, Math.min(count, maxMaterials));
     matTotal += matCounts[el];
   });
   

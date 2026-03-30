@@ -125,6 +125,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
   const [briefComment, setBriefComment] = useState('');
   const [floorPlanPreview, setFloorPlanPreview] = useState<string | null>(null);
   const floorPlanRef = useRef<HTMLInputElement>(null);
+  const [spacePhotoPreview, setSpacePhotoPreview] = useState<string | null>(null);
+  const spacePhotoRef = useRef<HTMLInputElement>(null);
+  const [spaceNote, setSpaceNote] = useState(state.params.spaceNote || '');
   const rooms = state.params.rooms || [];
   const spaceRange = React.useMemo(() => getCompositeRange(rooms as RoomType[]), [rooms]);
   const isSpaceRelevant = state.params.domain === 'architecture' ? !!state.params.archContext : rooms.length > 0;
@@ -461,7 +464,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
   const handleInitiateGeneration = () => {
     try {
       if (!isMuted) whoosh();
-      const result = buildUniversalPrompt(state, briefComment ? { userNote: briefComment } : undefined);
+      const stateWithSpace = spaceNote.trim() ? { ...state, params: { ...state.params, spaceNote: spaceNote.trim() } } : state;
+      const result = buildUniversalPrompt(stateWithSpace, briefComment ? { userNote: briefComment } : undefined);
       setGeneratedBullets(result.bulletPoints);
       setGathering(true);
     } catch (err) {
@@ -2314,6 +2318,55 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                     )}
                   </div>
                 </div>
+
+                {/* My Space — photo upload + description */}
+                <div className="flex items-start gap-4 mt-3 pt-3" style={{ borderTop: '1px solid rgba(45,75,140,0.05)' }}>
+                  <div className="shrink-0">
+                    <span className="text-[10px] uppercase tracking-[0.15em] font-medium block mb-1.5" style={{ color: '#a0aec0' }}>My Space</span>
+                    <input ref={spacePhotoRef} type="file" accept="image/*" className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleUpdate({ params: { ...state.params, spacePhoto: file } });
+                          const reader = new FileReader();
+                          reader.onloadend = () => setSpacePhotoPreview(reader.result as string);
+                          reader.readAsDataURL(file);
+                        }
+                      }} />
+                    {spacePhotoPreview ? (
+                      <div className="relative group">
+                        <img src={spacePhotoPreview} alt="My space" className="w-16 h-12 object-cover rounded-md border border-gray-200 shadow-sm" />
+                        <button onClick={() => { setSpacePhotoPreview(null); handleUpdate({ params: { ...state.params, spacePhoto: undefined } }); if (spacePhotoRef.current) spacePhotoRef.current.value = ''; }}
+                          className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-white border border-gray-200 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:border-red-300 transition-all shadow-sm">
+                          <svg width="6" height="6" viewBox="0 0 12 12" fill="none" stroke="#e57373" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="3" x2="9" y2="9" /><line x1="9" y1="3" x2="3" y2="9" /></svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => spacePhotoRef.current?.click()}
+                        className="w-16 h-12 border border-dashed border-gray-200 rounded-md flex flex-col items-center justify-center gap-0.5 text-gray-300 hover:border-gray-400 hover:text-gray-500 transition-all">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
+                        </svg>
+                        <span className="text-[7px] uppercase tracking-wider">Photo</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[10px] uppercase tracking-[0.15em] font-medium block mb-1.5" style={{ color: '#a0aec0' }}>Space Description</span>
+                    <textarea
+                      value={spaceNote}
+                      onChange={(e) => { setSpaceNote(e.target.value); handleUpdate({ params: { ...state.params, spaceNote: e.target.value } }); }}
+                      placeholder="Describe your space: dimensions, features, what you want to change..."
+                      maxLength={400}
+                      rows={2}
+                      className="w-full px-3 py-2 text-[11px] leading-relaxed text-gray-600 placeholder:text-gray-300 bg-white border border-gray-100 rounded-lg focus:outline-none focus:border-gray-300 transition-colors resize-none"
+                    />
+                    {spaceNote && (
+                      <span className="text-[8px] text-gray-300 float-right mt-0.5">{spaceNote.length}/400</span>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* ═══ MIDDLE: Brief + Materials side by side (stacked on mobile) ═══ */}
@@ -2395,7 +2448,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 </button>
                 <button onClick={() => {
                     if (!hasSpace) return;
-                    const result = buildUniversalPrompt(state, briefComment ? { userNote: briefComment } : undefined);
+                    const stateWithSpace2 = spaceNote.trim() ? { ...state, params: { ...state.params, spaceNote: spaceNote.trim() } } : state;
+                    const result = buildUniversalPrompt(stateWithSpace2, briefComment ? { userNote: briefComment } : undefined);
                     setGeneratedBullets(result.bulletPoints);
                     handleConfirmGeneration();
                   }}

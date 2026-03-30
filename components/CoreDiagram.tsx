@@ -175,6 +175,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
   const [musicOn, setMusicOn] = useState(false);
   const [guideDismissed, setGuideDismissed] = useState(true);
   const [dragging, setDragging] = useState(false);
+  const [dragAngle, setDragAngle] = useState(0);
   const [divePhase, setDivePhase] = useState<0 | 1 | 2 | 3>(0);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -231,9 +232,9 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
 
   const matsByEl = useMemo(() => {
     const g: Record<Element, MaterialDef[]> = { earth: [], fire: [], water: [], air: [] };
-    selectedMaterials.forEach(m => g[m.element].push(m));
+    selectedMaterials.forEach(m => { if (distribution[m.element] >= 5) g[m.element].push(m); });
     return g;
-  }, [selectedMaterials]);
+  }, [selectedMaterials, distribution]);
 
   const matPositions = useMemo(() => {
     const map: Record<string, { x: number; y: number }> = {};
@@ -245,9 +246,9 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
 
   const adjsByEl = useMemo(() => {
     const g: Record<Element, AdjectiveDef[]> = { earth: [], fire: [], water: [], air: [] };
-    selectedAdjectives.forEach(a => g[a.element].push(a));
+    selectedAdjectives.forEach(a => { if (distribution[a.element] >= 5) g[a.element].push(a); });
     return g;
-  }, [selectedAdjectives]);
+  }, [selectedAdjectives, distribution]);
 
   const atmoPositions = useMemo(() => {
     const map: Record<string, { x: number; y: number }> = {};
@@ -296,6 +297,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
     if (Math.sqrt(dx * dx + dy * dy) < 10) return;
     let ang = Math.atan2(dy, dx) * (180 / Math.PI);
     if (ang < 0) ang += 360;
+    setDragAngle(ang);
     let t: Element;
     if (ang >= 315 || ang < 45) t = 'fire';
     else if (ang >= 45 && ang < 135) t = 'earth';
@@ -597,7 +599,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           <div className="absolute rounded-full pointer-events-none halo-breathe" style={{ inset: -20, background: `radial-gradient(circle, ${dc}0A 0%, ${dc}04 50%, transparent 70%)` }} />
 
           {/* ═══ Rotation indicator — tick marks + curved arrow ═══ */}
-          <svg className="absolute pointer-events-none" style={{ inset: -14, width: 'calc(100% + 28px)', height: 'calc(100% + 28px)', opacity: dragging ? 0.5 : 0.2, transition: 'opacity 0.3s ease' }}
+          <svg className="absolute pointer-events-none" style={{ inset: -14, width: 'calc(100% + 28px)', height: 'calc(100% + 28px)', opacity: dragging ? 0.55 : 0.18, transition: 'opacity 0.3s ease', transform: dragging ? `rotate(${dragAngle}deg)` : 'rotate(0deg)', transformOrigin: 'center center' }}
             viewBox={`0 0 ${nR * 2 + 28} ${nR * 2 + 28}`}>
             {(() => {
               const c = nR + 14;

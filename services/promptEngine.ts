@@ -1379,6 +1379,14 @@ The generated interior must feel like a direct 3D realization of this exact floo
     P.push(`ADDITIONAL BRIEF NOTE from the user: "${input.userNote.trim()}". Incorporate this guidance into the design naturally.`);
   }
 
+  // [14b] CUSTOM SPACE CONTEXT (user's own space description + photo)
+  if (input.spaceNote?.trim()) {
+    P.push(`USER'S SPECIFIC SPACE DESCRIPTION (HIGH PRIORITY): The user has described their actual space: "${input.spaceNote.trim()}". This is their REAL existing space — incorporate these specific details, constraints, and wishes into the design. Adapt the elemental design language to work within the realities of this specific space (existing architecture, dimensions, features, limitations). The result should feel like a professional renovation/redesign of THIS particular space, not a generic concept.`);
+  }
+  if (input.reference.spacePhotoUploaded) {
+    P.push(`USER'S SPACE PHOTO UPLOADED: The user has provided a photograph of their actual space. Use this as the PRIMARY spatial reference — preserve the room geometry, window positions, ceiling height, floor area, and architectural features visible in the photo. Apply the elemental design language (materials, furniture, lighting, atmosphere) as a RENOVATION of this real space. The result should look like the same room after a professional interior designer transformed it with the ${input.primaryElement.toUpperCase()} element palette. Maintain the camera angle and perspective of the uploaded photo.`);
+  }
+
   const rawPrompt = P.join('\n\n');
   const finalPrompt = scrubBannedTokens(rawPrompt);
 
@@ -1608,7 +1616,9 @@ export const buildUniversalPrompt = (state: UserState, options?: PromptOptions):
     reference: {
       photoUploaded: !!state.params.referenceImage,
       planUploaded: !!state.params.architecturalPlan,
+      spacePhotoUploaded: !!state.params.spacePhoto,
     },
+    spaceNote: state.params.spaceNote,
     constraints: {
       ceilingHeightM: state.params.ceilingHeight,
       naturalLight: state.params.naturalLight,
