@@ -13,12 +13,12 @@ export const ELEMENT_COLORS: Record<Element, string> = {
   air: '#5A7FA3',
 };
 
-// Muted tones for orbital rings, sphere borders, subtle backgrounds
+// Muted tones — distinct but refined, each element clearly identifiable
 export const ELEMENT_COLORS_MUTED: Record<Element, string> = {
-  earth: '#B09870',
-  fire: '#C8806A',
-  water: '#5A9EB5',
-  air: '#9A94BE',
+  earth: '#A89068',
+  fire: '#C07A65',
+  water: '#5E9DB2',
+  air: '#9590B5',
 };
 
 // Placeholder utility (also used for material thumbnails)

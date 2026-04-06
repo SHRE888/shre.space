@@ -1193,7 +1193,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
         })()}
 
         {/* Central Core Diagram */}
-        <div className="flex-grow flex items-center justify-center transition-all duration-500 pt-1 sm:pt-2 pb-2 sm:pb-4" style={{ minHeight: 0 }}>
+        <div className="flex-grow flex items-center justify-center transition-all duration-500 pt-0 pb-1 sm:pt-1 sm:pb-2" style={{ minHeight: 0 }}>
           <div className="flex-1 flex items-center justify-center w-full h-full min-h-0">
           <CoreDiagram
             distribution={state.refinement.refinedPercentages}
@@ -1555,7 +1555,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
       )}
 
       {/* Space Config Sidebar — fixed left, full overlay on mobile */}
-      <div className={`w-[85vw] max-w-[280px] backdrop-blur-xl border-r flex flex-col z-30 transition-all duration-500 ease-out fixed left-0 top-11 bottom-0 ${isDomainPanelOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      <div className={`w-[min(85vw,300px)] max-w-[280px] backdrop-blur-xl border-r flex flex-col z-30 transition-all duration-500 ease-out fixed left-0 top-11 bottom-0 ${isDomainPanelOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{ borderColor: 'rgba(45,75,140,0.08)', background: 'rgba(252,252,250,0.98)' }}>
 
         {/* Collapse tab — only visible when panel is open */}
@@ -1567,8 +1567,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
           </button>
         )}
 
-        <div className="flex-1 flex flex-col px-3 sm:px-4 py-3 sm:py-4 gap-2.5 sm:gap-3 overflow-y-auto custom-scroll">
-          <div className="text-center mb-1">
+        <div className="flex-1 flex flex-col px-2.5 sm:px-3.5 py-2.5 sm:py-3 gap-2 sm:gap-2.5 overflow-y-auto custom-scroll">
+          <div className="text-center mb-0.5">
             <h2 className="text-[11px] uppercase tracking-[0.5em] font-semibold" style={{ color: '#8899b3' }}>Space</h2>
           </div>
 
@@ -2127,15 +2127,15 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
               onClick={() => { setShowConceptPage(false); setGathering(false); }} />
 
             {/* Modal card */}
-            <div className="relative bg-white rounded-xl sm:rounded-2xl overflow-hidden flex flex-col mx-2 sm:mx-0"
-              style={{ width: '860px', maxWidth: 'calc(100vw - 16px)', maxHeight: '90dvh', boxShadow: '0 8px 60px rgba(45,75,140,0.12), 0 2px 8px rgba(0,0,0,0.04)', animation: 'conceptScale 0.35s ease-out' }}>
+            <div className="relative bg-white rounded-xl sm:rounded-2xl overflow-hidden flex flex-col mx-1.5 sm:mx-0 min-h-0 w-[min(860px,calc(100vw-12px))] max-w-[calc(100vw-12px)] sm:max-w-none"
+              style={{ maxHeight: 'min(92dvh,920px)', boxShadow: '0 8px 60px rgba(45,75,140,0.12), 0 2px 8px rgba(0,0,0,0.04)', animation: 'conceptScale 0.35s ease-out' }}>
 
               {/* Accent line */}
               <div className="h-[2px] w-full shrink-0" style={{ background: `linear-gradient(90deg, ${domColor}60, ${domMc}60, ${domColor}60)` }} />
 
               {/* ═══ TOP: Space Config — prominent ═══ */}
-              <div className="px-4 sm:px-7 pt-4 sm:pt-5 pb-3 sm:pb-4 shrink-0 overflow-y-auto" style={{ background: 'rgba(247,249,252,0.6)', borderBottom: '1px solid rgba(45,75,140,0.05)' }}>
-                <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
+              <div className="px-3 sm:px-6 pt-3 sm:pt-4 pb-2 sm:pb-3 shrink-0" style={{ background: 'rgba(247,249,252,0.6)', borderBottom: '1px solid rgba(45,75,140,0.05)' }}>
+                <div className="flex items-center justify-between mb-2 sm:mb-3 flex-wrap gap-2">
                   <h2 className="text-[12px] sm:text-[13px] uppercase tracking-[0.3em] sm:tracking-[0.4em] font-semibold" style={{ color: '#3558A0' }}>Space</h2>
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-1.5">
@@ -2152,7 +2152,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 </div>
 
                 {/* Domain toggle */}
-                <div className="flex flex-wrap items-center gap-2 sm:gap-4 mb-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-2.5">
                   <div className="flex gap-1 rounded-lg p-[2px]" style={{ background: 'rgba(45,75,140,0.04)' }}>
                     {(['interior', 'architecture'] as Domain[]).map(d => (
                       <button key={d} onClick={() => handleUpdate({ params: { ...state.params, domain: d, category: d === 'interior' ? 'Living / Residential' : 'Private House', rooms: [], archContext: undefined } })}
@@ -2213,7 +2213,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 ) : null}
 
                 {/* Area + Ceiling inline — dynamic ranges */}
-                <div className="flex items-center gap-6 mt-3">
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-2 sm:mt-2.5">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] uppercase tracking-[0.12em]" style={{ color: '#a0aec0' }}>Area</span>
                     <input type="range" min={spaceRange.areaMin} max={spaceRange.areaMax} step="5" value={state.params.squareMeters || spaceRange.areaDefault}
@@ -2237,7 +2237,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 </div>
 
                 {/* Color Palette + Plan + Comment row */}
-                <div className="flex items-start gap-5 mt-4">
+                <div className="flex items-start gap-3 sm:gap-4 mt-2 sm:mt-3">
                   {/* Color Palette */}
                   <div className="flex-1 min-w-0">
                     <span className="text-[10px] uppercase tracking-[0.15em] font-medium block mb-1.5" style={{ color: '#a0aec0' }}>Palette</span>
@@ -2269,7 +2269,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 </div>
 
                 {/* Floor plan + Comment row */}
-                <div className="flex items-start gap-4 mt-3">
+                <div className="flex items-start gap-3 mt-2 sm:mt-2.5">
                   {/* Floor Plan Upload */}
                   <div className="shrink-0">
                     <span className="text-[10px] uppercase tracking-[0.15em] font-medium block mb-1.5" style={{ color: '#a0aec0' }}>Floor Plan</span>
@@ -2320,7 +2320,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 </div>
 
                 {/* My Space — photo upload + description */}
-                <div className="flex items-start gap-4 mt-3 pt-3" style={{ borderTop: '1px solid rgba(45,75,140,0.05)' }}>
+                <div className="flex items-start gap-3 mt-2 sm:mt-2.5 pt-2 sm:pt-2.5" style={{ borderTop: '1px solid rgba(45,75,140,0.05)' }}>
                   <div className="shrink-0">
                     <span className="text-[10px] uppercase tracking-[0.15em] font-medium block mb-1.5" style={{ color: '#a0aec0' }}>My Space</span>
                     <input ref={spacePhotoRef} type="file" accept="image/*" className="hidden"
@@ -2369,12 +2369,12 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 </div>
               </div>
 
-              {/* ═══ MIDDLE: Brief + Materials side by side (stacked on mobile) ═══ */}
-              <div className="flex-1 flex flex-col sm:flex-row min-h-0 overflow-hidden">
+              {/* ═══ MIDDLE: Brief + Materials — one scroll area for less nested scrolling ═══ */}
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col sm:flex-row">
 
                 {/* Brief */}
-                <div className="flex-1 px-4 sm:px-7 py-3 sm:py-4 overflow-y-auto" style={{ minWidth: 0 }}>
-                  <div className="flex items-center gap-2.5 mb-3">
+                <div className="flex-1 px-3 sm:px-6 py-2.5 sm:py-3" style={{ minWidth: 0 }}>
+                  <div className="flex items-center gap-2.5 mb-2 sm:mb-2.5">
                     <div className="w-5 h-5 rounded-full shrink-0" style={{ background: `linear-gradient(135deg, ${domColor}, ${domMc})` }} />
                     <h3 className="text-[12px] uppercase tracking-[0.3em] font-semibold text-gray-700">Brief</h3>
                     <span className="text-[10px] font-light" style={{ color: '#bcc5d3' }}>
@@ -2403,15 +2403,15 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 <div className="sm:hidden h-px shrink-0 mx-4" style={{ background: 'rgba(45,75,140,0.05)' }} />
 
                 {/* Materials + Atmosphere */}
-                <div className="w-full sm:w-[240px] shrink-0 px-4 sm:px-5 py-3 sm:py-4 overflow-y-auto" style={{ background: 'rgba(250,251,253,0.5)' }}>
-                  <h3 className="text-[10px] uppercase tracking-[0.25em] font-semibold mb-3" style={{ color: '#8899b3' }}>Materials</h3>
-                  <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="w-full sm:w-[220px] shrink-0 px-3 sm:px-4 py-2.5 sm:py-3" style={{ background: 'rgba(250,251,253,0.5)' }}>
+                  <h3 className="text-[10px] uppercase tracking-[0.25em] font-semibold mb-2" style={{ color: '#8899b3' }}>Materials</h3>
+                  <div className="grid grid-cols-3 sm:grid-cols-3 gap-1.5 sm:gap-2 mb-2">
                     {state.refinement.selectedMaterials.map((m, i) => {
                       const tex = matTexMap[m.name];
                       const ec = ELEMENT_COLORS[m.element];
                       return (
-                        <div key={i} className="flex flex-col items-center gap-1" title={m.name}>
-                          <div className="w-[60px] h-[60px] rounded-xl overflow-hidden" style={{ boxShadow: `0 1px 8px ${ec}12`, border: `1.5px solid ${ec}18`, background: `linear-gradient(135deg, ${ec}10, ${ec}05)` }}>
+                        <div key={i} className="flex flex-col items-center gap-0.5 sm:gap-1" title={m.name}>
+                          <div className="w-[52px] h-[52px] sm:w-[56px] sm:h-[56px] rounded-lg sm:rounded-xl overflow-hidden" style={{ boxShadow: `0 1px 8px ${ec}12`, border: `1.5px solid ${ec}18`, background: `linear-gradient(135deg, ${ec}10, ${ec}05)` }}>
                             {tex
                               ? <div style={{ width: '140%', height: '140%', marginLeft: '-20%', marginTop: '-20%', background: `url(${tex}) center/cover` }} />
                               : <div className="w-full h-full" style={{ background: `linear-gradient(135deg, ${ec}25, ${ec}10)` }} />}
@@ -2441,7 +2441,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
               </div>
 
               {/* ═══ BOTTOM: Actions ═══ */}
-              <div className="px-4 sm:px-7 py-3 flex items-center justify-between shrink-0 gap-2" style={{ borderTop: '1px solid rgba(45,75,140,0.05)' }}>
+              <div className="px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between shrink-0 gap-2" style={{ borderTop: '1px solid rgba(45,75,140,0.05)' }}>
                 <button onClick={() => { setShowConceptPage(false); setGathering(false); }}
                   className="text-[10px] uppercase tracking-[0.2em] font-medium px-3 sm:px-4 py-2 rounded-md transition-all hover:bg-gray-50 touch-target-auto" style={{ color: '#a0aec0' }}>
                   ← Back

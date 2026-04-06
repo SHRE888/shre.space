@@ -6,7 +6,6 @@ import { tick, snap, toggleAmbient, isAmbientPlaying, warmupSpeech } from '../se
 const ANIM_STYLE = document.createElement('style');
 ANIM_STYLE.textContent = `
   @keyframes levitate{0%{transform:translate(-50%,-50%) translateY(0)}25%{transform:translate(-50%,-50%) translateY(-8px)}50%{transform:translate(-50%,-50%) translateY(-3px)}75%{transform:translate(-50%,-50%) translateY(-10px)}100%{transform:translate(-50%,-50%) translateY(0)}}
-  @keyframes shadowPulse{0%,100%{transform:translateX(-50%) scale(1);opacity:.5}40%{transform:translateX(-50%) scale(.88);opacity:.3}70%{transform:translateX(-50%) scale(.92);opacity:.38}}
   @keyframes blobDrift1{0%{transform:translate(0,0) scale(1)}33%{transform:translate(5%,-4%) scale(1.04)}66%{transform:translate(-2%,5%) scale(.97)}100%{transform:translate(0,0) scale(1)}}
   @keyframes blobDrift2{0%{transform:translate(0,0) scale(1)}50%{transform:translate(-6%,4%) scale(1.06)}100%{transform:translate(0,0) scale(1)}}
   @keyframes spherePulse{0%,100%{opacity:.18}50%{opacity:.4}}
@@ -14,10 +13,9 @@ ANIM_STYLE.textContent = `
   @keyframes specDrift{0%,100%{transform:translate(0,0)}40%{transform:translate(3%,-2%)}80%{transform:translate(-2%,1%)}}
   @keyframes sphereBreath{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.015)}}
   @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-  @keyframes orbFloat{0%,100%{transform:translate(-50%,-50%) translateY(0)}50%{transform:translate(-50%,-50%) translateY(-2.5px)}}
+  @keyframes orbFloat{0%,100%{transform:translate(-50%,-50%) translateY(0)}50%{transform:translate(-50%,-50%) translateY(0)}}
   @keyframes atmoGlow{0%,100%{box-shadow:0 1px 5px var(--mc30),0 0 8px var(--mc15)}50%{box-shadow:0 2px 10px var(--mc30),0 0 16px var(--mc15)}}
   .nucleus-levitate{animation:levitate 7s cubic-bezier(0.45,0,0.55,1) infinite,sphereBreath 5s ease-in-out infinite;will-change:transform}
-  .nucleus-shadow{animation:shadowPulse 7s cubic-bezier(0.45,0,0.55,1) infinite;will-change:transform,opacity}
   .halo-breathe{animation:haloBreath 6s ease-in-out infinite;will-change:transform,opacity}
   .grad-blob-1{animation:blobDrift1 10s ease-in-out infinite;will-change:transform}
   .grad-blob-2{animation:blobDrift2 12s ease-in-out infinite;will-change:transform}
@@ -37,6 +35,7 @@ ANIM_STYLE.textContent = `
   @keyframes nucleusFadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
   @keyframes btnShimmer{0%{background-position:200% center}100%{background-position:-200% center}}
   @keyframes softGlow{0%,100%{box-shadow:0 0 12px var(--gc30),0 0 24px var(--gc15)}50%{box-shadow:0 0 20px var(--gc40),0 0 40px var(--gc20)}}
+  @keyframes sectorHintFadeIn{from{opacity:0}to{opacity:0.92}}
 `;
 if (!document.getElementById('core-diagram-anims')) {
   ANIM_STYLE.id = 'core-diagram-anims';
@@ -72,10 +71,185 @@ export interface PresetCombo {
   prompt: string; angle: number; dominant?: Element; reinforcer?: Element; supporter?: Element;
 }
 
+/** Layout radius (~half of bead + rim) — keeps materials off sector lines & neighbors. */
+const MATERIAL_ORBIT_ORB_RADIUS_PX = 34;
+const ATMOSPHERE_ORBIT_ORB_RADIUS_PX = 20;
+
 const MAT_TEX: Record<string, string> = MATERIAL_SPHERE_IMAGES;
 
-const EL_ANGLE: Record<Element, number> = { air: -90, fire: 0, earth: 90, water: 180 };
+/** Clockwise slice order from top-left boundary (-135°) — matches historical quadrant layout */
+const SECTOR_ORDER: Element[] = ['air', 'fire', 'earth', 'water'];
 const ELEMENTS: Element[] = ['earth', 'fire', 'water', 'air'];
+
+type ElementSectorLayout = Record<Element, { start: number; end: number; center: number; half: number }>;
+
+function buildSectorLayout(dist: Record<Element, number>): ElementSectorLayout {
+  const weights = SECTOR_ORDER.map(el => Math.max(dist[el], 4));
+  const sum = weights.reduce((a, b) => a + b, 0);
+  let start = (-3 * Math.PI) / 4;
+  const layout = {} as ElementSectorLayout;
+  SECTOR_ORDER.forEach((el, i) => {
+    const span = (weights[i] / sum) * 2 * Math.PI;
+    const end = start + span;
+    const center = (start + end) / 2;
+    layout[el] = { start, end, center, half: span / 2 };
+    start = end;
+  });
+  return layout;
+}
+
+/** Annular sector path (same sweep convention as legacy fixed quadrants). */
+function sectorBandPath(ri: number, ro: number, start: number, end: number): string {
+  const delta = end - start;
+  const large = delta > Math.PI ? 1 : 0;
+  const xis = Math.cos(start) * ri, yis = Math.sin(start) * ri;
+  const xie = Math.cos(end) * ri, yie = Math.sin(end) * ri;
+  const xoe = Math.cos(end) * ro, yoe = Math.sin(end) * ro;
+  const xos = Math.cos(start) * ro, yos = Math.sin(start) * ro;
+  return [`M ${xis} ${yis}`, `A ${ri} ${ri} 0 ${large} 1 ${xie} ${yie}`, `L ${xoe} ${yoe}`, `A ${ro} ${ro} 0 ${large} 0 ${xos} ${yos}`, 'Z'].join(' ');
+}
+
+function sectorRingArcPath(r: number, start: number, end: number): string {
+  const delta = end - start;
+  const large = delta > Math.PI ? 1 : 0;
+  const x1 = Math.cos(start) * r, y1 = Math.sin(start) * r;
+  const x2 = Math.cos(end) * r, y2 = Math.sin(end) * r;
+  return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
+}
+
+type RingOrbitLayoutOpts = { orbRadiusPx: number; edgeFrac?: number; minEdgeRad?: number };
+
+/** Materials / ring items: inset from sector edges, symmetric spread, min angular gap between orbs. */
+function sectorPosRingItemsInLayout(
+  el: Element, idx: number, total: number, orbit: number, layout: ElementSectorLayout, opts: RingOrbitLayoutOpts,
+) {
+  const { center, start, end } = layout[el];
+  const span = end - start;
+  const edgeFrac = opts.edgeFrac ?? 0.14;
+  const minEdgeRad = opts.minEdgeRad ?? Math.PI / 18;
+  const edgeMargin = Math.max(span * edgeFrac, minEdgeRad);
+  const usableHalf = Math.max(0, span / 2 - edgeMargin);
+  if (total <= 1 || usableHalf < 1e-6) {
+    return { x: Math.cos(center) * orbit, y: Math.sin(center) * orbit };
+  }
+  const minStep = 2 * Math.atan((opts.orbRadiusPx * 1.06) / Math.max(orbit, 1));
+  let half = usableHalf;
+  if (total > 1) {
+    const stepIfFull = (2 * half) / (total - 1);
+    if (stepIfFull < minStep) {
+      half = Math.min(usableHalf, ((total - 1) * minStep) / 2);
+    }
+  }
+  const step = total > 1 ? (2 * half) / (total - 1) : 0;
+  const offset = -half + idx * step;
+  let a = center + offset;
+  const lo = start + edgeMargin;
+  const hi = end - edgeMargin;
+  if (hi >= lo) a = Math.max(lo, Math.min(hi, a));
+  return { x: Math.cos(a) * orbit, y: Math.sin(a) * orbit };
+}
+
+function hexToRgba(hex: string, a: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return `rgba(136,136,136,${a})`;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+function stychiaConicGradient(layout: ElementSectorLayout, opacityHi: number, opacityLo: number): string {
+  const toDeg = (r: number) => ((r + Math.PI / 2) * 180 / Math.PI + 360) % 360;
+  const stops = SECTOR_ORDER.map(el => {
+    const { start, end } = layout[el];
+    const hex = MUTED_COLORS[el];
+    return `${hexToRgba(hex, opacityHi)} ${toDeg(start)}deg, ${hexToRgba(hex, opacityLo)} ${toDeg(end)}deg`;
+  }).join(', ');
+  return `conic-gradient(${stops})`;
+}
+
+/** Drag angle (rad, atan2) → element using proportional sectors */
+function elementFromDragAngle(angRad: number, layout: ElementSectorLayout): Element {
+  let t = angRad;
+  const base = layout.air.start;
+  while (t < base) t += 2 * Math.PI;
+  while (t >= base + 2 * Math.PI) t -= 2 * Math.PI;
+  for (const el of SECTOR_ORDER) {
+    const { start, end } = layout[el];
+    if (t >= start && t < end) return el;
+  }
+  return SECTOR_ORDER[0];
+}
+
+const ELEMENT_LABEL_EN: Record<Element, string> = {
+  earth: 'Earth',
+  fire: 'Fire',
+  water: 'Water',
+  air: 'Air',
+};
+
+type DistBracket = 'low' | 'mid' | 'high';
+
+function distributionBracket(pct: number): DistBracket {
+  if (pct < 18) return 'low';
+  if (pct < 42) return 'mid';
+  return 'high';
+}
+
+const BRACKET_LABEL_EN: Record<DistBracket, string> = {
+  low: 'Light',
+  mid: 'Balanced',
+  high: 'Strong',
+};
+
+/** Short English hint: what this element does at your share, and where the design lands. */
+const SECTOR_OUTCOME_HINT_EN: Record<Element, Record<DistBracket, string>> = {
+  earth: {
+    low: 'Low Earth share — the outcome leans lighter and more technical; natural mass stays in the background.',
+    mid: 'Medium Earth — warm, organic balance: wood, stone, and tactility read clearly without going fully rustic.',
+    high: 'Strong Earth — expect a grounded result: natural materials, calm warmth, and a space that feels rooted.',
+  },
+  fire: {
+    low: 'Low Fire — less drama and contrast; the palette stays calmer and more neutral overall.',
+    mid: 'Medium Fire — warm accents, deeper surfaces, and an evening / mood-lit character come through.',
+    high: 'Strong Fire — a bold, cinematic interior: intensity, depth, and confident material presence.',
+  },
+  water: {
+    low: 'Low Water — less mirror-like clarity; the space reads more matte and solid than fluid.',
+    mid: 'Medium Water — quiet reflections, smooth forms, and a serene, sculpted calm.',
+    high: 'Strong Water — a polished, fluid outcome: clarity, reflectivity, and refined depth.',
+  },
+  air: {
+    low: 'Low Air — less ethereal lightness; more weight stays on texture and physical material.',
+    mid: 'Medium Air — modern minimal openness: light, space, and transparency read clearly.',
+    high: 'Strong Air — an airy, forward result: light tones, spaciousness, and refined lightness.',
+  },
+};
+
+/** One short line per sector (shown near each slice after a dwell — avoids a crowded central panel). */
+const SECTOR_HINT_BRIEF_EN: Record<Element, Record<DistBracket, string>> = {
+  earth: {
+    low: 'Lighter, more technical; nature stays in the background.',
+    mid: 'Warm organic balance — wood & stone without going rustic.',
+    high: 'Grounded: natural materials, calm warmth, rooted feel.',
+  },
+  fire: {
+    low: 'Calmer palette — less drama and contrast.',
+    mid: 'Warm accents & mood-lit depth.',
+    high: 'Bold, cinematic — intensity and confident surfaces.',
+  },
+  water: {
+    low: 'More matte and solid than fluid or mirror-like.',
+    mid: 'Quiet reflections, smooth forms, serene calm.',
+    high: 'Polished and fluid — clarity and refined depth.',
+  },
+  air: {
+    low: 'Heavier on texture; less airy ethereality.',
+    mid: 'Minimal openness — light, space, transparency.',
+    high: 'Airy and forward — spacious, refined lightness.',
+  },
+};
+
+/** Cursor must rest near nucleus this long before per-sector hints ease in */
+const NUCLEUS_HINT_DWELL_MS = 1200;
 
 const MUTED_COLORS = ELEMENT_COLORS_MUTED;
 
@@ -139,17 +313,6 @@ function evenCircle(idx: number, total: number, orbit: number, startAngle = -Mat
   return { x: Math.cos(a) * orbit, y: Math.sin(a) * orbit };
 }
 
-function sectorPos(el: Element, idx: number, total: number, orbit: number) {
-  const baseAngle = EL_ANGLE[el] * Math.PI / 180;
-  const maxSpread = Math.PI / 4 - Math.PI / 36; // ±40° from center
-  if (total <= 1) {
-    return { x: Math.cos(baseAngle) * orbit, y: Math.sin(baseAngle) * orbit };
-  }
-  const offset = ((idx / (total - 1)) - 0.5) * 2 * maxSpread;
-  const a = baseAngle + offset;
-  return { x: Math.cos(a) * orbit, y: Math.sin(a) * orbit };
-}
-
 const CoreDiagram: React.FC<CoreDiagramProps> = ({
   distribution, selectedAdjectives, selectedMaterials, lockedElements,
   onAdjust, onToggleLock, onToggleMaterial, onToggleAtmosphere, isMuted = false,
@@ -177,6 +340,12 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
   const [dragAngle, setDragAngle] = useState(0);
   const [divePhase, setDivePhase] = useState<0 | 1 | 2 | 3>(0);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [orbitSectorHover, setOrbitSectorHover] = useState<Element | null>(null);
+  /** Cursor inside nucleus inspect radius (dial emphasis — immediate). */
+  const [nucleusZoneFocused, setNucleusZoneFocused] = useState(false);
+  /** After dwell in nucleus zone — soft per-sector labels at each slice. */
+  const [nucleusHintsVisible, setNucleusHintsVisible] = useState(false);
+  const nucleusHintsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { setMounted(true); setMusicOn(isAmbientPlaying()); }, []);
   useEffect(() => {
@@ -208,10 +377,15 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
   const dcOrig = ELEMENT_COLORS[dom];
 
   const nR = 118;
+  /** Pixel radius from diagram center: inside this = nucleus mix readout + dial emphasis */
+  const nucleusInspectR = nR + 36;
   const symOrbR = nR + 50;
   const matOrbR = nR + 140;
   const atmoOrbR = nR + 250;
-  const canvasSize = atmoOrbR * 2 + 80; // 816
+  /** Symmetric canvas margin — extra gutter so sector hints sit clearly outside the outer orbit */
+  const diagramPad = 60;
+  const canvasSize = atmoOrbR * 2 + diagramPad * 2;
+  const ctr = atmoOrbR + diagramPad;
 
   const [containerSize, setContainerSize] = useState<{ w: number; h: number }>({ w: 1200, h: 800 });
   useEffect(() => {
@@ -226,8 +400,8 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
   const diagramScale = Math.min(1, containerSize.w / canvasSize, containerSize.h / canvasSize);
 
   const nColors = useMemo(() => sorted.map(([el]) => MUTED_COLORS[el as Element]), [sorted]);
-  const nGrad = useMemo(() => `radial-gradient(circle at 36% 32%, ${dc}E0 0%, ${dc}A0 30%, ${nColors[1]}60 55%, ${nColors[2]}35 78%, ${nColors[3]}18 100%)`, [dc, nColors]);
-  const bgGrad = useMemo(() => `radial-gradient(ellipse at center, ${dc}0A 0%, ${dc}05 30%, #FAFBFC 60%, #F8F8F7 100%)`, [dc]);
+  const nGrad = useMemo(() => `radial-gradient(circle at 36% 32%, ${dc}D8 0%, ${dc}98 32%, ${nColors[1]}55 58%, ${nColors[2]}28 80%, transparent 100%)`, [dc, nColors]);
+  const bgGrad = useMemo(() => `radial-gradient(ellipse at center, ${dc}08 0%, ${dc}04 32%, #FAFBFC 62%, #F7F7F6 100%)`, [dc]);
 
   const matsByEl = useMemo(() => {
     const g: Record<Element, MaterialDef[]> = { earth: [], fire: [], water: [], air: [] };
@@ -235,13 +409,79 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
     return g;
   }, [selectedMaterials, distribution]);
 
+  const sectorLayout = useMemo(() => buildSectorLayout(distribution), [distribution]);
+
+  const clearPointerOverlays = useCallback(() => {
+    if (nucleusHintsTimerRef.current) {
+      clearTimeout(nucleusHintsTimerRef.current);
+      nucleusHintsTimerRef.current = null;
+    }
+    setOrbitSectorHover(null);
+    setNucleusZoneFocused(false);
+    setNucleusHintsVisible(false);
+  }, []);
+
+  const handleOrbitDiagramMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (matPicker || atmoPicker || dragging || gathering) {
+      clearPointerOverlays();
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ox = e.clientX - rect.left;
+    const oy = e.clientY - rect.top;
+    const cx0 = ctr;
+    const cy0 = ctr;
+    const dx = ox - cx0;
+    const dy = oy - cy0;
+    const r = Math.hypot(dx, dy);
+    if (r <= nucleusInspectR) {
+      setOrbitSectorHover(null);
+      setNucleusZoneFocused(true);
+      if (!nucleusHintsVisible && !nucleusHintsTimerRef.current) {
+        nucleusHintsTimerRef.current = setTimeout(() => {
+          nucleusHintsTimerRef.current = null;
+          setNucleusHintsVisible(true);
+        }, NUCLEUS_HINT_DWELL_MS);
+      }
+      return;
+    }
+    if (nucleusHintsTimerRef.current) {
+      clearTimeout(nucleusHintsTimerRef.current);
+      nucleusHintsTimerRef.current = null;
+    }
+    setNucleusZoneFocused(false);
+    setNucleusHintsVisible(false);
+    if (r > atmoOrbR + 82) {
+      setOrbitSectorHover(null);
+      return;
+    }
+    setOrbitSectorHover(elementFromDragAngle(Math.atan2(dy, dx), sectorLayout));
+  }, [matPicker, atmoPicker, dragging, gathering, sectorLayout, atmoOrbR, ctr, nucleusInspectR, nucleusHintsVisible, clearPointerOverlays]);
+
+  const handleOrbitDiagramMouseLeave = useCallback(() => {
+    clearPointerOverlays();
+  }, [clearPointerOverlays]);
+
+  useEffect(() => {
+    clearPointerOverlays();
+  }, [sectorLayout, clearPointerOverlays]);
+
+  const ringConicMat = useMemo(() => stychiaConicGradient(sectorLayout, 0.26, 0.09), [sectorLayout]);
+  const ringConicAtmo = useMemo(() => stychiaConicGradient(sectorLayout, 0.22, 0.08), [sectorLayout]);
+
   const matPositions = useMemo(() => {
     const map: Record<string, { x: number; y: number }> = {};
     ELEMENTS.forEach(el => {
-      matsByEl[el].forEach((m, i) => { map[m.name] = sectorPos(el, i, matsByEl[el].length, matOrbR); });
+      matsByEl[el].forEach((m, i) => {
+        map[m.name] = sectorPosRingItemsInLayout(el, i, matsByEl[el].length, matOrbR, sectorLayout, {
+          orbRadiusPx: MATERIAL_ORBIT_ORB_RADIUS_PX,
+          edgeFrac: 0.175,
+          minEdgeRad: Math.PI / 13,
+        });
+      });
     });
     return map;
-  }, [matsByEl, matOrbR]);
+  }, [matsByEl, matOrbR, sectorLayout]);
 
   const adjsByEl = useMemo(() => {
     const g: Record<Element, AdjectiveDef[]> = { earth: [], fire: [], water: [], air: [] };
@@ -252,10 +492,16 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
   const atmoPositions = useMemo(() => {
     const map: Record<string, { x: number; y: number }> = {};
     ELEMENTS.forEach(el => {
-      adjsByEl[el].forEach((a, i) => { map[`${a.label}-${a.element}`] = sectorPos(el, i, adjsByEl[el].length, atmoOrbR); });
+      adjsByEl[el].forEach((a, i) => {
+        map[`${a.label}-${a.element}`] = sectorPosRingItemsInLayout(el, i, adjsByEl[el].length, atmoOrbR, sectorLayout, {
+          orbRadiusPx: ATMOSPHERE_ORBIT_ORB_RADIUS_PX,
+          edgeFrac: 0.125,
+          minEdgeRad: Math.PI / 17,
+        });
+      });
     });
     return map;
-  }, [adjsByEl, atmoOrbR]);
+  }, [adjsByEl, atmoOrbR, sectorLayout]);
 
   const handleGenerate = useCallback(() => {
     if (generating || divePhase > 0) return;
@@ -297,14 +543,11 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
     let ang = Math.atan2(dy, dx) * (180 / Math.PI);
     if (ang < 0) ang += 360;
     setDragAngle(ang);
-    let t: Element;
-    if (ang >= 315 || ang < 45) t = 'fire';
-    else if (ang >= 45 && ang < 135) t = 'earth';
-    else if (ang >= 135 && ang < 225) t = 'water';
-    else t = 'air';
+    const angRad = Math.atan2(dy, dx);
+    const t = elementFromDragAngle(angRad, sectorLayout);
     const c = distribution[t];
     if (c < 60) { onAdjust(t, Math.min(65, c + 1.5)); tick(isMuted); }
-  }, [dragging, distribution, onAdjust, isMuted]);
+  }, [dragging, distribution, onAdjust, isMuted, sectorLayout]);
 
   const handleNucleusPointerUp = useCallback(() => { dragStartRef.current = null; setDragging(false); }, []);
 
@@ -312,98 +555,189 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
     <div ref={cRef}
       className={`w-full h-full flex items-center justify-center select-none relative overflow-hidden ${gathering ? 'core-gathering' : ''}`}
       style={{ background: bgGrad, opacity: mounted ? 1 : 0, transition: 'opacity 0.8s ease' }}
-      onClick={() => { warmupSpeech(); setMatPicker(null); setAtmoPicker(null); setExpMat(null); setShowAllMats(false); setFullMat(null); setShowAtmoRefs(false); setNucleusTooltip(false); setExpandedRing(null); }}
+      onClick={() => {
+        warmupSpeech(); clearPointerOverlays(); setMatPicker(null); setAtmoPicker(null); setExpMat(null); setShowAllMats(false); setFullMat(null);
+        setShowAtmoRefs(false); setNucleusTooltip(false); setExpandedRing(null);
+      }}
     >
       {/* ═══ Outer scene container — scales to fit viewport ═══ */}
-      <div className="relative" style={{ width: canvasSize, height: canvasSize, transform: diagramScale < 1 ? `scale(${diagramScale})` : undefined, transformOrigin: 'center center', flexShrink: 0 }}>
+      <div
+        className="relative"
+        style={{ width: canvasSize, height: canvasSize, transform: diagramScale < 1 ? `scale(${diagramScale})` : undefined, transformOrigin: 'center center', flexShrink: 0 }}
+        onMouseMove={handleOrbitDiagramMouseMove}
+        onMouseLeave={handleOrbitDiagramMouseLeave}
+      >
 
         {/* ═══ SVG orbit rings + sector guides ═══ */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none orbit-svg" viewBox={`${-canvasSize/2} ${-canvasSize/2} ${canvasSize} ${canvasSize}`}>
           <defs>
-            {/* Gradient for each orbit ring — blends element colors around the circle */}
-            {['mat', 'atmo', 'nuc'].map(ringId => (
-              <React.Fragment key={ringId}>
-                {ELEMENTS.map((el, idx) => {
-                  const mc = MUTED_COLORS[el];
-                  const baseA = EL_ANGLE[el];
-                  const pct = distribution[el] / 100;
-                  const gradId = `${ringId}-grad-${el}`;
-                  const rad = baseA * Math.PI / 180;
-                  const x1n = 0.5 + Math.cos(rad) * 0.35;
-                  const y1n = 0.5 + Math.sin(rad) * 0.35;
-                  return (
-                    <radialGradient key={gradId} id={gradId} cx={x1n} cy={y1n} r="0.6" gradientUnits="objectBoundingBox">
-                      <stop offset="0%" stopColor={mc} stopOpacity={Math.min(0.18, pct * 0.25)} />
-                      <stop offset="100%" stopColor={mc} stopOpacity={0} />
-                    </radialGradient>
-                  );
-                })}
-              </React.Fragment>
-            ))}
-            {/* Sector radial gradients for zone fills — luminous */}
-            {ELEMENTS.map(el => {
-              const mc = MUTED_COLORS[el];
-              const pct = distribution[el] / 100;
+            <filter id="sector-hi-soft" x="-12%" y="-12%" width="124%" height="124%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            {[matOrbR, atmoOrbR].flatMap((ringR, ri) =>
+              ELEMENTS.map(el => {
+                const { start, end } = sectorLayout[el];
+                const mc = MUTED_COLORS[el];
+                const pct = distribution[el] / 100;
+                const peak = 0.035 + pct * 0.14;
+                const x1 = Math.cos(start) * ringR;
+                const y1 = Math.sin(start) * ringR;
+                const x2 = Math.cos(end) * ringR;
+                const y2 = Math.sin(end) * ringR;
+                const gid = `orbit-arc-${ri}-${el}`;
+                return (
+                  <linearGradient key={gid} id={gid} gradientUnits="userSpaceOnUse" x1={x1} y1={y1} x2={x2} y2={y2}>
+                    <stop offset="0%" stopColor={mc} stopOpacity={0} />
+                    <stop offset="18%" stopColor={mc} stopOpacity={peak * 0.35} />
+                    <stop offset="50%" stopColor={mc} stopOpacity={peak} />
+                    <stop offset="82%" stopColor={mc} stopOpacity={peak * 0.35} />
+                    <stop offset="100%" stopColor={mc} stopOpacity={0} />
+                  </linearGradient>
+                );
+              }),
+            )}
+            {SECTOR_ORDER.map((el, i) => {
+              const rad = sectorLayout[el].start;
+              const r1 = nR + 10;
+              const r2 = atmoOrbR + 10;
+              const x1 = Math.cos(rad) * r1;
+              const y1 = Math.sin(rad) * r1;
+              const x2 = Math.cos(rad) * r2;
+              const y2 = Math.sin(rad) * r2;
+              const did = `div-line-grad-${i}`;
               return (
-                <radialGradient key={`zone-grad-${el}`} id={`zone-grad-${el}`} cx="50%" cy="50%" r="50%">
-                  <stop offset="20%" stopColor={mc} stopOpacity={pct * 0.18} />
-                  <stop offset="60%" stopColor={mc} stopOpacity={pct * 0.08} />
-                  <stop offset="100%" stopColor={mc} stopOpacity={0} />
-                </radialGradient>
+                <linearGradient key={did} id={did} gradientUnits="userSpaceOnUse" x1={x1} y1={y1} x2={x2} y2={y2}>
+                  <stop offset="0%" stopColor="#a8a8ae" stopOpacity={0} />
+                  <stop offset="14%" stopColor="#9c9ca3" stopOpacity={0.14} />
+                  <stop offset="50%" stopColor="#92929a" stopOpacity={0.27} />
+                  <stop offset="86%" stopColor="#9c9ca3" stopOpacity={0.14} />
+                  <stop offset="100%" stopColor="#a8a8ae" stopOpacity={0} />
+                </linearGradient>
               );
             })}
+            <path id="orbit-textpath-atmo" d={`M ${-(atmoOrbR - 14)} 0 A ${atmoOrbR - 14} ${atmoOrbR - 14} 0 0 0 ${atmoOrbR - 14} 0`} fill="none" />
+            <path id="orbit-textpath-mat" d={`M ${-(matOrbR - 10)} 0 A ${matOrbR - 10} ${matOrbR - 10} 0 0 0 ${matOrbR - 10} 0`} fill="none" />
           </defs>
-
-          {/* Sector zone fills — opacity scales with element percentage, soft gradient edges */}
+          {/* Sector zone tints — hierarchy when cursor on nucleus; subtle orbit-sector hover */}
           {ELEMENTS.map(el => {
-            const baseA = EL_ANGLE[el] * Math.PI / 180;
+            const mc = MUTED_COLORS[el];
             const pct = distribution[el] / 100;
-            const a1 = baseA - Math.PI / 4;
-            const a2 = baseA + Math.PI / 4;
-            const ri = nR + 14;
-            const ro = atmoOrbR + 10;
-            const d = [
-              `M ${Math.cos(a1) * ri} ${Math.sin(a1) * ri}`,
-              `A ${ri} ${ri} 0 0 1 ${Math.cos(a2) * ri} ${Math.sin(a2) * ri}`,
-              `L ${Math.cos(a2) * ro} ${Math.sin(a2) * ro}`,
-              `A ${ro} ${ro} 0 0 0 ${Math.cos(a1) * ro} ${Math.sin(a1) * ro}`,
-              'Z',
-            ].join(' ');
-            return <path key={`zone-${el}`} d={d} fill={`url(#zone-grad-${el})`} style={{ transition: 'opacity 0.6s ease' }} />;
+            const { start, end } = sectorLayout[el];
+            const ri = nR + 16;
+            const ro = atmoOrbR + 6;
+            const d = sectorBandPath(ri, ro, start, end);
+            const orbHi = orbitSectorHover === el;
+            const rank = sorted.findIndex(([e]) => e === el);
+            const hier = nucleusHintsVisible && rank >= 0 ? [0.042, 0.028, 0.018, 0.012][rank] ?? 0.008 : 0;
+            const baseOp = 0.014 + pct * 0.05;
+            const op = Math.min(0.165, baseOp + hier + (orbHi ? 0.03 : 0));
+            return <path key={`zone-${el}`} d={d} fill={mc} opacity={op} filter={orbHi ? 'url(#sector-hi-soft)' : undefined} style={{ transition: 'opacity 0.38s ease' }} />;
           })}
 
-          {/* Nucleus boundary ring — very subtle */}
-          <circle cx="0" cy="0" r={nR + 4} fill="none" stroke={dc} strokeWidth="0.5" opacity={0.1} />
+          {/* Sector divider lines — boundaries follow distribution-weighted layout */}
+          {SECTOR_ORDER.map((el, i) => {
+            const rad = sectorLayout[el].start;
+            const r1 = nR + 10;
+            const r2 = atmoOrbR + 10;
+            return (
+              <line key={`div-${el}-${i}`}
+                x1={Math.cos(rad) * r1} y1={Math.sin(rad) * r1}
+                x2={Math.cos(rad) * r2} y2={Math.sin(rad) * r2}
+                stroke={`url(#div-line-grad-${i})`} strokeWidth="0.68" strokeLinecap="round"
+              />
+            );
+          })}
 
-          {/* Orbit rings — gradient-colored arcs per element sector, with glow */}
+          {/* Nucleus boundary */}
+          <circle cx="0" cy="0" r={nR + 4} fill="none" stroke={dc} strokeWidth="0.35" opacity={0.08} />
+
+          {/* Orbit rings — element-colored arcs per sector */}
           {[matOrbR, atmoOrbR].map((ringR, ri) => (
             <React.Fragment key={`ring-${ri}`}>
               {ELEMENTS.map(el => {
-                const mc = MUTED_COLORS[el];
-                const pct = distribution[el] / 100;
-                const baseA = EL_ANGLE[el] * Math.PI / 180;
-                const a1 = baseA - Math.PI / 4;
-                const a2 = baseA + Math.PI / 4;
-                const x1 = Math.cos(a1) * ringR;
-                const y1 = Math.sin(a1) * ringR;
-                const x2 = Math.cos(a2) * ringR;
-                const y2 = Math.sin(a2) * ringR;
-                const arcD = `M ${x1} ${y1} A ${ringR} ${ringR} 0 0 1 ${x2} ${y2}`;
+                const { start, end } = sectorLayout[el];
+                const arcD = sectorRingArcPath(ringR, start, end);
+                const gid = `orbit-arc-${ri}-${el}`;
                 return (
-                  <React.Fragment key={`ring-${ri}-${el}`}>
-                    <path d={arcD} fill="none" stroke={mc} strokeWidth={ri === 0 ? 3 : 2.5} opacity={pct * 0.06} style={{ transition: 'opacity 0.6s ease', filter: 'blur(2px)' }} />
-                    <path d={arcD} fill="none" stroke={mc} strokeWidth={ri === 0 ? 0.8 : 0.6} opacity={0.08 + pct * 0.22} style={{ transition: 'opacity 0.6s ease' }} />
-                  </React.Fragment>
+                  <path key={`ring-${ri}-${el}`} d={arcD} fill="none" stroke={`url(#${gid})`}
+                    strokeWidth={ri === 0 ? 0.72 : 0.55} strokeLinecap="round"
+                    style={{ transition: 'opacity 0.6s ease' }}
+                  />
                 );
               })}
             </React.Fragment>
           ))}
+
+          {/* Minimal compass rim + outward ticks at sector centers */}
+          <circle cx="0" cy="0" r={atmoOrbR + 5} fill="none" stroke="rgba(88,88,98,0.1)" strokeWidth="0.55" />
+          <circle cx="0" cy="0" r={atmoOrbR - 4} fill="none" stroke="rgba(88,88,98,0.06)" strokeWidth="0.45" />
+          {SECTOR_ORDER.map(el => {
+            const ca = sectorLayout[el].center;
+            const rBase = atmoOrbR - 0.5;
+            const rTip = atmoOrbR + 12;
+            const xm = Math.cos(ca);
+            const ym = Math.sin(ca);
+            const hw = 2.15;
+            const px = -ym * hw;
+            const py = xm * hw;
+            return (
+              <path
+                key={`compass-tick-${el}`}
+                d={`M ${xm * rBase + px} ${ym * rBase + py} L ${xm * rTip} ${ym * rTip} L ${xm * rBase - px} ${ym * rBase - py} Z`}
+                fill="rgba(72,72,82,0.08)"
+                stroke="rgba(72,72,82,0.12)"
+                strokeWidth="0.32"
+                strokeLinejoin="round"
+              />
+            );
+          })}
+
+          {/* Ring labels — curved along orbit (structural, high contrast) */}
+          <text
+            className="pointer-events-none"
+            fill={dc}
+            fillOpacity={hoveredRing === 'atmo' || expandedRing === 'atmo' ? 0.95 : 0.78}
+            fontSize="11.5"
+            fontWeight="700"
+            letterSpacing="0.42em"
+            style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif", textTransform: 'uppercase' }}
+          >
+            <textPath href="#orbit-textpath-atmo" startOffset="50%" textAnchor="middle">atmosphere</textPath>
+          </text>
+          <text
+            className="pointer-events-none"
+            fill={dc}
+            fillOpacity={hoveredRing === 'mat' || expandedRing === 'mat' ? 0.95 : 0.78}
+            fontSize="11"
+            fontWeight="700"
+            letterSpacing="0.4em"
+            style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif", textTransform: 'uppercase' }}
+          >
+            <textPath href="#orbit-textpath-mat" startOffset="50%" textAnchor="middle">materials</textPath>
+          </text>
+
+          {/* Subtle radial spokes toward outer hints (ties copy to each sector when dwell completes) */}
+          {nucleusHintsVisible && ELEMENTS.map(el => {
+            const ca = sectorLayout[el].center;
+            const mc = MUTED_COLORS[el];
+            const rInner = atmoOrbR + 4;
+            const rOuter = atmoOrbR + 40;
+            const x1 = Math.cos(ca) * rInner, y1 = Math.sin(ca) * rInner;
+            const x2 = Math.cos(ca) * rOuter, y2 = Math.sin(ca) * rOuter;
+            return (
+              <line key={`hint-spoke-${el}`}
+                x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke={hexToRgba(mc, 0.38)} strokeWidth="0.85" strokeLinecap="round" opacity={0.85}
+              />
+            );
+          })}
         </svg>
 
         {/* ═══ Orbit rings — interactive: hover glow + click to expand ═══ */}
         <div className="absolute rounded-full"
           style={{
-            left: atmoOrbR + 40 - matOrbR - 8, top: atmoOrbR + 40 - matOrbR - 8,
+            left: ctr - matOrbR - 8, top: ctr - matOrbR - 8,
             width: matOrbR * 2 + 16, height: matOrbR * 2 + 16,
             cursor: 'pointer', zIndex: 5,
           }}
@@ -413,17 +747,19 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
         >
           <div className="absolute rounded-full transition-all duration-400" style={{
             inset: 8,
-            border: hoveredRing === 'mat' || expandedRing === 'mat'
-              ? `2px solid ${dc}60`
-              : `1.2px solid ${dc}30`,
+            borderRadius: '50%',
+            background: ringConicMat,
+            opacity: hoveredRing === 'mat' || expandedRing === 'mat' ? 1 : 0.88,
             boxShadow: hoveredRing === 'mat' || expandedRing === 'mat'
-              ? `0 0 20px ${dc}18, inset 0 0 20px ${dc}08`
-              : 'none',
+              ? `0 0 22px ${dc}25, inset 0 0 20px ${dc}0C`
+              : `0 0 10px ${dc}10`,
+            WebkitMask: `radial-gradient(circle closest-side, transparent calc(100% - ${expandedRing === 'mat' ? 5 : hoveredRing === 'mat' ? 4 : 3}px), #000 100%)`,
+            mask: `radial-gradient(circle closest-side, transparent calc(100% - ${expandedRing === 'mat' ? 5 : hoveredRing === 'mat' ? 4 : 3}px), #000 100%)`,
           }} />
         </div>
         <div className="absolute rounded-full"
           style={{
-            left: 32, top: 32,
+            left: ctr - atmoOrbR - 8, top: ctr - atmoOrbR - 8,
             width: atmoOrbR * 2 + 16, height: atmoOrbR * 2 + 16,
             cursor: 'pointer', zIndex: 4,
           }}
@@ -433,42 +769,28 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
         >
           <div className="absolute rounded-full transition-all duration-400" style={{
             inset: 8,
-            border: hoveredRing === 'atmo' || expandedRing === 'atmo'
-              ? `2px solid ${dc}50`
-              : `1px solid ${dc}22`,
+            borderRadius: '50%',
+            background: ringConicAtmo,
+            opacity: hoveredRing === 'atmo' || expandedRing === 'atmo' ? 1 : 0.82,
             boxShadow: hoveredRing === 'atmo' || expandedRing === 'atmo'
-              ? `0 0 24px ${dc}14, inset 0 0 24px ${dc}06`
-              : 'none',
+              ? `0 0 26px ${dc}20, inset 0 0 22px ${dc}08`
+              : `0 0 12px ${dc}0C`,
+            WebkitMask: `radial-gradient(circle closest-side, transparent calc(100% - ${expandedRing === 'atmo' ? 5 : hoveredRing === 'atmo' ? 4 : 3}px), #000 100%)`,
+            mask: `radial-gradient(circle closest-side, transparent calc(100% - ${expandedRing === 'atmo' ? 5 : hoveredRing === 'atmo' ? 4 : 3}px), #000 100%)`,
           }} />
         </div>
 
-        {/* ═══ Orbit ring labels — offset ABOVE ring line ═══ */}
-        <span className="absolute pointer-events-none transition-all duration-300" style={{
-          left: atmoOrbR + 40, top: atmoOrbR + 40 - matOrbR - 18, transform: 'translateX(-50%)',
-          fontSize: hoveredRing === 'mat' || expandedRing === 'mat' ? 10 : 8,
-          fontWeight: hoveredRing === 'mat' || expandedRing === 'mat' ? 600 : 500,
-          letterSpacing: '0.22em', textTransform: 'uppercase',
-          color: hoveredRing === 'mat' || expandedRing === 'mat' ? `${dc}CC` : `${dc}80`,
-        }}>materials</span>
-        <span className="absolute pointer-events-none transition-all duration-300" style={{
-          left: atmoOrbR + 40, top: 40 - 18, transform: 'translateX(-50%)',
-          fontSize: hoveredRing === 'atmo' || expandedRing === 'atmo' ? 10 : 8,
-          fontWeight: hoveredRing === 'atmo' || expandedRing === 'atmo' ? 600 : 500,
-          letterSpacing: '0.22em', textTransform: 'uppercase',
-          color: hoveredRing === 'atmo' || expandedRing === 'atmo' ? `${dc}AA` : `${dc}60`,
-        }}>atmosphere</span>
-
         {/* ═══ Element symbol triangles — uniform size ═══ */}
         {ELEMENTS.map(el => {
-          const a = EL_ANGLE[el] * Math.PI / 180;
+          const a = sectorLayout[el].center;
           const mc = MUTED_COLORS[el];
-          const cx = atmoOrbR + 40 + Math.cos(a) * symOrbR;
-          const cy = atmoOrbR + 40 + Math.sin(a) * symOrbR;
+          const cx = ctr + Math.cos(a) * symOrbR;
+          const cy = ctr + Math.sin(a) * symOrbR;
           const isAct = matPicker === el;
           const isDom = el === dom;
-          const SZ = 32;
-          const op = isAct ? 0.9 : isDom ? 0.65 : 0.38;
-          const sw = isAct ? 2.2 : 1.6;
+          const SZ = 28;
+          const op = isAct ? 0.8 : isDom ? 0.55 : 0.32;
+          const sw = isAct ? 1.8 : 1.3;
           const isUp = el === 'fire' || el === 'air';
           const hasBar = el === 'air' || el === 'earth';
           const side = SZ * 0.78;
@@ -500,7 +822,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                   {hasBar && <line x1={leftX + side * 0.2} y1={barY} x2={rightX - side * 0.2} y2={barY} stroke={mc} strokeWidth={sw} strokeLinecap="round" opacity={op} />}
                 </svg>
               </button>
-              <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', color: mc, opacity: isAct ? 0.85 : isDom ? 0.55 : 0.35, lineHeight: 1, transition: 'all 0.3s ease', background: 'rgba(255,255,255,0.75)', padding: '1px 4px', borderRadius: 4 }}>{el}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', color: mc, opacity: isAct ? 0.75 : isDom ? 0.5 : 0.3, lineHeight: 1, transition: 'all 0.3s ease', background: 'rgba(255,255,255,0.7)', padding: '1px 5px', borderRadius: 3 }}>{el}</span>
               <button className="flex items-center justify-center transition-all opacity-0 group-hover:opacity-70 hover:!opacity-100 hover:scale-125"
                 style={{ width: 22, height: 16, color: mc, background: 'none', border: 'none', padding: 0, cursor: 'pointer', marginTop: 2 }}
                 onClick={e => { e.stopPropagation(); snap(isMuted); onAdjust(el, Math.max(5, pct - 5)); }}>
@@ -518,12 +840,14 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           const tex = MAT_TEX[mat.name];
           const isExp = expMat === mat.name;
           const ringExp = expandedRing === 'mat';
-          const baseSz = isDom ? 58 : 50;
-          const sz = isExp ? 100 : ringExp ? baseSz + 16 : baseSz;
-          const cx = atmoOrbR + 40 + p.x;
-          const cy = atmoOrbR + 40 + p.y;
+          const baseSz = 48;
+          const sz = isExp ? 88 : ringExp ? baseSz + 10 : baseSz;
+          const cx = ctr + p.x;
+          const cy = ctr + p.y;
           const ang = Math.atan2(p.y, p.x);
-          const labelInward = { x: -Math.cos(ang) * (baseSz / 2 + 14), y: -Math.sin(ang) * (baseSz / 2 + 14) };
+          const labelR = sz / 2 + 10 + (ringExp || isExp ? 16 : 12);
+          const labelDx = Math.cos(ang) * labelR;
+          const labelDy = Math.sin(ang) * labelR;
           const handleMatClick = (e: React.MouseEvent) => {
             e.stopPropagation();
             snap(isMuted);
@@ -534,35 +858,38 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
               setExpMat(mat.name);
             }
           };
-          const floatDelay = `${(Math.abs(p.x * 7 + p.y * 3) % 5).toFixed(1)}s`;
           const showLabel = isExp || ringExp;
+          const isTravertine = /travertine/i.test(mat.name);
           return (
             <div key={mat.name} className="absolute group orb-item"
-              style={{ left: cx, top: cy, transform: 'translate(-50%, -50%)', transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)', zIndex: isExp ? 26 : ringExp ? 18 : 15, cursor: 'pointer', animation: gathering ? 'none' : `orbFloat ${8 + (Math.abs(p.x) % 4)}s ease-in-out infinite`, animationDelay: floatDelay }}
+              style={{ left: cx, top: cy, transform: 'translate(-50%, -50%)', transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)', zIndex: isExp ? 26 : ringExp ? 18 : 15, cursor: 'pointer' }}
               onClick={handleMatClick}
-              onMouseEnter={e => { if (!isExp) { (e.currentTarget as HTMLElement).style.transform = 'translate(-50%, -50%) scale(1.18)'; (e.currentTarget as HTMLElement).style.zIndex = '25'; } }}
+              onMouseEnter={e => { if (!isExp) { (e.currentTarget as HTMLElement).style.transform = 'translate(-50%, -50%) scale(1.08)'; (e.currentTarget as HTMLElement).style.zIndex = '25'; } }}
               onMouseLeave={e => { if (!isExp) { (e.currentTarget as HTMLElement).style.transform = 'translate(-50%, -50%)'; (e.currentTarget as HTMLElement).style.zIndex = ringExp ? '18' : '15'; } }}>
+              {/* Element-colored gradient ring */}
               <div style={{
-                width: sz, height: sz, borderRadius: '50%', position: 'relative', flexShrink: 0,
-                border: isExp ? `3px solid ${mc}` : ringExp ? `2.5px solid ${mc}` : `2.5px solid ${mc}`,
-                boxShadow: isExp
-                  ? `0 6px 24px rgba(0,0,0,0.18), 0 0 0 3px ${mc}40`
-                  : ringExp
-                    ? `0 4px 20px rgba(0,0,0,0.15), 0 0 12px ${mc}25`
-                    : `0 4px 16px rgba(0,0,0,0.12), 0 0 0 1px ${mc}20`,
+                width: sz + 6, height: sz + 6, borderRadius: '50%', flexShrink: 0,
+                background: `linear-gradient(135deg, ${mc}, ${mc}90)`,
+                padding: 3, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: isExp ? `0 0 18px ${mc}40, 0 3px 12px rgba(0,0,0,0.12)` : `0 0 10px ${mc}20, 0 2px 8px rgba(0,0,0,0.08)`,
                 transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)',
               }}>
-                <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', overflow: 'hidden' }}>
+                <div style={{
+                  width: sz, height: sz, borderRadius: '50%', position: 'relative', overflow: 'hidden',
+                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.4)',
+                }}>
                   <div style={{
-                    position: 'absolute', inset: '-15%', width: '130%', height: '130%', borderRadius: '50%',
-                    background: tex ? `url(${tex}) center/cover` : `radial-gradient(circle at 32% 28%, ${mc}CC, ${mc}60)`,
+                    position: 'absolute', inset: '-8%', width: '116%', height: '116%', borderRadius: '50%',
+                    background: tex ? `url(${tex}) center/cover` : `radial-gradient(circle at 32% 28%, ${mc}BB, ${mc}60)`,
+                    filter: isTravertine ? 'saturate(0.88) contrast(0.86) brightness(1.07)' : undefined,
                   }} />
-                  <div className="absolute pointer-events-none" style={{ width: '38%', height: '32%', top: '8%', left: '12%', background: 'radial-gradient(ellipse at 42% 36%, rgba(255,255,255,0.32) 0%, transparent 75%)', borderRadius: '50%' }} />
+                  <div className="absolute pointer-events-none" style={{ width: '36%', height: '30%', top: '10%', left: '14%', background: 'radial-gradient(ellipse at 42% 36%, rgba(255,255,255,0.35) 0%, transparent 75%)', borderRadius: '50%' }} />
                 </div>
               </div>
               <span className={`absolute px-2 py-0.5 rounded-full whitespace-nowrap transition-all ${showLabel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                style={{ fontSize: ringExp ? 11 : 10, fontWeight: 500, color: mc, background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(4px)', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', pointerEvents: 'none', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center',
-                  left: '50%', top: '50%', transform: `translate(calc(-50% + ${labelInward.x}px), calc(-50% + ${labelInward.y}px))` }}>
+                style={{ fontSize: ringExp ? 10 : 9, fontWeight: 500, color: mc, background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(6px)', boxShadow: `0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px ${mc}14`, pointerEvents: 'none', maxWidth: 132, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center',
+                  textShadow: '0 1px 0 rgba(255,255,255,0.9)', lineHeight: 1.25,
+                  left: '50%', top: '50%', transform: `translate(calc(-50% + ${labelDx}px), calc(-50% + ${labelDy}px))` }}>
                 {mat.name.split('(')[0].trim()}
               </span>
             </div>
@@ -575,40 +902,39 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           const p = atmoPositions[key]; if (!p) return null;
           const mc = MUTED_COLORS[adj.element];
           const ec = ELEMENT_COLORS[adj.element];
-          const cx = atmoOrbR + 40 + p.x;
-          const cy = atmoOrbR + 40 + p.y;
-          const floatDelay = `${(i * 1.3 % 5).toFixed(1)}s`;
+          const cx = ctr + p.x;
+          const cy = ctr + p.y;
           const ang = Math.atan2(p.y, p.x);
-          const labelDist = 34;
+          const atmoRingExp = expandedRing === 'atmo';
+          const sphereSz = atmoRingExp ? 24 : 17;
+          const labelDist = sphereSz / 2 + 14 + (atmoRingExp ? 10 : 4);
           const lblX = Math.cos(ang) * labelDist;
           const lblY = Math.sin(ang) * labelDist;
-          const atmoRingExp = expandedRing === 'atmo';
-          const sphereSz = atmoRingExp ? 28 : 20;
           return (
             <div key={`${key}-${i}`} className="absolute cursor-pointer orb-item"
-              style={{ left: cx, top: cy, transform: `translate(-50%, -50%)${atmoRingExp ? ' scale(1.35)' : ''}`, zIndex: atmoRingExp ? 12 : 8, transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)', animation: gathering ? 'none' : `orbFloat ${10 + (i % 4)}s ease-in-out infinite`, animationDelay: floatDelay }}
+              style={{ left: cx, top: cy, transform: `translate(-50%, -50%)${atmoRingExp ? ' scale(1.15)' : ''}`, zIndex: atmoRingExp ? 12 : 8, transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)' }}
               onClick={e => { e.stopPropagation(); snap(isMuted); setAtmoPicker(atmoPicker === adj.element ? null : adj.element); setMatPicker(null); }}
               onMouseEnter={e => {
                 const el = e.currentTarget as HTMLElement;
-                el.style.transform = 'translate(-50%, -50%) scale(1.8)';
+                el.style.transform = 'translate(-50%, -50%) scale(1.4)';
                 el.style.zIndex = '25';
                 const sphere = el.querySelector('[data-atmo-sphere]') as HTMLElement;
-                if (sphere) { sphere.style.boxShadow = `0 3px 16px ${mc}70, 0 0 24px ${ec}50`; sphere.style.borderColor = `${ec}90`; }
+                if (sphere) { sphere.style.boxShadow = `0 2px 10px ${mc}40`; sphere.style.borderColor = `${mc}60`; }
                 const lbl = el.querySelector('[data-atmo-label]') as HTMLElement;
-                if (lbl) { lbl.style.opacity = '1'; lbl.style.color = ec; lbl.style.transform = 'translate(-50%, -50%) scale(1.1)'; lbl.style.fontWeight = '600'; }
+                if (lbl) { lbl.style.opacity = '0.8'; lbl.style.color = ec; lbl.style.transform = 'translate(-50%, -50%) scale(1.05)'; lbl.style.fontWeight = '500'; }
               }}
               onMouseLeave={e => {
                 const el = e.currentTarget as HTMLElement;
-                el.style.transform = `translate(-50%, -50%)${atmoRingExp ? ' scale(1.35)' : ''}`;
+                el.style.transform = `translate(-50%, -50%)${atmoRingExp ? ' scale(1.15)' : ''}`;
                 el.style.zIndex = atmoRingExp ? '12' : '8';
                 const sphere = el.querySelector('[data-atmo-sphere]') as HTMLElement;
                 if (sphere) {
-                  sphere.style.boxShadow = atmoRingExp ? `0 2px 10px ${mc}50, 0 0 14px ${mc}20` : `0 1px 5px ${mc}30, 0 0 6px ${mc}12`;
-                  sphere.style.borderColor = atmoRingExp ? `${mc}70` : `${mc}40`;
+                  sphere.style.boxShadow = atmoRingExp ? `0 2px 8px ${mc}40, 0 0 10px ${mc}18` : `0 1px 4px ${mc}25`;
+                  sphere.style.borderColor = atmoRingExp ? `${mc}65` : `${mc}38`;
                 }
                 const lbl = el.querySelector('[data-atmo-label]') as HTMLElement;
                 if (lbl) {
-                  lbl.style.opacity = atmoRingExp ? '0.85' : '0.6';
+                  lbl.style.opacity = atmoRingExp ? '0.88' : '0.62';
                   lbl.style.color = atmoRingExp ? ec : mc;
                   lbl.style.transform = 'translate(-50%, -50%) scale(1)';
                   lbl.style.fontWeight = atmoRingExp ? '500' : '400';
@@ -616,17 +942,19 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
               }}>
               <div data-atmo-sphere="" style={{
                 width: sphereSz, height: sphereSz, borderRadius: '50%', position: 'relative', overflow: 'hidden',
-                background: `radial-gradient(circle at 35% 30%, ${mc}B0, ${mc}70)`,
-                boxShadow: atmoRingExp ? `0 2px 10px ${mc}50, 0 0 14px ${mc}20` : `0 1px 5px ${mc}30, 0 0 6px ${mc}12`,
-                border: atmoRingExp ? `2px solid ${mc}70` : `1.5px solid ${mc}40`,
+                background: `radial-gradient(circle at 35% 30%, ${mc}A0, ${mc}60)`,
+                boxShadow: atmoRingExp ? `0 2px 8px ${mc}40, 0 0 10px ${mc}18` : `0 1px 4px ${mc}25`,
+                border: atmoRingExp ? `1.5px solid ${mc}65` : `1px solid ${mc}38`,
                 transition: 'all 0.4s ease',
               }}>
-                <div style={{ position: 'absolute', width: '45%', height: '40%', top: '12%', left: '18%', borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(255,255,255,0.4) 0%, transparent 80%)' }} />
+                <div style={{ position: 'absolute', width: '40%', height: '35%', top: '12%', left: '16%', borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(255,255,255,0.35) 0%, transparent 75%)' }} />
               </div>
               <span data-atmo-label="" className="absolute pointer-events-none" style={{
-                fontSize: atmoRingExp ? 14 : 13, fontWeight: atmoRingExp ? 500 : 400, fontStyle: 'italic',
+                fontSize: atmoRingExp ? 12 : 11, fontWeight: atmoRingExp ? 500 : 400, fontStyle: 'italic',
                 color: atmoRingExp ? ec : mc, fontFamily: "'IBM Plex Serif', Georgia, serif",
-                whiteSpace: 'nowrap', letterSpacing: '0.03em', opacity: atmoRingExp ? 0.85 : 0.6,
+                whiteSpace: 'nowrap', letterSpacing: '0.04em', opacity: atmoRingExp ? 0.88 : 0.62,
+                maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis',
+                textShadow: '0 1px 2px rgba(255,255,255,0.95), 0 0 12px rgba(255,255,255,0.65)',
                 transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)',
                 left: `calc(50% + ${lblX}px)`, top: `calc(50% + ${lblY}px)`, transform: 'translate(-50%, -50%) scale(1)',
               }}>{adj.label}</span>
@@ -636,28 +964,30 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
 
         {/* ═══ Central Nucleus — zIndex 30 to stay above everything ═══ */}
         <div ref={nucleusRef} className="absolute nucleus-levitate"
-          style={{ left: atmoOrbR + 40, top: atmoOrbR + 40, width: nR * 2, height: nR * 2, transform: 'translate(-50%, -50%)', cursor: dragging ? NUCLEUS_CURSOR.replace('pointer', 'grabbing') : NUCLEUS_CURSOR, zIndex: 30 }}
+          style={{
+            left: ctr, top: ctr, width: nR * 2, height: nR * 2, transform: 'translate(-50%, -50%)',
+            cursor: dragging ? NUCLEUS_CURSOR.replace('pointer', 'grabbing') : NUCLEUS_CURSOR, zIndex: 30,
+          }}
           onPointerDown={handleNucleusPointerDown} onPointerMove={handleNucleusPointerMove} onPointerUp={handleNucleusPointerUp} onPointerCancel={handleNucleusPointerUp}
         >
-          <div className="absolute pointer-events-none nucleus-shadow" style={{ width: nR * 1.2, height: nR * 0.12, bottom: -nR * 0.2, left: '50%', transform: 'translateX(-50%)', borderRadius: '50%', background: `radial-gradient(ellipse, ${dc}12 0%, transparent 70%)`, opacity: 0.5 }} />
-          <div className="absolute rounded-full pointer-events-none halo-breathe" style={{ inset: -28, background: `radial-gradient(circle, ${dc}18 0%, ${dc}0A 40%, ${dc}04 65%, transparent 85%)` }} />
+          <div className="absolute rounded-full pointer-events-none halo-breathe" style={{ inset: -22, background: `radial-gradient(circle, ${dc}0A 0%, ${dc}06 38%, transparent 72%)` }} />
 
-          {/* ═══ Rotation indicator — tick marks + curved arrow ═══ */}
-          <svg className="absolute pointer-events-none" style={{ inset: -14, width: 'calc(100% + 28px)', height: 'calc(100% + 28px)', opacity: dragging ? 0.55 : 0.18, transition: 'opacity 0.3s ease', transform: dragging ? `rotate(${dragAngle}deg)` : 'rotate(0deg)', transformOrigin: 'center center' }}
+          {/* ═══ Rotation indicator — readable dial (drag / center focus) ═══ */}
+          <svg className="absolute pointer-events-none" style={{ inset: -14, width: 'calc(100% + 28px)', height: 'calc(100% + 28px)', opacity: dragging ? 0.62 : nucleusZoneFocused ? 0.5 : 0.24, transition: 'opacity 0.35s ease', transform: dragging ? `rotate(${dragAngle}deg)` : 'rotate(0deg)', transformOrigin: 'center center' }}
             viewBox={`0 0 ${nR * 2 + 28} ${nR * 2 + 28}`}>
             {(() => {
               const c = nR + 14;
               const r = nR + 6;
               const ticks: React.ReactElement[] = [];
-              for (let i = 0; i < 24; i++) {
-                const ang = (i / 24) * Math.PI * 2 - Math.PI / 2;
-                const isMajor = i % 6 === 0;
-                const len = isMajor ? 6 : 3;
+              for (let i = 0; i < 36; i++) {
+                const ang = (i / 36) * Math.PI * 2 - Math.PI / 2;
+                const isMajor = i % 9 === 0;
+                const len = isMajor ? 7 : 3.2;
                 const x1 = c + Math.cos(ang) * (r - len);
                 const y1 = c + Math.sin(ang) * (r - len);
                 const x2 = c + Math.cos(ang) * r;
                 const y2 = c + Math.sin(ang) * r;
-                ticks.push(<line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={dc} strokeWidth={isMajor ? 1 : 0.5} opacity={isMajor ? 0.6 : 0.35} />);
+                ticks.push(<line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={dc} strokeWidth={isMajor ? 1.05 : 0.55} opacity={isMajor ? 0.72 : 0.4} />);
               }
               const arrowR = r - 1;
               const aStart = -20 * Math.PI / 180;
@@ -674,6 +1004,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
               const t2y = ay2 + Math.sin(tipAng + 0.6) * tipLen;
               return (
                 <>
+                  <circle cx={c} cy={c} r={r + 5} fill="none" stroke={dc} strokeWidth="0.65" opacity={nucleusZoneFocused ? 0.2 : 0.1} />
                   {ticks}
                   <path d={`M ${ax1} ${ay1} A ${arrowR} ${arrowR} 0 0 1 ${ax2} ${ay2}`} fill="none" stroke={dc} strokeWidth="1" opacity="0.45" strokeLinecap="round" />
                   <polyline points={`${t1x},${t1y} ${ax2},${ay2} ${t2x},${t2y}`} fill="none" stroke={dc} strokeWidth="1" opacity="0.45" strokeLinecap="round" strokeLinejoin="round" />
@@ -682,13 +1013,22 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
             })()}
           </svg>
 
-          <div className="absolute inset-0 rounded-full overflow-hidden" style={{ boxShadow: `0 4px 32px ${dc}35, 0 0 60px ${dc}18, 0 0 100px ${dc}08`, contain: 'paint' }}>
+          <div className="absolute inset-0 rounded-full overflow-hidden" style={{
+            boxShadow: `
+              0 0 0 1px rgba(255,255,255,0.28) inset,
+              0 2px 24px ${dc}22,
+              0 0 48px ${dc}0C,
+              0 1px 2px rgba(255,255,255,0.45) inset,
+              0 -1px 20px ${dc}18 inset
+            `,
+            contain: 'paint',
+          }}>
             <div className="absolute inset-0" style={{ background: nGrad }} />
-            <div className="absolute grad-blob-1 pointer-events-none" style={{ width: '130%', height: '130%', top: '-15%', left: '-15%', background: `radial-gradient(ellipse at 38% 32%, ${nColors[0]}90 0%, ${nColors[0]}28 40%, transparent 68%)`, opacity: 0.6 }} />
-            <div className="absolute grad-blob-2 pointer-events-none" style={{ width: '110%', height: '110%', top: '-5%', left: '-5%', background: `radial-gradient(ellipse at 62% 65%, ${nColors[1]}70 0%, ${nColors[1]}18 35%, transparent 62%)`, opacity: 0.6 }} />
-            <div className="absolute sphere-pulse pointer-events-none" style={{ inset: 0, background: `radial-gradient(circle, ${nColors[0]}18 0%, transparent 55%)` }} />
+            <div className="absolute grad-blob-1 pointer-events-none" style={{ width: '125%', height: '125%', top: '-12%', left: '-12%', background: `radial-gradient(ellipse at 38% 32%, ${nColors[0]}70 0%, ${nColors[0]}16 42%, transparent 66%)`, opacity: 0.42 }} />
+            <div className="absolute grad-blob-2 pointer-events-none" style={{ width: '108%', height: '108%', top: '-4%', left: '-4%', background: `radial-gradient(ellipse at 62% 65%, ${nColors[1]}48 0%, ${nColors[1]}10 38%, transparent 62%)`, opacity: 0.38 }} />
+            <div className="absolute sphere-pulse pointer-events-none" style={{ inset: 0, background: `radial-gradient(circle, ${nColors[0]}10 0%, transparent 58%)` }} />
           </div>
-          <div className="absolute rounded-full pointer-events-none specular-drift" style={{ width: '44%', height: '42%', top: '9%', left: '14%', background: 'radial-gradient(ellipse at 42% 35%, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.08) 50%, transparent 100%)' }} />
+          <div className="absolute rounded-full pointer-events-none specular-drift" style={{ width: '42%', height: '40%', top: '10%', left: '15%', background: 'radial-gradient(ellipse at 40% 32%, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.06) 48%, transparent 100%)' }} />
           {/* Center content — triangle + label OR spin-to-generate overlay */}
           <div className="absolute inset-0 flex flex-col items-center justify-center z-10"
             onClick={e => {
@@ -708,7 +1048,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
             <div style={{ opacity: nucleusTooltip ? 0 : 1, transform: nucleusTooltip ? 'scale(0.6) rotate(120deg)' : 'scale(1) rotate(0deg)', transition: 'opacity 0.5s ease, transform 0.6s cubic-bezier(0.34,1.56,0.64,1)', pointerEvents: nucleusTooltip ? 'none' : 'auto' }}
               className="flex flex-col items-center justify-center">
               {(() => {
-                const s = 42;
+                const s = 48;
                 const side = s * 0.78;
                 const triH = side * Math.sqrt(3) / 2;
                 const tY = (s - triH) / 2;
@@ -773,18 +1113,17 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                   : 'select materials'}
               </span>
 
-              {/* Generate button — glowing gradient shimmer */}
+              {/* Generate button */}
               {selectedMaterials.length > 0 && (
-                <button className="mt-4 uppercase transition-all hover:scale-110 active:scale-95"
+                <button className="mt-4 uppercase transition-all hover:scale-108 active:scale-95"
                   style={{
                     fontSize: 9, letterSpacing: '0.35em', fontWeight: 600, padding: '7px 22px',
                     borderRadius: 20, color: '#fff',
-                    background: `linear-gradient(90deg, ${nColors[0]}90 0%, rgba(255,255,255,0.25) 25%, ${nColors[1] || nColors[0]}80 50%, rgba(255,255,255,0.25) 75%, ${nColors[0]}90 100%)`,
-                    backgroundSize: '400% 100%',
-                    border: '1px solid rgba(255,255,255,0.3)',
+                    background: `linear-gradient(135deg, ${dc}C8, ${dc}90)`,
+                    border: '1px solid rgba(255,255,255,0.2)',
                     backdropFilter: 'blur(6px)',
-                    boxShadow: `0 0 16px ${nColors[0]}50, 0 0 32px ${nColors[0]}20, 0 2px 8px rgba(0,0,0,0.1)`,
-                    animation: nucleusTooltip ? 'nucleusFadeUp 0.4s ease-out 0.4s both, btnShimmer 3s ease-in-out infinite' : 'none',
+                    boxShadow: `0 3px 16px ${dc}30, 0 0 24px ${dc}12`,
+                    animation: nucleusTooltip ? 'nucleusFadeUp 0.4s ease-out 0.4s both' : 'none',
                   }}
                   onClick={e => { e.stopPropagation(); setNucleusTooltip(false); handleGenerate(); }}>
                   Generate
@@ -793,6 +1132,93 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Per-sector hints — push into outer gutter + tangential offset; Plex Serif italic */}
+        {!matPicker && !atmoPicker && !gathering && !fullMat && nucleusHintsVisible && ELEMENTS.map(el => {
+          const livePct = distribution[el];
+          const bracket = distributionBracket(livePct);
+          const brief = SECTOR_HINT_BRIEF_EN[el][bracket];
+          const mc = MUTED_COLORS[el];
+          const stagger = sorted.findIndex(([e]) => e === el);
+          const safeStagger = stagger < 0 ? 0 : stagger;
+          const ca = sectorLayout[el].center;
+          const c = Math.cos(ca), s = Math.sin(ca);
+          const pad = 44;
+          const innerR = atmoOrbR + 24;
+          let bestT = innerR + 20;
+          for (let t = innerR + 18; t < 560; t += 1.5) {
+            const x = ctr + c * t, y = ctr + s * t;
+            if (x < pad || x > canvasSize - pad || y < pad || y > canvasSize - pad) break;
+            bestT = t;
+          }
+          const slot = SECTOR_ORDER.indexOf(el);
+          const tn = -s, ts = c;
+          const spread = (slot % 2 === 0 ? 1 : -1) * (22 + slot * 5);
+          let lx = ctr + c * bestT + tn * spread;
+          let ly = ctr + s * bestT + ts * spread;
+          const pull = Math.hypot(lx - ctr, ly - ctr);
+          if (pull < innerR + 14) {
+            const sc = (lx - ctr) / (pull || 1), sy = (ly - ctr) / (pull || 1);
+            lx = ctr + sc * (innerR + 16);
+            ly = ctr + sy * (innerR + 16);
+          }
+          lx = Math.min(canvasSize - pad - 4, Math.max(pad + 4, lx));
+          ly = Math.min(canvasSize - pad - 4, Math.max(pad + 4, ly));
+          const hintSerif = "'IBM Plex Serif', Georgia, serif";
+          const labelShadow = '0 0 28px rgba(252,252,251,0.98), 0 1px 3px rgba(255,255,255,0.95)';
+          return (
+            <div
+              key={`nucleus-hint-${el}`}
+              className="absolute z-[5] pointer-events-none text-center"
+              style={{
+                left: lx,
+                top: ly,
+                transform: 'translate(-50%, -50%)',
+                maxWidth: 168,
+                animation: `sectorHintFadeIn 0.75s ease-out ${safeStagger * 88}ms both`,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 10.5,
+                  fontStyle: 'italic',
+                  fontWeight: 500,
+                  letterSpacing: '0.12em',
+                  color: mc,
+                  fontFamily: hintSerif,
+                  textShadow: labelShadow,
+                  marginBottom: 3,
+                  lineHeight: 1.25,
+                }}
+              >{ELEMENT_LABEL_EN[el]}</div>
+              <div
+                style={{
+                  fontSize: 9.5,
+                  fontStyle: 'italic',
+                  fontWeight: 400,
+                  letterSpacing: '0.06em',
+                  color: 'rgba(52,52,60,0.62)',
+                  fontFamily: hintSerif,
+                  textShadow: labelShadow,
+                  marginBottom: 6,
+                }}
+              >{Math.round(livePct)}% · {BRACKET_LABEL_EN[bracket]}</div>
+              <p
+                className="m-0"
+                style={{
+                  fontSize: 10.5,
+                  fontStyle: 'italic',
+                  fontWeight: 400,
+                  lineHeight: 1.58,
+                  letterSpacing: '0.02em',
+                  color: 'rgba(36,36,44,0.88)',
+                  fontFamily: hintSerif,
+                  textShadow: labelShadow,
+                }}
+              >{brief}</p>
+            </div>
+          );
+        })}
       </div>
 
       {/* ═══ "All" materials — full-width bottom panel ═══ */}
@@ -825,7 +1251,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                           <div key={mat.name} className="flex flex-col items-center gap-2 cursor-pointer group"
                             onClick={e => { e.stopPropagation(); snap(isMuted); setExpMat(isExp ? null : mat.name); }}>
                             <div style={{
-                              width: isExp ? 100 : 78, height: isExp ? 100 : 78,
+                              width: isExp ? 108 : 88, height: isExp ? 108 : 88,
                               borderRadius: '50%', position: 'relative', overflow: 'hidden',
                               border: `2px solid ${mc}${isExp ? '50' : '20'}`,
                               boxShadow: isExp ? `0 8px 32px rgba(0,0,0,0.18), 0 0 0 2px ${mc}20` : `0 3px 12px rgba(0,0,0,0.10)`,
@@ -859,7 +1285,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
       {/* ═══ Material picker ═══ */}
       {matPicker && (() => {
         const mc = MUTED_COLORS[matPicker];
-        const a = EL_ANGLE[matPicker] * Math.PI / 180;
+        const a = sectorLayout[matPicker].center;
         const midR = (symOrbR + matOrbR) / 2;
         const rawX = Math.cos(a) * (midR + 70);
         const rawY = Math.sin(a) * (midR + 70);
@@ -915,7 +1341,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
       {/* ═══ Atmosphere picker — triggered by clicking atmo sphere ═══ */}
       {atmoPicker && (() => {
         const mc = MUTED_COLORS[atmoPicker];
-        const a = EL_ANGLE[atmoPicker] * Math.PI / 180;
+        const a = sectorLayout[atmoPicker].center;
         const midR = (matOrbR + atmoOrbR) / 2;
         const rawX = Math.cos(a) * (midR + 30);
         const rawY = Math.sin(a) * (midR + 30);
@@ -1039,7 +1465,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                       style={{ background: isViewing ? `${mc}10` : isSelected ? `${mc}05` : 'transparent', border: `1.5px solid ${isViewing ? `${mc}30` : isSelected ? `${mc}12` : 'rgba(0,0,0,0.03)'}` }}>
                       {/* Preview — click to view */}
                       <div className="cursor-pointer" style={{ flexShrink: 0 }} onClick={() => setFullMat(name)}>
-                        <div style={{ width: 42, height: 42, borderRadius: '50%', position: 'relative', overflow: 'hidden', border: `2px solid ${mc}${isViewing ? '60' : '20'}`, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', transition: 'all 0.3s ease' }}>
+                        <div style={{ width: 48, height: 48, borderRadius: '50%', position: 'relative', overflow: 'hidden', border: `2px solid ${mc}${isViewing ? '60' : '20'}`, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', transition: 'all 0.3s ease' }}>
                           <div style={{ position: 'absolute', inset: '-15%', width: '130%', height: '130%', borderRadius: '50%', background: t ? `url(${t}) center/cover` : `linear-gradient(135deg, ${mc}28, ${mc}0C)` }} />
                         </div>
                       </div>

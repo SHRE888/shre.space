@@ -12,6 +12,7 @@ import { generateImageFromPrompt, dataUrlToFile } from './services/geminiService
 import { interpretRefinementFeedback } from './services/refinementFeedback';
 import { getInitialSelection, getSelectionFromPercentages } from './services/refinementLogic';
 import { SHORT_QUESTIONS, ELEMENT_COLORS, CANONICAL_MATERIALS, MATERIAL_SPHERE_IMAGES, generateSurveyQuestions } from './constants';
+import { getRecommendedProfessionalPartners } from './lib/professionalPartners';
 
 // --- LANDING PAGE ---
 const Landing = () => {
@@ -695,6 +696,19 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
   const selectedMaterials: { name: string; element: Element }[] = activeHistoryEntry?.materials ?? liveSelectedMaterials;
   const selectedAtmosphere: { label: string; element: Element }[] = activeHistoryEntry?.adjectives ?? liveSelectedAtmosphere;
+
+  const professionalRecs = React.useMemo(
+    () =>
+      getRecommendedProfessionalPartners(
+        {
+          squareMeters: state.params.squareMeters ?? 120,
+          category: state.params.category,
+          domain: state.params.domain ?? 'interior',
+        },
+        { perRole: 6 },
+      ),
+    [state.params.squareMeters, state.params.category, state.params.domain],
+  );
 
   // Build DNA materials
   const dnaMaterials = React.useMemo(() => {
@@ -1776,30 +1790,75 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
         </div>
       )}
 
-      {/* ═══ BRANDS BAR ═══ */}
+      {/* ═══ BRANDS + SPACE-AWARE PROFESSIONAL RECS ═══ */}
       {isComplete && (
         <div className="flex-shrink-0 border-t border-gray-50 bg-white transition-all duration-1000 ease-out"
           style={{ transitionDelay: '1000ms' }}>
-          <div className="px-3 py-1.5 flex items-center gap-1 overflow-x-auto custom-scroll">
-            <span className="text-[9px] uppercase tracking-[0.2em] text-gray-400 font-medium mr-1 flex-shrink-0">Partners</span>
-            {Array.from(new Set(BRAND_CATALOG.map(b => b.category))).map(cat => {
-              const brands = BRAND_CATALOG.filter(b => b.category === cat);
-              const isHighlighted = highlightedCategory === cat;
-              return (
-                <div key={cat} className="flex items-center gap-0.5 flex-shrink-0">
-                  {brands.map(b => (
-                    <a key={b.id} href={b.url} target="_blank" rel="noopener noreferrer"
-                      className={`px-1.5 py-1 rounded text-[9px] tracking-[0.04em] font-medium transition-all duration-300 whitespace-nowrap ${
-                        isHighlighted ? 'text-gray-700 bg-gray-50 shadow-sm' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-                      }`}
-                      onMouseEnter={() => setHoveredBrand(b.id)} onMouseLeave={() => setHoveredBrand(null)}
-                      title={`${b.name} — ${b.specialty}`}>
-                      {b.name}
-                    </a>
-                  ))}
+          <div className="px-2 sm:px-3 py-2 flex flex-col gap-2">
+            {/* Product brands — single horizontal scroll on narrow screens */}
+            <div className="flex items-center gap-1 overflow-x-auto custom-scroll pb-0.5 -mx-0.5 px-0.5">
+              <span className="text-[8px] sm:text-[9px] uppercase tracking-[0.18em] sm:tracking-[0.2em] text-gray-400 font-medium mr-1 flex-shrink-0">Brands</span>
+              {Array.from(new Set(BRAND_CATALOG.map(b => b.category))).map(cat => {
+                const brands = BRAND_CATALOG.filter(b => b.category === cat);
+                const isHighlighted = highlightedCategory === cat;
+                return (
+                  <div key={cat} className="flex items-center gap-0.5 flex-shrink-0">
+                    {brands.map(b => (
+                      <a key={b.id} href={b.url} target="_blank" rel="noopener noreferrer"
+                        className={`px-1.5 py-1 rounded-md text-[8px] sm:text-[9px] tracking-[0.03em] sm:tracking-[0.04em] font-medium transition-all duration-300 whitespace-nowrap ${
+                          isHighlighted ? 'text-gray-700 bg-gray-50 shadow-sm' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                        }`}
+                        onMouseEnter={() => setHoveredBrand(b.id)} onMouseLeave={() => setHoveredBrand(null)}
+                        title={`${b.name} — ${b.specialty}`}>
+                        {b.name}
+                      </a>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="text-[8px] sm:text-[9px] text-gray-400 font-light leading-snug px-0.5 border-t border-gray-100/80 pt-1.5 mt-0.5">
+              <span className="font-medium text-gray-500">რეკომენდაცია</span>
+              {' · '}
+              {state.params.category || 'Space'}
+              {' · '}
+              <span className="tabular-nums">{state.params.squareMeters ?? 120} m²</span>
+              {state.params.domain === 'architecture' ? ' · architecture' : ' · interior'}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2 text-left">
+              {([
+                { role: 'contractor' as const, labelGe: 'სარემონტო / სამშენებლო', labelEn: 'Build & renovation' },
+                { role: 'architect' as const, labelGe: 'არქიტექტორები', labelEn: 'Architecture' },
+                { role: 'designer' as const, labelGe: 'ინტერიერის დიზაინერები', labelEn: 'Interior design' },
+              ]).map(({ role, labelGe, labelEn }) => (
+                <div key={role} className="min-w-0 rounded-lg bg-gray-50/70 border border-gray-100/90 px-2 py-1.5 sm:py-2">
+                  <div className="text-[8px] sm:text-[9px] font-medium text-gray-600 leading-tight mb-1 tracking-wide">
+                    <span className="text-gray-800">{labelGe}</span>
+                    <span className="text-gray-400 font-light mx-1">·</span>
+                    <span className="text-gray-400 font-light uppercase tracking-[0.12em]">{labelEn}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {professionalRecs[role].map(p => (
+                      <a
+                        key={p.id}
+                        href={p.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex max-w-full px-1.5 py-0.5 rounded-md text-[8px] sm:text-[9px] font-medium text-gray-500 hover:text-gray-800 hover:bg-white border border-transparent hover:border-gray-200/80 transition-colors"
+                        title={p.specialty}
+                      >
+                        <span className="truncate">{p.name}</span>
+                      </a>
+                    ))}
+                  </div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+            <p className="text-[7px] sm:text-[8px] text-gray-300 leading-snug px-0.5">
+              მისამართები საინფორმაციოა — შეაჯერეთ მომსახურება პირდაპირ პარტნიორთან. · Links are for discovery; confirm fit with each firm.
+            </p>
           </div>
         </div>
       )}
