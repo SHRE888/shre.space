@@ -82,11 +82,11 @@ export const buildDesignSummary = (input: PromptInput, activeDistribution: Vecto
   bullets.push(`Mood: ${atmosWords.charAt(0).toUpperCase() + atmosWords.slice(1)}`);
 
   if (input.materialsSelected.length > 0) {
-    const matDetails = input.materialsSelected.slice(0, 4).map(m => {
+    const matDetails = input.materialsSelected.map(m => {
       const detail = MATERIAL_PRODUCT_MAP[m.name];
-      return detail || m.name;
+      return detail ? `${m.name} (${detail})` : m.name;
     });
-    bullets.push(`Surfaces: ${matDetails.join(' · ')}`);
+    bullets.push(`Your finishes (all visible in render): ${matDetails.join(' · ')}`);
   } else {
     bullets.push(`Surfaces: ${profile.materialBehaviorPhrases[0]}`);
   }

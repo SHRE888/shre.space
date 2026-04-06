@@ -144,6 +144,8 @@ export interface UserState {
     architecturalPlan?: File;
     spacePhoto?: File;
     spaceNote?: string;
+    /** Optional one-line space summary; editable in results. If unset, derived from category/rooms/area. */
+    spaceSummaryLine?: string;
   };
   shortSurveyAnswers: Record<string, number>;
   deepSurveyAnswers: Record<string, number>;
@@ -185,6 +187,8 @@ export interface PromptInput {
   };
   /** User's description of their specific space (context for generation) */
   spaceNote?: string;
+  /** Single-line space config (workspace or user-edited in results) */
+  spaceSummaryLine?: string;
   constraints?: {
     ceilingHeightM?: number;
     naturalLight?: "low" | "medium" | "high";
@@ -193,6 +197,8 @@ export interface PromptInput {
   };
   /** For anti-repetition: increments on each regenerate */
   generationIndex?: number;
+  /** Prior completed generations in this session (0 = first image); tightens realism/harmony language */
+  sessionGenerationOrdinal?: number;
   /** Cycled: geometry | lighting | material | focal */
   variationFocus?: 'geometry' | 'lighting' | 'material' | 'focal';
   /** User refinement feedback (e.g. "Make it softer") */

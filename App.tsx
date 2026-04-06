@@ -611,6 +611,29 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   const [targetedEditText, setTargetedEditText] = useState<string | null>(null);
   const refinementFeedbackRef = React.useRef<string | null>(null);
 
+  const [scaleAreaDraft, setScaleAreaDraft] = useState(() => String(state.params.squareMeters ?? 120));
+  const [scaleCeilingDraft, setScaleCeilingDraft] = useState(() => String(state.params.ceilingHeight ?? 2.8));
+
+  React.useEffect(() => {
+    setScaleAreaDraft(String(state.params.squareMeters ?? 120));
+    setScaleCeilingDraft(String(state.params.ceilingHeight ?? 2.8));
+  }, [state.params.squareMeters, state.params.ceilingHeight]);
+
+  const parseScaleDrafts = React.useCallback((): { area: number; ceil: number } => {
+    const a = parseFloat(scaleAreaDraft.replace(',', '.'));
+    const c = parseFloat(scaleCeilingDraft.replace(',', '.'));
+    const area = Number.isFinite(a) ? Math.max(8, Math.min(50000, Math.round(a))) : (state.params.squareMeters ?? 120);
+    const ceil = Number.isFinite(c) ? Math.max(2, Math.min(12, Math.round(c * 10) / 10)) : (state.params.ceilingHeight ?? 2.8);
+    return { area, ceil };
+  }, [scaleAreaDraft, scaleCeilingDraft, state.params.squareMeters, state.params.ceilingHeight]);
+
+  const scaleDirty = React.useMemo(() => {
+    const { area, ceil } = parseScaleDrafts();
+    const ca = state.params.squareMeters ?? 120;
+    const cc = state.params.ceilingHeight ?? 2.8;
+    return area !== ca || ceil !== cc;
+  }, [parseScaleDrafts, state.params.squareMeters, state.params.ceilingHeight]);
+
   const displayedImageUrl = selectedHistoryImage ?? imageUrl;
   const isEditingMaterials = materialPickerOpen || materialsChanged;
 
@@ -1170,6 +1193,74 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
               </div>
             )}
           </div>
+
+          {/* Scale — one thin row; Regenerate only when values differ (like DNA tweak) */}
+          {isComplete && displayedImageUrl && (
+            <div className="flex-shrink-0 border-t border-gray-100/80 bg-white/55">
+              <div className="flex items-center gap-2 px-2 sm:px-3 py-1">
+                <span className="text-[8px] uppercase tracking-[0.2em] text-gray-400 font-medium shrink-0">Scale</span>
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 tabular-nums text-[9px] sm:text-[10px] text-gray-600">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-label="Area square meters"
+                    className="w-10 sm:w-11 bg-transparent border-0 border-b border-gray-200/90 focus:border-gray-400 px-0 py-0.5 text-right focus:outline-none focus:ring-0"
+                    value={scaleAreaDraft}
+                    onChange={(e) => setScaleAreaDraft(e.target.value.replace(/[^\d.]/g, ''))}
+                  />
+                  <span className="text-gray-400 shrink-0">m²</span>
+                  <span className="text-gray-200 shrink-0">·</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    spellCheck={false}
+                    aria-label="Ceiling height meters"
+                    className="w-8 sm:w-9 bg-transparent border-0 border-b border-gray-200/90 focus:border-gray-400 px-0 py-0.5 text-right focus:outline-none focus:ring-0"
+                    value={scaleCeilingDraft}
+                    onChange={(e) => setScaleCeilingDraft(e.target.value.replace(/[^\d.,]/g, '').replace(',', '.'))}
+                  />
+                  <span className="text-gray-400 shrink-0">m</span>
+                </div>
+                <div
+                  className={`shrink-0 overflow-hidden transition-all duration-300 ease-out ${
+                    scaleDirty ? 'max-w-[140px] opacity-100 translate-x-0' : 'max-w-0 opacity-0 translate-x-1 pointer-events-none'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { area, ceil } = parseScaleDrafts();
+                      setScaleAreaDraft(String(area));
+                      setScaleCeilingDraft(String(ceil));
+                      chime();
+                      setSelectedHistoryImage(null);
+                      setLoading(true);
+                      setPhase('generating');
+                      setLoadProgress(0);
+                      setImageLoaded(false);
+                      setImageUrl(null);
+                      setState((prev) => {
+                        const next = { ...prev.params, squareMeters: area, ceilingHeight: ceil };
+                        delete next.spaceSummaryLine;
+                        return { ...prev, params: next };
+                      });
+                      setGenerationKey((k) => k + 1);
+                    }}
+                    className="whitespace-nowrap text-[8px] uppercase tracking-[0.16em] font-semibold px-2.5 py-1 rounded-md transition-all active:scale-[0.97] text-white shadow-sm"
+                    style={{
+                      background: scaleDirty ? `linear-gradient(135deg, ${domColor}, ${domColor}cc)` : 'transparent',
+                      boxShadow: scaleDirty ? `0 1px 6px ${domColor}35` : 'none',
+                    }}
+                  >
+                    Regenerate
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Concept Brief strip — compact inline */}
           {isComplete && (
@@ -1794,9 +1885,9 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
       {isComplete && (
         <div className="flex-shrink-0 border-t border-gray-50 bg-white transition-all duration-1000 ease-out"
           style={{ transitionDelay: '1000ms' }}>
-          <div className="px-2 sm:px-3 py-2 flex flex-col gap-2">
+          <div className="px-2 sm:px-3 py-1.5 flex flex-col gap-1.5">
             {/* Product brands — single horizontal scroll on narrow screens */}
-            <div className="flex items-center gap-1 overflow-x-auto custom-scroll pb-0.5 -mx-0.5 px-0.5">
+            <div className="flex items-center gap-1 overflow-x-auto custom-scroll -mx-0.5 px-0.5">
               <span className="text-[8px] sm:text-[9px] uppercase tracking-[0.18em] sm:tracking-[0.2em] text-gray-400 font-medium mr-1 flex-shrink-0">Brands</span>
               {Array.from(new Set(BRAND_CATALOG.map(b => b.category))).map(cat => {
                 const brands = BRAND_CATALOG.filter(b => b.category === cat);
@@ -1818,35 +1909,34 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
               })}
             </div>
 
-            <p className="text-[8px] sm:text-[9px] text-gray-400 font-light leading-snug px-0.5 border-t border-gray-100/80 pt-1.5 mt-0.5">
-              <span className="font-medium text-gray-500">რეკომენდაცია</span>
-              {' · '}
-              {state.params.category || 'Space'}
-              {' · '}
-              <span className="tabular-nums">{state.params.squareMeters ?? 120} m²</span>
-              {state.params.domain === 'architecture' ? ' · architecture' : ' · interior'}
+            <p className="text-[7px] sm:text-[8px] text-gray-500 leading-tight px-0.5 border-t border-gray-100/80 pt-1 mt-0.5 tabular-nums">
+              <span className="uppercase tracking-[0.12em] text-gray-400 font-medium">Suggested</span>
+              <span className="text-gray-300 mx-1">·</span>
+              {state.params.category || 'Space type'}
+              <span className="text-gray-300 mx-1">·</span>
+              {state.params.squareMeters ?? 120} m²
+              <span className="text-gray-300 mx-1">·</span>
+              {state.params.domain === 'architecture' ? 'Architecture' : 'Interior'}
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2 text-left">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 text-left">
               {([
-                { role: 'contractor' as const, labelGe: 'სარემონტო / სამშენებლო', labelEn: 'Build & renovation' },
-                { role: 'architect' as const, labelGe: 'არქიტექტორები', labelEn: 'Architecture' },
-                { role: 'designer' as const, labelGe: 'ინტერიერის დიზაინერები', labelEn: 'Interior design' },
-              ]).map(({ role, labelGe, labelEn }) => (
-                <div key={role} className="min-w-0 rounded-lg bg-gray-50/70 border border-gray-100/90 px-2 py-1.5 sm:py-2">
-                  <div className="text-[8px] sm:text-[9px] font-medium text-gray-600 leading-tight mb-1 tracking-wide">
-                    <span className="text-gray-800">{labelGe}</span>
-                    <span className="text-gray-400 font-light mx-1">·</span>
-                    <span className="text-gray-400 font-light uppercase tracking-[0.12em]">{labelEn}</span>
+                { role: 'contractor' as const, label: 'Build & renovation' },
+                { role: 'architect' as const, label: 'Architects' },
+                { role: 'designer' as const, label: 'Interior designers' },
+              ]).map(({ role, label }) => (
+                <div key={role} className="min-w-0 rounded-md bg-gray-50/80 border border-gray-100/85 px-1.5 py-1 sm:px-2 sm:py-1.5">
+                  <div className="text-[7px] sm:text-[8px] font-semibold uppercase tracking-[0.14em] text-gray-500 mb-0.5 leading-none">
+                    {label}
                   </div>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-0.5">
                     {professionalRecs[role].map(p => (
                       <a
                         key={p.id}
                         href={p.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex max-w-full px-1.5 py-0.5 rounded-md text-[8px] sm:text-[9px] font-medium text-gray-500 hover:text-gray-800 hover:bg-white border border-transparent hover:border-gray-200/80 transition-colors"
+                        className="inline-flex max-w-full px-1 py-0.5 rounded text-[7px] sm:text-[8px] font-medium text-gray-500 hover:text-gray-800 hover:bg-white/95 border border-transparent hover:border-gray-200/90 transition-colors"
                         title={p.specialty}
                       >
                         <span className="truncate">{p.name}</span>
@@ -1856,8 +1946,8 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 </div>
               ))}
             </div>
-            <p className="text-[7px] sm:text-[8px] text-gray-300 leading-snug px-0.5">
-              მისამართები საინფორმაციოა — შეაჯერეთ მომსახურება პირდაპირ პარტნიორთან. · Links are for discovery; confirm fit with each firm.
+            <p className="text-[6px] sm:text-[7px] text-gray-400 leading-tight px-0.5 text-center sm:text-left">
+              Informational links — verify scope and fit with each firm before engaging.
             </p>
           </div>
         </div>

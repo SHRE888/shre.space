@@ -4,6 +4,26 @@ import { scrubBannedTokens } from './bannedTokens';
 import { elementLanguageProfile } from './elementLanguage';
 import { buildDesignSummary } from './designSummary';
 
+/** One-line summary of workspace space config; shown/edited in results footer and fed to the image prompt */
+export const formatSpaceConfigOneLiner = (p: UserState['params']): string => {
+  const domainLabel = p.domain === 'architecture' ? 'Architecture' : 'Interior';
+  const cat = p.category || 'Space';
+  const area = p.squareMeters ?? 120;
+  const rooms = p.rooms && p.rooms.length > 0 ? p.rooms.join(', ') : null;
+  const ctx = p.domain === 'architecture' && p.archContext ? p.archContext : null;
+  const ceiling = typeof p.ceilingHeight === 'number' ? `${p.ceilingHeight} m ceil` : null;
+  const light = p.naturalLight ? `${p.naturalLight} light` : null;
+  const palette = p.colorPalette && p.colorPalette !== 'auto' ? p.colorPalette.replace(/-/g, ' ') : null;
+  const parts: string[] = [domainLabel, cat];
+  if (rooms) parts.push(rooms);
+  if (ctx) parts.push(ctx);
+  parts.push(`${area} m²`);
+  if (ceiling) parts.push(ceiling);
+  if (light) parts.push(light);
+  if (palette) parts.push(palette);
+  return parts.join(' · ');
+};
+
 // --- ADAPTER / LEGACY SUPPORT ---
 export const calculateAnalysis = (state: UserState): AnalysisResult => {
   const scores: Record<Element, number> = { air: 0, fire: 0, water: 0, earth: 0 };
@@ -540,35 +560,31 @@ const buildMaterialPlacement = (materials: { name: string }[]): string => {
   return placements.join('. ') + '.';
 };
 
-// Resolve real product descriptions from selected materials
-const resolveRealProducts = (materials: { name: string }[], dist: Vector4): string => {
-  const sorted = (['earth', 'fire', 'water', 'air'] as Element[]).sort((a, b) => dist[b] - dist[a]);
-  const primary = sorted[0];
-  const secondary = sorted[1];
-  const parts: string[] = [];
-
-  materials.forEach(m => {
-    const products = MATERIAL_PRODUCT_MAP[m.name];
-    if (products && products.length > 0) {
-      const p = products[0];
-      parts.push(`${p.brand} ${p.product} (${p.finish})`);
-    }
-  });
-
-  const furniture = FURNITURE_BY_ELEMENT[primary];
-  if (furniture.length > 0) parts.push(furniture[0]);
-  if (secondary !== primary) {
-    const secFurniture = FURNITURE_BY_ELEMENT[secondary];
-    if (secFurniture.length > 1) parts.push(secFurniture[1]);
-    else if (secFurniture.length > 0) parts.push(secFurniture[0]);
-  }
-
-  const lights = LIGHTING_BY_ELEMENT[primary];
-  if (lights.length > 0) parts.push(lights[0]);
-
-  return parts.join('; ');
+/** Hard requirement: every catalog pick is visible and matches what the user chose */
+const buildUserSelectedMaterialsMandatory = (
+  materials: Array<{ name: string }>,
+  materialPlacement: string,
+): string => {
+  const exact = materials.map((m) => m.name).join('; ');
+  const anchors = materials
+    .map((m) => {
+      const prods = MATERIAL_PRODUCT_MAP[m.name];
+      if (!prods?.length) return `${m.name} (match catalog name visually — real supplier-grade finish)`;
+      const p = prods[0];
+      return `${m.name} → ${p.brand} ${p.product}, ${p.finish}`;
+    })
+    .join(' | ');
+  return [
+    `USER-SELECTED FINISHES — NON-NEGOTIABLE DELIVERABLE`,
+    `The client chose these exact materials from the elemental catalog. The image must prove they were used — not a similar mood, not a generic substitute.`,
+    `SELECTED (each must appear visibly in-frame): ${exact}.`,
+    `REAL-PRODUCT VISUAL ANCHORS: ${anchors}.`,
+    `ASSIGNED SURFACES: ${materialPlacement}`,
+    `VISIBILITY: Every item in SELECTED must be identifiable in the photograph — correct texture, color family, and finish (matte/polished/veined/weave/brushed as applicable). Compose framing and focal depth so each finish gets at least one clear read (hero plane, foreground edge, or mid-ground zone). Do not hide the user's picks in deep shadow, blur-only bokeh, or off-camera imagination.`,
+    `PRECEDENCE: If DOMINANT ENERGY text, furniture examples, or COMBO ACCENTS imply different materials on the same surface roles, the USER-SELECTED FINISHES win. Generic stone/wood/metal language is background only where it does not replace a selected finish.`,
+    `Wood shows grain; stone shows veining or pore structure; metal shows brush/patina direction; plaster shows trowel; textile shows weave — tuned to the specific pick above.`,
+  ].join('\n\n');
 };
-
 
 // --- ELEMENT → ARCHITECTURAL STYLE RECOGNITION ---
 // Maps each element to well-known architectural directions as a recognition framework.
@@ -1015,6 +1031,58 @@ const getDefaultRoomProgram = (roomName: string) => ({
 });
 
 // ── COMPOSITION STRATEGIES (anti-repetition) ──
+/** Must stay aligned with App.tsx IMAGE_HOTSPOTS (x,y = % from left, top) for pin-to-pixel coherence */
+const HOTSPOT_FRAME_ANCHORS_16_9: Array<{ role: string; x: number; y: number }> = [
+  { role: 'FLOOR FINISH (foreground slab, joints, rug edge)', x: 25, y: 88 },
+  { role: 'PRIMARY WALL / VERTICAL FINISH', x: 8, y: 40 },
+  { role: 'FURNITURE VOLUMES (casegoods, tables, cabinet masses)', x: 38, y: 62 },
+  { role: 'MAIN SEATING / PRIMARY UPHOLSTERY', x: 55, y: 68 },
+  { role: 'ARCHITECTURAL OR CEILING LIGHTING', x: 35, y: 10 },
+  { role: 'FEATURE STONE OR MONOLITHIC SURFACE (island, hearth, splash)', x: 72, y: 55 },
+  { role: 'TEXTILE LAYER (cushions, drapery, soft zones)', x: 48, y: 52 },
+  { role: 'METAL ACCENTS / HARDWARE / REFLECTIVE FIXTURES', x: 88, y: 35 },
+  { role: 'DECOR / ART GLASS / CURATED OBJECTS ON SURFACES', x: 65, y: 38 },
+];
+
+const buildHotspotAnchoredCompositionBlock = (): string => {
+  const lines = HOTSPOT_FRAME_ANCHORS_16_9.map(
+    (h) => `• ${h.role}: center the most legible instance near (${h.x}%, ${h.y}%) — ±8% tolerance.`,
+  );
+  return [
+    'INTERACTIVE PIN / HOTSPOT ALIGNMENT (16:9): The UI shows fixed-position pins at approximate frame coordinates. Compose so the strongest visual read of each role falls in its zone — viewers must be able to connect each pin to a real material, real product, or real fixture.',
+    ...lines,
+    'Pins MUST sit on truthful features — not empty paint, not anonymous ceiling, not unused floor corners. If a briefed material would miss its zone, adjust furniture layout or camera so construction logic stays natural.',
+  ].join(' ');
+};
+
+const buildClientEnergyHarmonyBlock = (
+  activeDist: Record<Element, number>,
+  primary: Element,
+  secondary: Element,
+  sorted: Element[],
+): string => {
+  const e = Math.round(activeDist.earth);
+  const f = Math.round(activeDist.fire);
+  const w = Math.round(activeDist.water);
+  const a = Math.round(activeDist.air);
+  const primPct = Math.round(activeDist[primary]);
+  const secPct = Math.round(activeDist[secondary]);
+  const tertiary = sorted.filter((el) => el !== primary && el !== secondary && Math.round(activeDist[el]) >= 8);
+  const trace =
+    tertiary.length > 0
+      ? ` Weaker shares (${tertiary.map((x) => `${x} ${Math.round(activeDist[x])}%`).join(', ')}) appear only as subtle traces — texture, object choice, or lighting nuance — never as a competing style.`
+      : '';
+  return `CLIENT ENERGY PROFILE (adapt — never illustrate literal elements): Earth ${e}%, Fire ${f}%, Water ${w}%, Air ${a}%. ${primary.toUpperCase()} at ${primPct}% DOMINATES — largest surfaces, spatial proportions, and overall light mood follow this logic first. ${secondary.toUpperCase()} at ${secPct}% HARMONIZES as the designed counter-accent (furniture, metal temperature, selective zones, focal contrast) — coordinated, not fighting the dominant.${trace} One coherent narrative a photographer could caption in one sentence.`;
+};
+
+const buildSessionPassBlock = (ordinal: number): string => {
+  const pass = ordinal + 1;
+  if (ordinal <= 0) {
+    return `SESSION GENERATION PASS ${pass}: Establish elemental hierarchy and a fully buildable, photographable space. Favor contractor-grade realism over stylization.`;
+  }
+  return `SESSION GENERATION PASS ${pass} (progressive refinement): Increase micro-realism versus a generic visualization — sharper material transitions, clearer manufacturer-level product reads, more disciplined lighting, calmer coordination so secondary energies support (not dilute) the dominant. Every specified finish must be visible and correctly zoned.`;
+};
+
 const COMPOSITION_STRATEGIES = [
   { name: 'asymmetric-depth', desc: 'Off-center composition with strong diagonal depth. Primary furniture group offset to one-third of frame. Layered depth through foreground element, midground focus, background wall.' },
   { name: 'axial-linear', desc: 'Strong central axis with symmetrical flanking elements. Eye drawn along a clear perspective line. Balanced but not mirror-perfect.' },
@@ -1068,7 +1136,6 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
 
   // Material placement — explicit surface-to-material mapping
   const materialPlacement = buildMaterialPlacement(input.materialsSelected);
-  const realProducts = resolveRealProducts(input.materialsSelected, activeDist);
 
   // Furniture diversity — cycle different items per generation using generationIndex
   const genIdx = input.generationIndex ?? 0;
@@ -1174,8 +1241,17 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
     P.push(`DOMAIN: INTERIOR. Generate ONLY an interior space — the camera is INSIDE a room. Do NOT generate any exterior building views, facades, or outdoor landscapes. This is a ROOM seen from inside.`);
   }
 
+  const spaceConfigLine = input.spaceSummaryLine?.trim();
+  if (spaceConfigLine) {
+    P.push(`SPACE CONFIG SUMMARY (active one-line brief from workspace or user edit — treat as authoritative for project type, rooms/context, scale, and atmosphere cues; keep the image consistent with it): ${spaceConfigLine}`);
+  }
+
   // [0b] ELEMENT ENERGY AS ABSTRACT SPATIAL LOGIC — not literal
   P.push(`ELEMENT ENERGY IS ABSTRACT DESIGN LOGIC — translated EXCLUSIVELY into REAL, BUILDABLE architectural decisions. Earth, Fire, Water, Air = materiality, atmosphere, form, contrast, softness, openness, lighting behavior. They are NEVER literal — no flames, no water waves, no wind effects, no soil or dirt, no element symbols, no conceptual art installations. Translate elemental energy into CONSTRUCTABLE architectural and design choices: real materials from real manufacturers, real construction methods, real furniture from real brands, real lighting systems, real spatial proportions that follow building codes. Every design decision inspired by element energy must pass the test: "Could an architecture firm specify this in construction documents and a contractor build it?"`);
+
+  // [0c] CLIENT PROFILE + SESSION REFINEMENT — hierarchy and progressive tightening
+  P.push(buildClientEnergyHarmonyBlock(activeDist, primary, secondary, sorted));
+  P.push(buildSessionPassBlock(input.sessionGenerationOrdinal ?? 0));
 
   // [1] PHOTOGRAPHIC IDENTITY
   P.push(`Ultra-realistic editorial architectural photograph of a completed, physically built ${spaceLabel}. ${areaM2}m², ceiling height ${ceilingH}m. Published in Dezeen / ArchDaily / AD Magazine. Shot on location by an elite architectural photographer (Hélène Binet / Iwan Baan / Fernando Guerra caliber). The space is REAL, BUILT, INHABITED — not a render or concept. This is a DELIVERED PROJECT by a real architecture firm for a real client — it went through design development, construction documents, building permits, contractor bidding, and physical construction. Years of design: patina on materials, wear on floors, curated objects. Light enters naturally through real windows creating authentic shadow patterns. Every material is identifiable — stone veining, wood grain, plaster trowel marks, metal reflections, fabric weave. CONSTRUCTION EVIDENCE: visible material joints, shadow gaps where different finishes meet, real grout lines, edge trims, expansion joints, proper baseboards or shadow details. The image shows how materials were ACTUALLY INSTALLED — not floating surfaces but real construction with depth, layers, and substrate.`);
@@ -1227,7 +1303,7 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
 
   // [3] MATERIAL SPECIFICATION (the user's actual choices — highest priority)
   if (input.materialsSelected.length > 0 && materialPlacement) {
-    P.push(`MATERIAL SPECIFICATION (use EXACTLY these materials on these surfaces): ${materialPlacement} Each material must be clearly identifiable in the photograph — show its characteristic texture, color, and finish at close range. The viewer should be able to name each material from looking at the image. Wood shows grain direction and natural color variation. Stone shows veining pattern and surface porosity. Plaster shows subtle trowel texture. Metal shows brushing direction or patina. Textile shows weave structure.`);
+    P.push(buildUserSelectedMaterialsMandatory(input.materialsSelected, materialPlacement));
   } else {
     P.push(`Material palette: ${roomProgram.materialPriority}. Elevated selections: ${profile.materialBehaviorPhrases.slice(0, 4).join(', ')}. Every surface shows realistic texture depth — no flat, uniform, or digitally perfect surfaces.`);
   }
@@ -1326,6 +1402,11 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   // [9] FRAMING
   P.push(`Composition: ${composition.desc} Full-frame with 15% breathing margin. All furniture fully visible — NOTHING cropped at frame edge. Clear foreground-midground-background depth layering. A curated vignette element in the near foreground (plant leaf edge, book corner, ceramic edge) creates editorial depth. The composition follows the rule of thirds with the primary furniture group at the golden ratio intersection.`);
 
+  // [9b] Pin-aligned zones (interior only — matches UI hotspot percentages)
+  if (input.domain !== 'architecture') {
+    P.push(buildHotspotAnchoredCompositionBlock());
+  }
+
   // [10] PHYSICAL RULES + ELEMENT CONSTRAINTS
   P.push(`Physical accuracy (non-negotiable): Every object obeys gravity — furniture legs create contact shadows on floor. Ceiling height ${ceilingH}m throughout. Doors 80cm+ wide, 210cm tall with visible frames. Windows have 15cm+ deep reveals, real frames, and show subtle reflections of interior on glass. Wall thickness 15-20cm visible at every opening. MATERIAL JOINTS ARE CRITICAL: visible 3mm shadow gaps between floor and wall, edge profiles on stone counters, reveal strips between different materials, baseboards or flush shadow details. Fabrics have realistic drape — cushions show compression, throws have natural folds, curtains puddle slightly on floor. Every surface has micro-texture variation — no surface is perfectly uniform. FORBIDDEN in this room: ${roomProgram.forbiddenItems.join(', ')}. FORBIDDEN by ${primary.toUpperCase()} element logic: ${domBrief.avoidStrict}`);
 
@@ -1364,6 +1445,7 @@ The generated interior must feel like a direct 3D realization of this exact floo
 - REAL-WORLD RELEVANCE: every architectural solution must be something a professional architecture firm would actually specify for a client. No conceptual art installations disguised as architecture. No impossible cantilevers, no gravity-defying forms, no materials used in ways that contradict their physical properties.
 - STRUCTURAL INTEGRITY: all forms must be structurally plausible — visible columns where needed, proper load paths, realistic spans, credible connection details between different materials. Walls have thickness. Cantilevers have limits. Glass has frames or visible structural silicone joints.
 - MATERIAL HONESTY: materials behave as they do in reality. Stone has weight and needs support. Metal has gauge thickness and visible joining methods (welding, bolting, folding). Wood has grain direction and joinery. Plaster has substrate. Nothing floats without structure.
+- USER-SELECTED CATALOG FINISHES: When USER-SELECTED FINISHES are specified, each pick must be clearly visible and recognizable — not swapped for a lookalike. Frame and light the shot so the client can confirm every chosen material appears in the render.
 - The dominant element energy must be clearly READABLE through design choices (material selection, color temperature, spatial proportion, light quality) — not through literal symbols or decorative gimmicks.
 - If this is INTERIOR: the camera is inside a room. No exterior building facades visible. Windows show realistic exterior views (landscape, city, garden) but the composition is interior.
 - If this is ARCHITECTURE: the camera is outside. Show the building in its context. No room interiors visible beyond what's naturally seen through windows from outside.
@@ -1493,74 +1575,52 @@ export const buildTargetedEditPrompt = (
   const matList = materials.slice(0, 5).map(m => m.name).join(', ');
   const adjList = adjectives.slice(0, 3).map(a => a.label).join(', ');
 
-  const ELEMENT_FURNITURE_STYLE: Record<Element, string> = {
-    earth: 'solid wood frames, organic curved forms, raw linen/bouclé upholstery, hand-thrown ceramic legs, warm walnut/oak tones — brands like Poliform, Carl Hansen, Arper',
-    fire: 'bold sculptural silhouettes, dark leather/velvet, oxidized metal accents, dramatic contrast pieces, jewel-tone fabrics — brands like Minotti, Baxter, Meridiani',
-    water: 'fluid curved lines, chrome/polished steel frames, cool grey/blue fabrics, glass-topped pieces, seamless microcement finishes — brands like B&B Italia, Flexform, MDF Italia',
-    air: 'ultra-minimal geometric forms, thin metal frames, translucent/acrylic elements, white/silver palette, weightless appearance — brands like Kartell, Flos, Hay, Magis',
-  };
-
-  const ELEMENT_MATERIAL_STYLE: Record<Element, string> = {
-    earth: 'natural stone with visible veining (Antolini, Levantina), aged lime/clay plaster (Clayworks, Bauwerk), raw timber planking (reclaimed oak, walnut), terracotta, hand-glazed tiles, cork, sisal — all real materials with proper installation details',
-    fire: 'corten steel (SSAB COR-TEN A), blackened bronze, dark marble (Nero Marquina by Levantina/Salvatori), hammered copper (De Castelli), charred wood shou sugi ban, volcanic basalt — all industrially available and contractor-installable',
-    water: 'polished concrete, microcement (Kerakoll, Ideal Work), frosted glass (Saint-Gobain acid-etched), mirror-polished stainless steel (Rimex 304 grade), blue-grey terrazzo — all real finishes installed by specialist trades',
-    air: 'white Corian (Hi-Macs, Krion), matte anodized aluminum, translucent onyx (backlit with real LED panels), dichroic film glass (3M Dichroic Film on laminated glass), ultra-thin porcelain slabs (Laminam, Neolith) — all commercially available products',
-  };
-
   const isArch = domain.toLowerCase().includes('arch') || domain.toLowerCase().includes('exterior');
 
   const preserveInterior = [
-    `✗ Camera angle, perspective, framing`,
-    `✗ Room shape, walls, floor, ceiling`,
-    `✗ Wall color/texture/material`,
-    `✗ Floor material and pattern`,
-    `✗ Window positions, curtains, blinds`,
-    `✗ Any furniture NOT mentioned above`,
-    `✗ Lighting direction, color temperature, shadows`,
-    `✗ Decorative objects (plants, books, vases, art)`,
-    `✗ Background, exterior view through windows`,
+    `— Camera, framing, perspective`,
+    `— Room geometry, walls, floor, ceiling`,
+    `— Surfaces and objects the USER REQUEST does not name`,
+    `— Window placement, treatments, exterior view`,
+    `— Global lighting direction and shadow character`,
+    `— Decor and styling you were not told to touch`,
   ];
 
   const preserveArchitecture = [
-    `✗ Camera angle, perspective, framing`,
-    `✗ Building overall form, massing, proportions`,
-    `✗ Structural elements (columns, beams, cantilevers)`,
-    `✗ Roof shape, roofline, eaves`,
-    `✗ Site context, landscaping, terrain`,
-    `✗ Window/door positions NOT mentioned above`,
-    `✗ Sky, weather, time of day lighting`,
-    `✗ Any facade elements NOT mentioned above`,
-    `✗ Surrounding buildings, street, context`,
-    `✗ Shadow direction and ambient light`,
+    `— Camera, framing, perspective`,
+    `— Building massing, structure, roofline`,
+    `— Site, landscape, context, sky`,
+    `— Facade elements the USER REQUEST does not name`,
+    `— Openings you were not told to change`,
+    `— Shadow direction and ambient light character`,
   ];
 
+  const styleFallback =
+    `Fallback only (if the user request does not already specify material, form, or product): ` +
+    `bias replacements toward ${dominant}-dominant (${domPct}%), secondary ${secondary} (${secPct}%) — ${ELEMENT_AESTHETIC[dominant].slice(0, 120)}… ` +
+    `Keep real-world buildable photorealism. ` +
+    `If the user named a specific color, material, object, or action, obey the USER REQUEST exactly and ignore conflicting hints.`;
+
   const lines: string[] = [
-    `EDIT THIS IMAGE. Change ONLY what I describe below. Keep EVERYTHING ELSE identical.`,
+    `SURGICAL EDIT — LITERAL SCOPE`,
+    `Implement ONLY what the user request says. Do not reinterpret, redesign, or "upgrade" the scene. No fantasy or utopian features unless explicitly asked.`,
     ``,
-    `DOMAIN: ${isArch ? 'ARCHITECTURE / EXTERIOR' : 'INTERIOR DESIGN'}`,
-    `SPACE: ${spaceCategory}`,
+    `USER REQUEST (absolute priority; narrow reading):`,
+    `"${userInstruction.trim()}"`,
     ``,
-    `WHAT TO CHANGE: "${userInstruction}"`,
+    `CONTEXT (for identification only — do not expand the task): ${isArch ? 'exterior / architecture' : 'interior'} · ${spaceCategory}`,
     ``,
-    `DO NOT CHANGE (keep pixel-identical):`,
+    `DO NOT ALTER:`,
     ...(isArch ? preserveArchitecture : preserveInterior),
     ``,
-    `STYLE FOR THE NEW ELEMENT:`,
-    `The replacement must match ${dominant.toUpperCase()}-dominant aesthetic (${domPct}%):`,
-    `${ELEMENT_AESTHETIC[dominant]}`,
+    `HOW TO APPLY THE CHANGE:`,
+    `- Minimum change that satisfies the user request; same location/footprint as the affected element unless the text asks to move/add/remove.`,
+    `- Match existing light direction, perspective, and scale; photoreal, contractor-buildable materials only.`,
+    `- No new objects, surfaces, or effects beyond what the user request implies.`,
     ``,
-    isArch ? `Architectural language: ${ELEMENT_MATERIAL_STYLE[dominant]}` : `Furniture reference: ${ELEMENT_FURNITURE_STYLE[dominant]}`,
-    `Material reference: ${ELEMENT_MATERIAL_STYLE[dominant]}`,
-    adjList ? `Mood: ${adjList}` : '',
-    ``,
-    `TECHNICAL REQUIREMENTS:`,
-    `- Same position and approximate size as the original element`,
-    `- Correct perspective matching the existing vanishing points`,
-    `- Shadows consistent with the existing light source direction`,
-    `- Photorealistic ${isArch ? 'architectural' : 'material'} quality (real textures, not CG — real construction photography)`,
-    `- The edit must be seamless and invisible`,
-    `- CONSTRUCTABILITY: the replacement must be something a real contractor could build/install using standard methods and commercially available materials`,
-    isArch ? `- Maintain buildable, structurally plausible architecture — proper load paths, realistic spans, real cladding systems` : `- Furniture and materials must be real products from real manufacturers, installed using standard trade methods`,
+    styleFallback,
+    matList ? `Project materials (reference if relevant; do not replace unspecified areas with these): ${matList}.` : '',
+    adjList ? `Mood notes (secondary — only if request is vague): ${adjList}.` : '',
   ].filter(Boolean);
 
   return lines.join('\n');
@@ -1570,6 +1630,8 @@ export interface PromptOptions {
   generationIndex?: number;
   refinementFeedback?: string;
   userNote?: string;
+  /** Override session ordinal; default = state.generationHistory.length */
+  sessionGenerationOrdinal?: number;
 }
 
 // --- LEGACY WRAPPER FOR APP.TSX ---
@@ -1619,6 +1681,7 @@ export const buildUniversalPrompt = (state: UserState, options?: PromptOptions):
       spacePhotoUploaded: !!state.params.spacePhoto,
     },
     spaceNote: state.params.spaceNote,
+    spaceSummaryLine: state.params.spaceSummaryLine?.trim() || formatSpaceConfigOneLiner(state.params),
     constraints: {
       ceilingHeightM: state.params.ceilingHeight,
       naturalLight: state.params.naturalLight,
@@ -1626,6 +1689,7 @@ export const buildUniversalPrompt = (state: UserState, options?: PromptOptions):
       budgetLevel: state.params.budgetLevel,
     },
     generationIndex: options?.generationIndex,
+    sessionGenerationOrdinal: options?.sessionGenerationOrdinal ?? (state.generationHistory?.length ?? 0),
     refinementFeedback: options?.refinementFeedback,
     userNote: options?.userNote,
     aspectRatio: state.params.resolution,
@@ -1638,7 +1702,9 @@ export const buildUniversalPrompt = (state: UserState, options?: PromptOptions):
   const sec = sorted[1];
   const primPct = Math.round(p[prim]);
   const secPct = Math.round(p[sec]);
-  const matNames = state.refinement.selectedMaterials.slice(0, 4).map(m => m.name.split('(')[0].trim()).join(', ');
+  const matNames = state.refinement.selectedMaterials.length > 0
+    ? state.refinement.selectedMaterials.map(m => m.name).join(' · ')
+    : null;
   const adjNames = state.refinement.selectedAdjectives.slice(0, 3).map(a => a.label).join(', ');
   const roomLabel = state.params.rooms?.[0] || state.params.category || 'Space';
   const area = state.params.squareMeters || 100;
