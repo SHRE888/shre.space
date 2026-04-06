@@ -590,7 +590,12 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   const [loadProgress, setLoadProgress] = useState(0);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof globalThis !== 'undefined' && 'matchMedia' in globalThis) {
+      return globalThis.matchMedia('(min-width: 768px)').matches;
+    }
+    return true;
+  });
   const [hoveredHotspot, setHoveredHotspot] = useState<string | null>(null);
   const [hoveredBrand, setHoveredBrand] = useState<string | null>(null);
   const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
@@ -1005,7 +1010,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   // --- ERROR STATE ---
   if (genError) {
     return (
-      <div className="h-[calc(100vh-92px)] h-[calc(100dvh-92px)] flex flex-col items-center justify-center bg-[#fafafa] relative overflow-hidden px-4">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-[#fafafa] relative overflow-hidden px-4">
         <div className="relative z-10 flex flex-col items-center max-w-md px-6">
           <div className="w-14 h-14 rounded-full flex items-center justify-center mb-6" style={{ background: `${domColor}10`, border: `1.5px solid ${domColor}25` }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={domColor} strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -1039,9 +1044,9 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
   if (loading) {
     return (
-      <div className="h-[calc(100vh-92px)] h-[calc(100dvh-92px)] flex flex-col items-center justify-center bg-[#fafafa] relative overflow-hidden px-4">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-[#fafafa] relative overflow-hidden px-4">
         <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-[0.04]" style={{ background: `radial-gradient(circle, ${domColor}, transparent 70%)` }} />
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(600px,140vw)] h-[min(600px,140vw)] rounded-full opacity-[0.04]" style={{ background: `radial-gradient(circle, ${domColor}, transparent 70%)` }} />
           <div className="absolute top-0 left-0 right-0 h-px bg-gray-100" />
         </div>
         <div className="relative z-10 flex flex-col items-center">
@@ -1096,23 +1101,26 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
   // --- RESULTS VIEW ---
   return (
-    <div className="h-[calc(100vh-92px)] h-[calc(100dvh-92px)] flex flex-col overflow-hidden bg-[#fafafa] relative">
+    <div className="flex-1 min-h-0 flex flex-col overflow-x-hidden overflow-y-auto md:overflow-hidden bg-[#fafafa] relative w-full min-h-[50dvh]">
 
       {/* ═══ MAIN AREA — image + sidebar ═══ */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
+      <div className="flex-1 flex flex-col md:flex-row overflow-visible md:overflow-hidden relative min-h-0 min-h-[45dvh] md:min-h-0">
 
-        {/* ── HERO IMAGE + HOTSPOTS ── */}
-        <div className={`relative flex flex-col overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] min-w-0 ${isRevealed ? 'opacity-100' : 'opacity-0 scale-[1.02]'}`}
-          style={{ flex: isEditingMaterials && sidebarOpen ? '1 1 55%' : '1 1 auto' }}>
+        {/* ── HERO IMAGE + HOTSPOTS (flex-1 + basis-0 so mobile always reserves space for the render) ── */}
+        <div
+          className={`relative flex flex-col overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] min-w-0 min-h-0 flex-1 ${
+            isEditingMaterials && sidebarOpen ? 'md:flex-[1_1_55%]' : ''
+          } ${isRevealed ? 'opacity-100' : 'opacity-0 scale-[1.02]'}`}
+        >
 
-          {/* Image container */}
-          <div className={`flex-1 flex items-center justify-center relative z-10 min-h-0 transition-all duration-500 ${isEditingMaterials ? 'p-4' : 'p-2.5'}`}>
+          {/* Image container — aspect box on mobile so height is never 0; show image in revealing phase too */}
+          <div className={`flex-1 flex items-center justify-center relative z-10 w-full min-h-0 md:min-h-0 transition-all duration-500 ${isEditingMaterials ? 'p-2 sm:p-4' : 'p-1.5 sm:p-2.5'}`}>
             {displayedImageUrl && (
-              <div className={`relative w-full h-full flex items-center justify-center transition-all duration-700 ease-out ${isComplete ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'} ${isEditingMaterials ? 'scale-[0.94]' : 'scale-100'}`}>
-                <div className={`relative w-full h-full max-h-full rounded-lg overflow-hidden transition-all duration-500 ${isEditingMaterials ? 'shadow-lg shadow-black/5' : 'shadow-2xl shadow-black/8'}`}>
-                  <div className="absolute inset-0 rounded-lg overflow-hidden border border-white/50">
+              <div className={`relative w-full max-w-full overflow-hidden transition-all duration-700 ease-out max-md:aspect-[16/9] max-md:min-h-[40dvh] max-md:max-h-[58dvh] md:flex md:items-center md:justify-center md:h-full md:min-h-0 md:aspect-auto md:max-h-none ${isRevealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'} ${isEditingMaterials ? 'scale-[0.94]' : 'scale-100'}`}>
+                <div className={`relative w-full h-full min-h-[200px] md:min-h-0 rounded-lg overflow-hidden transition-all duration-500 ${isEditingMaterials ? 'shadow-lg shadow-black/5' : 'shadow-2xl shadow-black/8'}`}>
+                  <div className="absolute inset-0 rounded-lg overflow-hidden border border-white/50 bg-gray-100/80">
                     <img src={displayedImageUrl} alt="Architectural visualization"
-                      className={`w-full h-full object-cover transition-all duration-[2s] ease-out cursor-zoom-in ${imageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.03]'}`}
+                      className={`w-full h-full object-contain md:object-cover transition-all duration-[2s] ease-out cursor-zoom-in ${imageLoaded ? 'opacity-100 scale-100' : 'opacity-40 scale-[1.01]'}`}
                       onLoad={() => setImageLoaded(true)}
                       onClick={() => setZoomedImage(displayedImageUrl)}
                       key={displayedImageUrl} />
@@ -1306,8 +1314,8 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
         </div>
 
         {/* ── MATERIAL DNA SIDEBAR ── */}
-        <div className={`bg-white border-l md:border-l border-t md:border-t-0 border-gray-100/60 flex flex-col overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
-          sidebarOpen ? 'w-full md:w-[400px] max-h-[45vh] md:max-h-none' : 'w-full md:w-[44px] max-h-[44px] md:max-h-none'
+        <div className={`bg-white border-l md:border-l border-t md:border-t-0 border-gray-100/60 flex flex-col overflow-hidden shrink-0 transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
+          sidebarOpen ? 'w-full md:w-[400px] max-h-[38vh] sm:max-h-[42vh] md:max-h-none' : 'w-full md:w-[44px] max-h-[44px] md:max-h-none'
         } ${isRevealed ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}
           style={{ transitionDelay: isRevealed ? '300ms' : '0ms' }}>
 

@@ -147,8 +147,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       )}
 
-      <main className={`flex-grow ${isLanding ? '' : 'pt-11'}`}>
-        <div className={`transition-opacity duration-500 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
+      <main
+        className={`${isLanding ? 'flex-grow' : 'flex flex-1 flex-col min-h-0 overflow-y-auto pt-11'}`}
+      >
+        <div
+          className={`transition-opacity duration-500 ${isLanding ? '' : 'flex-1 flex flex-col min-h-0'} ${mounted ? 'opacity-100' : 'opacity-0'}`}
+        >
           {children}
         </div>
       </main>
