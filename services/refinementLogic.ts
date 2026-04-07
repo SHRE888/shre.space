@@ -335,14 +335,5 @@ export const reweightWithLocks = (
       roundedDist[targetElement] += diff;
   }
 
-  // Ensure a clear dominant — no two elements share the top value
-  const sorted = ELEMENTS.slice().sort((a, b) => roundedDist[b] - roundedDist[a]);
-  if (roundedDist[sorted[0]] === roundedDist[sorted[1]] && roundedDist[sorted[0]] > 0) {
-    if (!lockedSet.has(sorted[0]) && !lockedSet.has(sorted[sorted.length - 1]) && roundedDist[sorted[sorted.length - 1]] > 0) {
-      roundedDist[sorted[0]] += 1;
-      roundedDist[sorted[sorted.length - 1]] -= 1;
-    }
-  }
-
   return roundedDist as Record<Element, number>;
 };

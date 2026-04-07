@@ -86,7 +86,7 @@ export const buildDesignSummary = (input: PromptInput, activeDistribution: Vecto
       const detail = MATERIAL_PRODUCT_MAP[m.name];
       return detail ? `${m.name} (${detail})` : m.name;
     });
-    bullets.push(`Your finishes (all visible in render): ${matDetails.join(' · ')}`);
+    bullets.push(`Your finishes (≥80% clearly visible in render, target all): ${matDetails.join(' · ')}`);
   } else {
     bullets.push(`Surfaces: ${profile.materialBehaviorPhrases[0]}`);
   }

@@ -79,7 +79,8 @@ function getCompositeRange(rooms: RoomType[]): RoomRange {
     areaMax: rooms.length > 1
       ? Math.min(500, ranges.reduce((s, r) => s + r.areaMax, 0))
       : ranges[0].areaMax,
-    areaDefault: ranges.reduce((s, r) => s + r.areaDefault, 0),
+    /** One image ≈ one primary space — default tracks first selected room, not sum of all defaults (sum skewed e.g. ~60 m²). */
+    areaDefault: ranges[0].areaDefault,
     ceilMin: Math.min(...ranges.map(r => r.ceilMin)),
     ceilMax: Math.max(...ranges.map(r => r.ceilMax)),
     ceilDefault: Math.round(ranges.reduce((s, r) => s + r.ceilDefault, 0) / ranges.length * 10) / 10,
@@ -2563,7 +2564,6 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                     handleDistributionChange(el, showGenerateModal.dist[el]);
                   });
                   setShowGenerateModal(null);
-                  setShowSummary(true);
                 }}
                 className="w-full py-3 sm:py-4 rounded-xl text-white font-semibold text-[14px] sm:text-[19px] uppercase tracking-[0.3em] sm:tracking-[0.5em] transition-all duration-300 flex items-center justify-center gap-3"
                 style={{ background: '#3558A0', boxShadow: '0 4px 20px rgba(53,88,160,0.3)' }}

@@ -1,4 +1,5 @@
 import { Vector4, Element } from '../types';
+import { ELEMENTS } from '../constants';
 
 interface ElementProfile {
   atmospherePhrases: string[];
@@ -40,42 +41,55 @@ const DICTIONARY: Record<Element, ElementProfile> = {
   }
 };
 
+/** Largest-remainder allocation so phrase counts track percentages (incl. near-equal quads). */
+const allocateProportionalSlots = (dist: Vector4, totalSlots: number, minPct = 5): Record<Element, number> => {
+  const slots: Record<Element, number> = { earth: 0, fire: 0, water: 0, air: 0 };
+  const active = ELEMENTS.filter((el) => dist[el] >= minPct);
+  if (active.length === 0 || totalSlots <= 0) return slots;
+
+  const sumW = active.reduce((s, el) => s + dist[el], 0) || 1;
+  const raw = active.map((el) => (dist[el] / sumW) * totalSlots);
+  const floors = active.map((el, i) => {
+    const f = Math.floor(raw[i]);
+    slots[el] = f;
+    return { el, frac: raw[i] - f };
+  });
+  let remainder = totalSlots - active.reduce((s, el) => s + slots[el], 0);
+  floors.sort((a, b) => b.frac - a.frac);
+  for (let k = 0; k < remainder; k++) slots[floors[k % floors.length].el]++;
+
+  return slots;
+};
+
+const takePhrases = (pool: string[], count: number): string[] => {
+  if (count <= 0 || pool.length === 0) return [];
+  const out: string[] = [];
+  for (let i = 0; i < count; i++) out.push(pool[i % pool.length]);
+  return out;
+};
+
 export const elementLanguageProfile = (dist: Vector4): ElementProfile => {
-  // We aggregate phrases based on weight
-  // > 40%: Primary driver (pick 2 from each category)
-  // 20-40%: Support layer (pick 1 from each category)
-  // 5-20%: Trace (pick 1 from atmosphere/material only)
-  
   const combined: ElementProfile = {
     atmospherePhrases: [],
     formPhrases: [],
     lightPhrases: [],
     materialBehaviorPhrases: [],
-    contrastPhrases: []
+    contrastPhrases: [],
   };
 
-  const elements: Element[] = ['earth', 'fire', 'water', 'air'];
+  const atmSlots = allocateProportionalSlots(dist, 8);
+  const formSlots = allocateProportionalSlots(dist, 6);
+  const lightSlots = allocateProportionalSlots(dist, 6);
+  const matSlots = allocateProportionalSlots(dist, 8);
+  const conSlots = allocateProportionalSlots(dist, 4);
 
-  elements.forEach(el => {
-    const weight = dist[el];
+  ELEMENTS.forEach((el) => {
     const dict = DICTIONARY[el];
-    
-    if (weight >= 40) {
-      combined.atmospherePhrases.push(...dict.atmospherePhrases.slice(0, 2));
-      combined.formPhrases.push(...dict.formPhrases.slice(0, 2));
-      combined.lightPhrases.push(...dict.lightPhrases.slice(0, 2));
-      combined.materialBehaviorPhrases.push(...dict.materialBehaviorPhrases.slice(0, 2));
-      combined.contrastPhrases.push(...dict.contrastPhrases.slice(0, 2));
-    } else if (weight >= 20) {
-      combined.atmospherePhrases.push(dict.atmospherePhrases[0]);
-      combined.formPhrases.push(dict.formPhrases[0]);
-      combined.lightPhrases.push(dict.lightPhrases[0]);
-      combined.materialBehaviorPhrases.push(dict.materialBehaviorPhrases[0]);
-      combined.contrastPhrases.push(dict.contrastPhrases[0]);
-    } else if (weight >= 5) {
-      combined.atmospherePhrases.push(dict.atmospherePhrases[2] || dict.atmospherePhrases[0]);
-      combined.materialBehaviorPhrases.push(dict.materialBehaviorPhrases[2] || dict.materialBehaviorPhrases[0]);
-    }
+    combined.atmospherePhrases.push(...takePhrases(dict.atmospherePhrases, atmSlots[el]));
+    combined.formPhrases.push(...takePhrases(dict.formPhrases, formSlots[el]));
+    combined.lightPhrases.push(...takePhrases(dict.lightPhrases, lightSlots[el]));
+    combined.materialBehaviorPhrases.push(...takePhrases(dict.materialBehaviorPhrases, matSlots[el]));
+    combined.contrastPhrases.push(...takePhrases(dict.contrastPhrases, conSlots[el]));
   });
 
   return combined;

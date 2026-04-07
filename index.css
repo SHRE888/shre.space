@@ -383,6 +383,87 @@ input[type="range"]::-moz-range-thumb {
   animation: ping-slow 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
+/* Material DNA results orbital — hover “alive” micro-motion */
+@keyframes dnaOrbitDashDrift {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: 28; }
+}
+.dna-orbit-ring-dash {
+  animation: dnaOrbitDashDrift 4.5s linear infinite;
+}
+
+@keyframes dnaOrbitLayerAlive {
+  0%, 100% { filter: saturate(1) brightness(1); }
+  50% { filter: saturate(1.12) brightness(1.02); }
+}
+.dna-orbit-rotate-layer--alive {
+  animation: dnaOrbitLayerAlive 3.5s ease-in-out infinite;
+}
+
+@keyframes dnaNucleusAlive {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+.dna-nucleus--alive > div {
+  animation: dnaNucleusAlive 2.6s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+@keyframes dnaSphereAlive {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.045); }
+}
+.dna-orbit-sphere--alive > div.rounded-full {
+  animation: dnaSphereAlive 2.2s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+@keyframes dnaNucleusDialRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.dna-nucleus-dial-inner {
+  transform-origin: 0px 0px;
+  animation: dnaNucleusDialRotate 6.5s linear infinite;
+}
+
+@media (min-width: 768px) {
+  .dna-nucleus-dial-inner {
+    opacity: 0;
+    animation-play-state: paused;
+  }
+  .dna-nucleus-dial-inner.dna-nucleus-dial-inner--hot {
+    opacity: 0.94;
+    animation-play-state: running;
+    animation-duration: 3.35s;
+  }
+}
+
+@media (max-width: 767px) {
+  .dna-nucleus-dial-inner {
+    opacity: 0.36;
+    animation-duration: 9.5s;
+  }
+  .dna-nucleus-dial-inner.dna-nucleus-dial-inner--hot {
+    opacity: 0.9;
+    animation-duration: 3.6s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dna-orbit-ring-dash,
+  .dna-orbit-rotate-layer--alive,
+  .dna-nucleus--alive > div,
+  .dna-orbit-sphere--alive > div.rounded-full,
+  .dna-nucleus-dial-inner {
+    animation: none !important;
+  }
+  .dna-nucleus-dial-inner {
+    opacity: 0.45 !important;
+  }
+}
+
 /* Orbit diagram animations */
 @keyframes orbit-label-appear {
   from { opacity: 0; transform: translateY(4px); }

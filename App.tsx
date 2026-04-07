@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { HashRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
-import { whoosh, chime, materialize } from './services/soundService';
+import { whoosh, chime, materialize, dnaNucleusResonance } from './services/soundService';
 import { Layout } from './components/Layout';
 import { WorkspacePage } from './components/WorkspacePage';
 import { AboutPage } from './components/AboutPage';
@@ -12,7 +12,7 @@ import { generateImageFromPrompt, dataUrlToFile } from './services/geminiService
 import { interpretRefinementFeedback } from './services/refinementFeedback';
 import { getInitialSelection, getSelectionFromPercentages } from './services/refinementLogic';
 import { SHORT_QUESTIONS, ELEMENT_COLORS, CANONICAL_MATERIALS, MATERIAL_SPHERE_IMAGES, generateSurveyQuestions } from './constants';
-import { getRecommendedProfessionalPartners } from './lib/professionalPartners';
+import { getRecommendedProfessionalPartners, type ProfessionalPartner } from './lib/professionalPartners';
 
 // --- LANDING PAGE ---
 const Landing = () => {
@@ -25,13 +25,13 @@ const Landing = () => {
   }, []);
 
   return (
-    <div className="h-screen h-[100dvh] bg-[#fafafa] select-none overflow-hidden relative flex flex-col items-center justify-center">
+    <div className="h-screen h-[100dvh] bg-[#fafafa] select-none overflow-hidden relative flex flex-col items-center justify-center pt-[max(0px,env(safe-area-inset-top))] pb-[max(0px,env(safe-area-inset-bottom))]">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] sm:w-[800px] h-[600px] sm:h-[800px] rounded-full bg-gradient-to-br from-gray-100/30 via-transparent to-transparent blur-3xl" />
       </div>
 
       {/* Top — SHRE branding, centered */}
-      <div className={`absolute top-6 sm:top-8 left-1/2 -translate-x-1/2 z-10 text-center transition-all duration-700 ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
+      <div className={`absolute top-[max(1.25rem,env(safe-area-inset-top,0px)+0.5rem)] sm:top-8 left-1/2 -translate-x-1/2 z-10 text-center transition-all duration-700 ease-out px-2 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
         <p className="text-[11px] sm:text-[13px] uppercase tracking-[0.4em] sm:tracking-[0.6em] font-medium" style={{ color: '#b0b0b0' }}>
           SHRE ENGINE
         </p>
@@ -41,10 +41,11 @@ const Landing = () => {
       </div>
 
       {/* Top-right — About link */}
-      <div className={`absolute top-6 sm:top-8 right-4 sm:right-10 z-10 transition-all duration-700 ease-out ${mounted ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: '400ms' }}>
+      <div className={`absolute top-[max(1rem,env(safe-area-inset-top,0px)+0.25rem)] sm:top-8 right-[max(1rem,env(safe-area-inset-right,0px))] sm:right-10 z-10 transition-all duration-700 ease-out ${mounted ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: '400ms' }}>
         <button
+          type="button"
           onClick={() => navigate('/about')}
-          className="text-[12px] sm:text-[13px] uppercase tracking-[0.2em] sm:tracking-[0.3em] font-light hover:text-gray-700 transition-colors duration-300"
+          className="min-h-[44px] min-w-[44px] px-2 flex items-center justify-center text-[11px] sm:text-[13px] uppercase tracking-[0.2em] sm:tracking-[0.3em] font-light hover:text-gray-700 active:text-gray-900 transition-colors duration-300 touch-manipulation"
           style={{ color: '#b0b0b0' }}
         >
           About
@@ -83,8 +84,9 @@ const Landing = () => {
           style={{ transitionDelay: '500ms' }}
         >
           <button
+            type="button"
             onClick={() => { whoosh(); clearState(); sessionStorage.removeItem('shre_welcome_shown'); navigate('/survey'); }}
-            className="px-10 sm:px-16 py-4 sm:py-5 text-[14px] sm:text-[16px] uppercase tracking-[0.3em] sm:tracking-[0.5em] font-medium transition-all duration-500 ease-out hover:tracking-[0.6em] active:scale-[0.97] rounded-full"
+            className="w-full max-w-[min(100%,320px)] sm:max-w-none sm:w-auto px-8 sm:px-16 py-3.5 sm:py-5 text-[13px] sm:text-[16px] uppercase tracking-[0.28em] sm:tracking-[0.5em] font-medium transition-all duration-500 ease-out sm:hover:tracking-[0.6em] active:scale-[0.97] rounded-full touch-manipulation min-h-[48px]"
             style={{
               background: '#1a1a1a',
               color: '#fafafa',
@@ -98,10 +100,10 @@ const Landing = () => {
       </div>
 
       {/* Bottom center — Studio credit */}
-      <div className={`absolute bottom-6 sm:bottom-8 left-1/2 -translate-x-1/2 z-10 text-center transition-all duration-700 ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`} style={{ transitionDelay: '600ms' }}>
-        <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.2em] sm:tracking-[0.3em] font-light" style={{ color: '#c0c0c0' }}>
-          SHRE Studio · 2025
-        </p>
+      <div className={`absolute bottom-[max(1.25rem,env(safe-area-inset-bottom,0px)+0.5rem)] sm:bottom-8 left-1/2 -translate-x-1/2 z-10 text-center transition-all duration-700 ease-out px-4 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`} style={{ transitionDelay: '600ms' }}>
+        <a href="https://shre.ge" target="_blank" rel="noopener noreferrer" className="text-[10px] sm:text-[11px] uppercase tracking-[0.2em] sm:tracking-[0.3em] font-light inline-block py-2 touch-manipulation" style={{ color: '#c0c0c0' }}>
+          SHRE Studio · 2026
+        </a>
       </div>
     </div>
   );
@@ -596,6 +598,27 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
     }
     return true;
   });
+
+  /** Material DNA orbital — static diagram (no drag-to-rotate) */
+  const [dnaOrbitHover, setDnaOrbitHover] = useState(false);
+  const [dnaNucleusNear, setDnaNucleusNear] = useState(false);
+  const dnaOrbitalRef = useRef<HTMLDivElement | null>(null);
+
+  const updateDnaNucleusProximity = useCallback((clientX: number, clientY: number) => {
+    const el = dnaOrbitalRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const scale = Math.min(rect.width / 200, rect.height / 200) || 1;
+    const near = Math.hypot(clientX - cx, clientY - cy) < 28 * scale;
+    setDnaNucleusNear((prev) => {
+      if (near && !prev && typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(pointer: fine)').matches) {
+        dnaNucleusResonance();
+      }
+      return near;
+    });
+  }, []);
   const [hoveredHotspot, setHoveredHotspot] = useState<string | null>(null);
   const [hoveredBrand, setHoveredBrand] = useState<string | null>(null);
   const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
@@ -615,6 +638,8 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   const [targetedEditMode, setTargetedEditMode] = useState(false);
   const [targetedEditText, setTargetedEditText] = useState<string | null>(null);
   const refinementFeedbackRef = React.useRef<string | null>(null);
+  /** Prior targeted-edit instructions keyed by the image URL they were applied from (follow-up edits stay on-topic). */
+  const editThreadsByImageUrlRef = React.useRef<Record<string, string[]>>({});
 
   const [scaleAreaDraft, setScaleAreaDraft] = useState(() => String(state.params.squareMeters ?? 120));
   const [scaleCeilingDraft, setScaleCeilingDraft] = useState(() => String(state.params.ceilingHeight ?? 2.8));
@@ -737,6 +762,22 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
       ),
     [state.params.squareMeters, state.params.category, state.params.domain],
   );
+
+  const architectsAndDesigners = React.useMemo(() => {
+    const seen = new Set<string>();
+    const out: ProfessionalPartner[] = [];
+    for (const p of professionalRecs.architect) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      out.push(p);
+    }
+    for (const p of professionalRecs.designer) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      out.push(p);
+    }
+    return out;
+  }, [professionalRecs]);
 
   // Build DNA materials
   const dnaMaterials = React.useMemo(() => {
@@ -871,8 +912,20 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   React.useEffect(() => {
     let cancelled = false;
 
-    const finishGeneration = (imgUrl: string) => {
+    const finishGeneration = (
+      imgUrl: string,
+      scale: { area: number; ceil: number },
+      editMeta?: { baseImageUrl: string; instruction: string } | null,
+    ) => {
       if (cancelled) return;
+      if (editMeta) {
+        const prev = editThreadsByImageUrlRef.current[editMeta.baseImageUrl] || [];
+        const next = [...prev, editMeta.instruction].slice(-12);
+        editThreadsByImageUrlRef.current = {
+          ...editThreadsByImageUrlRef.current,
+          [imgUrl]: next,
+        };
+      }
       setImageUrl(imgUrl);
       setLoadProgress(100);
       setTimeout(() => {
@@ -890,7 +943,6 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           const mats = (state.refinement.selectedMaterials || []).map(m => ({ name: m.name, element: m.element }));
           const adjs = (state.refinement.selectedAdjectives || []).map(a => ({ label: a.label, element: a.element }));
           const space = state.params.category || 'Living / Residential';
-          const area = state.params.squareMeters || 120;
           const roomLabel = state.params.rooms?.[0] || space;
           const matSnippet = mats.slice(0, 3).map(m => m.name).join(', ');
           const adjSnippet = adjs.slice(0, 2).map(a => a.label).join(' & ');
@@ -898,7 +950,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
             `${roomLabel} — ${dominant} ${Math.round(p[dominant])}% / ${secondary} ${Math.round(p[secondary])}%`,
             matSnippet ? `Materials: ${matSnippet}` : null,
             adjSnippet ? `Mood: ${adjSnippet}` : null,
-            `${area}m²`,
+            `${scale.area} m² · ceiling ${scale.ceil} m`,
           ].filter(Boolean);
           const conceptStr = conceptParts.join(' · ');
           const newEntry: GenerationHistoryEntry = {
@@ -910,7 +962,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
             dist: { ...p },
             spaceCategory: space,
             domain: state.params.domain || 'interior',
-            areaM2: area,
+            areaM2: scale.area,
             timestamp: Date.now(),
             materials: mats,
             adjectives: adjs,
@@ -932,6 +984,12 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
         const feedback = refinementFeedbackRef.current ?? savedDirection;
         refinementFeedbackRef.current = null;
 
+        const scaleSnap = parseScaleDrafts();
+        setState((prev) => ({
+          ...prev,
+          params: { ...prev.params, squareMeters: scaleSnap.area, ceilingHeight: scaleSnap.ceil },
+        }));
+
         const isTargeted = targetedEditMode && targetedEditText && displayedImageUrl;
 
         if (isTargeted && displayedImageUrl) {
@@ -940,6 +998,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           const dom = sortedEls[0];
           const mats = (state.refinement.selectedMaterials || []).map(m => ({ name: m.name, element: m.element }));
           const adjs = (state.refinement.selectedAdjectives || []).map(a => ({ label: a.label, element: a.element }));
+          const priorEdits = editThreadsByImageUrlRef.current[displayedImageUrl] || [];
           const editPrompt = buildTargetedEditPrompt(
             targetedEditText!,
             dom,
@@ -948,21 +1007,29 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
             adjs,
             state.params.domain || 'interior',
             state.params.category || 'Living / Residential',
+            priorEdits,
           );
-          setStory(`Edit: ${targetedEditText}`);
+          const turn = (priorEdits.length || 0) + 1;
+          setStory(`Edit (${turn}): ${targetedEditText}`);
           const renderFile = await dataUrlToFile(displayedImageUrl);
           const imgUrl = await generateImageFromPrompt('', renderFile, '16:9', editPrompt);
+          const editSnapshot = { baseImageUrl: displayedImageUrl, instruction: targetedEditText! };
           setTargetedEditMode(false);
           setTargetedEditText(null);
-          if (!cancelled) finishGeneration(imgUrl);
+          if (!cancelled) finishGeneration(imgUrl, scaleSnap, editSnapshot);
         } else {
-          const result = buildUniversalPrompt(state, {
+          editThreadsByImageUrlRef.current = {};
+          const stateForPrompt = {
+            ...state,
+            params: { ...state.params, squareMeters: scaleSnap.area, ceilingHeight: scaleSnap.ceil },
+          };
+          const result = buildUniversalPrompt(stateForPrompt, {
             generationIndex: generationKey,
             refinementFeedback: feedback || undefined,
           });
           setStory(result.promptStory);
           const imgUrl = await generateImageFromPrompt(result.imagePrompt, directionPhoto || undefined, result.aspectRatio);
-          if (!cancelled) finishGeneration(imgUrl);
+          if (!cancelled) finishGeneration(imgUrl, scaleSnap);
         }
       } catch (err: any) {
         if (cancelled) return;
@@ -1108,7 +1175,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
         {/* ── HERO IMAGE + HOTSPOTS (flex-1 + basis-0 so mobile always reserves space for the render) ── */}
         <div
-          className={`relative flex flex-col overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] min-w-0 min-h-0 flex-1 ${
+          className={`relative flex flex-col overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] min-w-0 min-h-0 flex-1 max-md:sticky max-md:top-11 max-md:z-30 max-md:bg-[#fafafa] max-md:shadow-[0_6px_20px_-8px_rgba(0,0,0,0.08)] ${
             isEditingMaterials && sidebarOpen ? 'md:flex-[1_1_55%]' : ''
           } ${isRevealed ? 'opacity-100' : 'opacity-0 scale-[1.02]'}`}
         >
@@ -1116,7 +1183,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           {/* Image container — aspect box on mobile so height is never 0; show image in revealing phase too */}
           <div className={`flex-1 flex items-center justify-center relative z-10 w-full min-h-0 md:min-h-0 transition-all duration-500 ${isEditingMaterials ? 'p-2 sm:p-4' : 'p-1.5 sm:p-2.5'}`}>
             {displayedImageUrl && (
-              <div className={`relative w-full max-w-full overflow-hidden transition-all duration-700 ease-out max-md:aspect-[16/9] max-md:min-h-[40dvh] max-md:max-h-[58dvh] md:flex md:items-center md:justify-center md:h-full md:min-h-0 md:aspect-auto md:max-h-none ${isRevealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'} ${isEditingMaterials ? 'scale-[0.94]' : 'scale-100'}`}>
+              <div className={`relative w-full max-w-full overflow-hidden transition-all duration-700 ease-out max-md:aspect-[16/9] max-md:min-h-[48dvh] max-md:max-h-[72dvh] md:flex md:items-center md:justify-center md:h-full md:min-h-0 md:aspect-auto md:max-h-none ${isRevealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'} ${isEditingMaterials ? 'scale-[0.94]' : 'scale-100'}`}>
                 <div className={`relative w-full h-full min-h-[200px] md:min-h-0 rounded-lg overflow-hidden transition-all duration-500 ${isEditingMaterials ? 'shadow-lg shadow-black/5' : 'shadow-2xl shadow-black/8'}`}>
                   <div className="absolute inset-0 rounded-lg overflow-hidden border border-white/50 bg-gray-100/80">
                     <img src={displayedImageUrl} alt="Architectural visualization"
@@ -1314,8 +1381,8 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
         </div>
 
         {/* ── MATERIAL DNA SIDEBAR ── */}
-        <div className={`bg-white border-l md:border-l border-t md:border-t-0 border-gray-100/60 flex flex-col overflow-hidden shrink-0 transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
-          sidebarOpen ? 'w-full md:w-[400px] max-h-[38vh] sm:max-h-[42vh] md:max-h-none' : 'w-full md:w-[44px] max-h-[44px] md:max-h-none'
+        <div className={`relative z-10 bg-white border-l md:border-l border-t md:border-t-0 border-gray-100/60 flex flex-col overflow-hidden shrink-0 transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
+          sidebarOpen ? 'w-full md:w-[400px] max-h-[30vh] sm:max-h-[36vh] md:max-h-none' : 'w-full md:w-[44px] max-h-[44px] md:max-h-none'
         } ${isRevealed ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}
           style={{ transitionDelay: isRevealed ? '300ms' : '0ms' }}>
 
@@ -1343,7 +1410,10 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
               {/* ═══ HEADER — fixed ═══ */}
               <div className="flex-shrink-0 px-4 pt-3 pb-1.5 bg-white z-10 border-b border-gray-100/80">
                 <div className="flex items-center justify-between">
-                  <p className="text-[12px] uppercase tracking-[0.25em] text-gray-400 font-medium">Material DNA</p>
+                  <div>
+                    <p className="text-[12px] uppercase tracking-[0.25em] text-gray-400 font-medium">Material DNA</p>
+                    <p className="text-[8px] text-gray-400/65 font-light tracking-[0.12em] mt-0.5">Materials · atmosphere · balance</p>
+                  </div>
                   <button onClick={() => setSidebarOpen(false)}
                     className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors">
                     <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#999" strokeWidth="1.5" strokeLinecap="round"><path d="M4 3 L7 6 L4 9" /></svg>
@@ -1355,64 +1425,139 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
               <div className="flex-1 overflow-y-auto custom-scroll min-h-0">
               <div className="px-4 pt-2 pb-2">
 
-                {/* Axonometric orbital — materials grouped by element sector */}
+                {/* Symmetric circular orbit — materials by element (no sector spokes / no dashed rings) */}
                 {(() => {
-                  const CX = 120, CY = 52, ORX = 105, ORY = 42, IRX = 58, IRY = 23;
+                  const VB = 200;
+                  const CX = 100;
+                  const CY = 100;
+                  const ROUT = 76;
+                  const RIN = 42;
                   const EL_ANGLES: Record<Element, number> = { air: -90, fire: 0, earth: 90, water: 180 };
                   const matsByEl: Record<Element, typeof dnaMaterials> = { earth: [], fire: [], water: [], air: [] };
                   dnaMaterials.forEach(m => matsByEl[m.element]?.push(m));
+                  const orbitHover = dnaOrbitHover;
+                  const nucleusHot = dnaNucleusNear;
+                  const ringOuterOpacity = orbitHover ? 0.36 : 0.22;
+                  const ringInnerOpacity = orbitHover ? 0.26 : 0.14;
                   return (
-                    <div className="relative mx-auto" style={{ width: '240px', height: '104px' }}>
-                      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 240 104" fill="none">
-                        <ellipse cx={CX} cy={CY} rx={ORX} ry={ORY} stroke={`${domColor}18`} strokeWidth="1" strokeDasharray="3 4" />
-                        <ellipse cx={CX} cy={CY} rx={IRX} ry={IRY} stroke={`${domColor}10`} strokeWidth="0.8" strokeDasharray="2 3" />
+                    <div className="mx-auto w-full max-w-[168px] md:max-w-[160px]">
+                    <div
+                      ref={dnaOrbitalRef}
+                      aria-label="Material DNA — element shares and selected materials"
+                      className={`relative mx-auto select-none rounded-full transition-[box-shadow] duration-500 aspect-square max-w-[168px] ${orbitHover ? 'shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_6px_20px_-5px_rgba(0,0,0,0.06)]' : ''}`}
+                      style={{ width: 'min(100%, 168px)' }}
+                      onMouseEnter={() => setDnaOrbitHover(true)}
+                      onMouseMove={(e) => updateDnaNucleusProximity(e.clientX, e.clientY)}
+                      onMouseLeave={() => {
+                        setDnaOrbitHover(false);
+                        setDnaNucleusNear(false);
+                      }}
+                    >
+                    <div className="absolute inset-0 origin-center">
+                      <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible" viewBox={`0 0 ${VB} ${VB}`} fill="none">
+                        <circle
+                          cx={CX}
+                          cy={CY}
+                          r={ROUT}
+                          stroke={domColor}
+                          strokeWidth={1}
+                          fill="none"
+                          opacity={ringOuterOpacity}
+                          style={{ transition: 'opacity 0.35s ease' }}
+                        />
+                        <circle
+                          cx={CX}
+                          cy={CY}
+                          r={RIN}
+                          stroke={domColor}
+                          strokeWidth={0.85}
+                          fill="none"
+                          opacity={ringInnerOpacity}
+                          style={{ transition: 'opacity 0.35s ease' }}
+                        />
                       </svg>
-                      {/* Center nucleus */}
-                      <div className="absolute rounded-full" style={{
-                        width: '14px', height: '14px', left: `${CX}px`, top: `${CY}px`,
-                        transform: 'translate(-50%, -50%)',
-                        background: `radial-gradient(circle at 38% 32%, ${domColor}A0, ${domColor}60)`,
-                        boxShadow: `0 1px 8px ${domColor}30`, zIndex: 4,
-                      }} />
-                      {/* Element nodes + their grouped material spheres */}
+                      {/* Center nucleus — static reference point */}
+                      <div
+                        className="absolute pointer-events-none z-[4] transition-opacity duration-300"
+                        style={{ left: `${(CX / VB) * 100}%`, top: `${(CY / VB) * 100}%`, transform: 'translate(-50%, -50%)' }}
+                      >
+                        <div className="relative flex items-center justify-center w-6 h-6">
+                          <div
+                            className="absolute rounded-full border border-solid w-[24px] h-[24px]"
+                            style={{
+                              borderColor: `${domColor}55`,
+                              boxShadow: `inset 0 0 0 1px ${domColor}12`,
+                              opacity: nucleusHot ? 0.88 : 0.65,
+                              transition: 'opacity 0.35s ease',
+                            }}
+                          />
+                          <div
+                            className="absolute rounded-full border w-[18px] h-[18px]"
+                            style={{
+                              borderColor: `${domColor}35`,
+                              opacity: nucleusHot ? 0.62 : 0.45,
+                              transition: 'opacity 0.35s ease',
+                            }}
+                          />
+                          <div
+                            className="absolute rounded-full transition-[box-shadow,transform] duration-500"
+                            style={{
+                              width: '8px',
+                              height: '8px',
+                              background: `radial-gradient(circle at 38% 32%, ${domColor}E0, ${domColor}70)`,
+                              boxShadow: nucleusHot
+                                ? `0 0 14px ${domColor}70, 0 1px 8px ${domColor}45`
+                                : `0 0 10px ${domColor}55, 0 1px 6px ${domColor}35`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {/* Spheres drawn first (below nodes); % labels on top */}
                       {(['air', 'fire', 'earth', 'water'] as Element[]).map(el => {
                         const baseAngle = EL_ANGLES[el];
                         const val = Math.round(dist[el]);
                         const isDom = el === dominant;
                         const ec = ELEMENT_COLORS[el];
                         const rad = (baseAngle * Math.PI) / 180;
-                        const elX = CX + Math.cos(rad) * ORX;
-                        const elY = CY + Math.sin(rad) * ORY;
-                        const s = Math.max(10, Math.min(18, val * 0.32 + 5));
+                        const elX = CX + Math.cos(rad) * ROUT;
+                        const elY = CY + Math.sin(rad) * ROUT;
+                        const s = Math.max(7, Math.min(13, val * 0.26 + 4));
                         const mats = matsByEl[el];
+                        const lr = rad;
+                        const labelScale = 1.2;
+                        const lx = CX + Math.cos(lr) * ROUT * labelScale;
+                        const ly = CY + Math.sin(lr) * ROUT * labelScale;
                         return (
                           <React.Fragment key={el}>
-                            {/* Element node on outer ring */}
-                            <div className="absolute rounded-full flex items-center justify-center transition-all duration-700"
-                              style={{
-                                width: `${s}px`, height: `${s}px`, left: `${elX}px`, top: `${elY}px`,
-                                transform: 'translate(-50%, -50%)', backgroundColor: ec,
-                                opacity: isDom ? 0.9 : 0.3,
-                                boxShadow: isDom ? `0 2px 10px ${ec}50` : `0 1px 3px rgba(0,0,0,0.08)`,
-                                zIndex: isDom ? 6 : 2,
-                              }}>
-                              {s >= 14 && <span className="text-white font-bold" style={{ fontSize: '7px' }}>{val}</span>}
-                            </div>
-                            {/* Material spheres clustered near this element on inner ring */}
                             {mats.map((mat, mi) => {
                               const spreadPerItem = mats.length <= 1 ? 0 : 18;
                               const totalSpread = (mats.length - 1) * spreadPerItem;
                               const offsetAngle = baseAngle - totalSpread / 2 + mi * spreadPerItem;
                               const mRad = (offsetAngle * Math.PI) / 180;
-                              const mx = CX + Math.cos(mRad) * IRX;
-                              const my = CY + Math.sin(mRad) * IRY;
+                              const tuck = isDom ? 0.85 : 1;
+                              const mx = CX + Math.cos(mRad) * RIN * tuck;
+                              const my = CY + Math.sin(mRad) * RIN * tuck;
                               const mc = ec;
                               const tex = MATERIAL_SPHERE_IMAGES[mat.name];
+                              const sphereSize = isDom ? 13 : 14;
                               return (
-                                <div key={mat.id || `${el}-${mi}`} className="absolute transition-all duration-500"
-                                  style={{ width: '17px', height: '17px', left: `${mx}px`, top: `${my}px`, transform: 'translate(-50%, -50%)', zIndex: 3 }}>
-                                  <div className="w-full h-full rounded-full overflow-hidden border-[1.5px] border-white shadow-sm"
-                                    style={{ boxShadow: `0 1px 4px ${mc}20` }}>
+                                <div
+                                  key={`${mat.name}-${el}-${mi}`}
+                                  className="absolute transition-all duration-500"
+                                  style={{
+                                    width: `${sphereSize}px`,
+                                    height: `${sphereSize}px`,
+                                    left: `${(mx / VB) * 100}%`,
+                                    top: `${(my / VB) * 100}%`,
+                                    transform: 'translate(-50%, -50%)',
+                                    zIndex: 1,
+                                    transitionDelay: '0ms',
+                                  }}
+                                >
+                                  <div
+                                    className="w-full h-full rounded-full overflow-hidden border border-white shadow-sm"
+                                    style={{ boxShadow: `0 1px 4px ${mc}18` }}
+                                  >
                                     {tex && !tex.startsWith('https://placehold')
                                       ? <img src={tex} alt="" className="w-[140%] h-[140%] max-w-none object-cover" style={{ marginLeft: '-20%', marginTop: '-20%', mixBlendMode: 'multiply' }} loading="lazy" />
                                       : <div className="w-full h-full" style={{ background: `radial-gradient(circle at 35% 30%, ${mc}40, ${mc}15)` }} />}
@@ -1420,9 +1565,39 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                                 </div>
                               );
                             })}
+                            <div
+                              className="absolute rounded-full flex items-center justify-center transition-all duration-700"
+                              style={{
+                                width: `${s}px`,
+                                height: `${s}px`,
+                                left: `${(elX / VB) * 100}%`,
+                                top: `${(elY / VB) * 100}%`,
+                                transform: 'translate(-50%, -50%)',
+                                backgroundColor: ec,
+                                opacity: isDom ? 0.92 : 0.34,
+                                boxShadow: isDom ? `0 2px 12px ${ec}45` : `0 1px 3px rgba(0,0,0,0.08)`,
+                                zIndex: isDom ? 10 : 5,
+                              }}
+                            />
+                            <span
+                              className="absolute pointer-events-none z-[12] font-mono tabular-nums text-[6px] sm:text-[6.5px] font-extralight leading-none tracking-tight transition-opacity duration-300"
+                              style={{
+                                left: `${(lx / VB) * 100}%`,
+                                top: `${(ly / VB) * 100}%`,
+                                transform: 'translate(-50%, -50%)',
+                                color: ec,
+                                opacity: orbitHover ? (isDom ? 0.95 : 0.78) : isDom ? 0.88 : 0.62,
+                                textShadow: '0 0 4px rgba(255,255,255,0.98), 0 1px 1px rgba(255,255,255,0.9)',
+                              }}
+                            >
+                              {val}
+                              <span style={{ opacity: 0.55, fontSize: '5px' }}>%</span>
+                            </span>
                           </React.Fragment>
                         );
                       })}
+                    </div>
+                    </div>
                     </div>
                   );
                 })()}
@@ -1462,7 +1637,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         const ec = ELEMENT_COLORS[el];
                         return (
                           <div key={el} className="flex items-center gap-1.5" style={{ opacity: isDom ? 1 : 0.65 }}>
-                            <span className="text-[10px] uppercase tracking-[0.1em] w-8 shrink-0 text-right" style={{ fontWeight: isDom ? 700 : 500, color: ec }}>{el.slice(0, 2)}</span>
+                            <span className="text-[10px] uppercase tracking-[0.1em] w-8 shrink-0 text-right font-light" style={{ fontWeight: isDom ? 500 : 400, color: ec }}>{el.slice(0, 2)}</span>
                             <div className="flex-1 relative h-[14px] flex items-center cursor-ew-resize group">
                               <div className="absolute left-0 right-0 h-[4px] rounded-full" style={{ background: 'rgba(0,0,0,0.04)' }} />
                               <div className="absolute left-0 h-[4px] rounded-full transition-all duration-300"
@@ -1479,9 +1654,9 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                               maxLength={3}
                               defaultValue={val}
                               key={`${el}-${val}`}
-                              className="font-mono tabular-nums text-[11px] w-10 text-center shrink-0 rounded px-0.5 py-[2px] outline-none transition-all border"
+                              className="font-mono tabular-nums text-[11px] w-10 text-center shrink-0 rounded px-0.5 py-[2px] outline-none transition-all border font-normal"
                               style={{
-                                fontWeight: isDom ? 700 : 500,
+                                fontWeight: isDom ? 500 : 450,
                                 color: isDom ? ec : '#666',
                                 borderColor: `${ec}30`,
                                 background: `${ec}08`,
@@ -1527,8 +1702,11 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
               </div>
 
               {/* Material Grid */}
-              <div className="px-3 pt-2.5 pb-2">
-                <div className="grid grid-cols-4 gap-1">
+              <div className="px-2.5 sm:px-3 pt-2.5 pb-2 max-md:pb-3">
+                <p className="text-[8px] text-center text-gray-400/75 font-light tracking-[0.06em] mb-2 max-md:mb-2.5 px-1 leading-relaxed max-md:text-[9px]">
+                  Materials by element ring above; atmosphere chips summarize mood.
+                </p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-md:gap-2.5 justify-items-center">
                   {dnaMaterials.map((mat, idx) => {
                     const elColor = ELEMENT_COLORS[mat.element];
                     const sphereImg = MATERIAL_SPHERE_IMAGES[mat.name];
@@ -1536,12 +1714,15 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                     const isUserSelected = selectedMaterials.some(m => m.name === mat.name);
 
                     return (
-                      <div key={mat.id || idx}
-                        className={`group relative flex flex-col items-center rounded-lg transition-all duration-300 hover:bg-gray-50/80 cursor-default p-1 ${isLinked ? 'bg-gray-50 ring-1 ring-gray-200/60' : ''}`}
+                      <div key={`${mat.name}-${mat.element}-${idx}`}
+                        className={`group relative flex flex-col items-center rounded-lg transition-all duration-300 hover:bg-gray-50/80 cursor-default p-1 max-md:p-1.5 w-full max-w-[92px] sm:max-w-none ${isLinked ? 'bg-gray-50 ring-1 ring-gray-200/60' : ''}`}
                         title={`${mat.name} — ${ELEMENT_DESCRIPTORS[mat.element]} · ${Math.round(dist[mat.element])}%`}>
-                        <div className="relative">
-                          <div className={`rounded-full overflow-hidden transition-all duration-500 bg-white ${isLinked ? 'shadow-md scale-105' : ''}`}
-                            style={{ width: '64px', height: '64px', border: `1.5px solid ${elColor}15` }}>
+                        <div className="relative w-full flex justify-center">
+                          <div className={`relative shrink-0 w-[76px] h-[76px] sm:w-[70px] sm:h-[70px] md:w-16 md:h-16 ${isLinked ? 'scale-105' : ''}`}>
+                          <div
+                            className={`rounded-full overflow-hidden transition-all duration-500 bg-white max-md:shadow-sm w-full h-full ${isLinked ? 'shadow-md' : ''}`}
+                            style={{ border: `1.5px solid ${elColor}15` }}
+                          >
                             {sphereImg && !sphereImg.startsWith('https://placehold')
                               ? <img src={sphereImg} alt={mat.name}
                                   className="w-[130%] h-[130%] max-w-none object-cover transition-transform duration-500 group-hover:scale-110"
@@ -1557,8 +1738,9 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                               <svg width="6" height="6" viewBox="0 0 12 12" fill="none" stroke="#e57373" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="3" x2="9" y2="9" /><line x1="9" y1="3" x2="3" y2="9" /></svg>
                             </button>
                           )}
+                          </div>
                         </div>
-                        <span className="text-center leading-tight mt-1 w-full truncate text-[9px] font-medium" style={{ color: '#7a8da6' }}>
+                        <span className="text-center leading-tight mt-1 max-md:mt-1.5 w-full truncate text-[9px] max-md:text-[10px] font-medium px-0.5" style={{ color: '#7a8da6' }}>
                           {mat.name.split('(')[0].trim()}
                         </span>
                       </div>
@@ -1567,7 +1749,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 </div>
                 {/* Add material button inside the grid area */}
                 <button onClick={() => setMaterialPickerOpen(!materialPickerOpen)}
-                  className={`w-full mt-2 py-2 border border-dashed rounded-md text-[10px] uppercase tracking-[0.15em] font-medium transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                  className={`touch-target-auto w-full mt-2 max-md:mt-2.5 py-2 max-md:py-2.5 border border-dashed rounded-md text-[10px] uppercase tracking-[0.15em] font-medium transition-all duration-300 flex items-center justify-center gap-1.5 ${
                     materialPickerOpen ? 'border-gray-400 text-gray-600 bg-gray-50' : 'border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-600'
                   }`}>
                   <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
@@ -1581,7 +1763,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 {/* Material picker dropdown */}
                 {materialPickerOpen && (
                   <div className="px-3 pt-3 pb-2 border-b border-gray-100 animate-fade-in-up bg-gray-50/40" style={{ animationDuration: '0.2s' }}>
-                    <p className="text-[11px] uppercase tracking-[0.15em] text-gray-400 font-semibold mb-2.5">Available Materials</p>
+                    <p className="text-[9px] uppercase tracking-[0.2em] text-gray-400/80 font-light mb-2.5">Add material</p>
                     {(Object.entries(CANONICAL_MATERIALS) as [string, string[]][])
                       .filter(([key]) => key !== 'shared')
                       .map(([elKey, matNames]) => {
@@ -1592,7 +1774,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                           <div key={elKey} className="mb-3">
                             <div className="flex items-center gap-2 mb-1.5 px-0.5">
                               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: elColor }} />
-                              <span className="text-[11px] uppercase tracking-[0.12em] font-bold" style={{ color: elColor }}>{elKey}</span>
+                              <span className="text-[10px] uppercase tracking-[0.14em] font-light" style={{ color: elColor }}>{elKey}</span>
                               <span className="text-[9px] text-gray-300 font-light ml-auto">{availableMats.length}</span>
                             </div>
                             <div className="flex flex-wrap gap-1.5">
@@ -1618,7 +1800,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 {/* Atmosphere chips */}
                 {selectedAtmosphere.length > 0 && (
                   <div className="px-3 pt-2 pb-1.5">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400 font-medium mb-1.5">Atmosphere</p>
+                    <p className="text-[8px] uppercase tracking-[0.22em] text-gray-400/70 font-light mb-1.5">Atmosphere</p>
                     <div className="flex flex-wrap gap-1.5">
                       {selectedAtmosphere.slice(0, 6).map((adj, i) => {
                         const ec = ELEMENT_COLORS[adj.element];
@@ -1745,7 +1927,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                           handleRefineSubmit();
                         }
                       }}
-                      placeholder={displayedImageUrl ? "e.g. change sofa design..." : "Custom direction..."}
+                      placeholder={displayedImageUrl ? "Edit detail… (follow-ups remember this render — “it”, “more”, same topic)" : "Custom direction..."}
                       className="flex-1 px-2.5 py-1.5 border border-gray-100 rounded text-[11px] placeholder:text-gray-300 focus:outline-none focus:border-gray-300 transition-colors" />
                     <input ref={directionPhotoRef} type="file" accept="image/*" className="hidden"
                       onChange={(e) => {
@@ -1811,7 +1993,13 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                     <div className="flex items-center gap-1.5 mt-1.5">
                       <span className="text-[9px] text-gray-400 font-medium">{targetedEditMode ? 'Edit:' : 'Active:'}</span>
                       <span className="text-[9px] font-medium text-gray-600 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">{savedDirection}</span>
-                      <button onClick={() => { setSavedDirection(null); refinementFeedbackRef.current = null; setTargetedEditMode(false); setTargetedEditText(null); }} className="text-[9px] text-gray-300 hover:text-gray-600 ml-0.5">&times;</button>
+                      <button onClick={() => {
+                        setSavedDirection(null);
+                        refinementFeedbackRef.current = null;
+                        setTargetedEditMode(false);
+                        setTargetedEditText(null);
+                        editThreadsByImageUrlRef.current = {};
+                      }} className="text-[9px] text-gray-300 hover:text-gray-600 ml-0.5">&times;</button>
                     </div>
                   )}
                 </div>
@@ -1893,10 +2081,10 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
       {isComplete && (
         <div className="flex-shrink-0 border-t border-gray-50 bg-white transition-all duration-1000 ease-out"
           style={{ transitionDelay: '1000ms' }}>
-          <div className="px-2 sm:px-3 py-1.5 flex flex-col gap-1.5">
+          <div className="px-2 sm:px-3 py-2 sm:py-1.5 flex flex-col gap-2 sm:gap-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]">
             {/* Product brands — single horizontal scroll on narrow screens */}
-            <div className="flex items-center gap-1 overflow-x-auto custom-scroll -mx-0.5 px-0.5">
-              <span className="text-[8px] sm:text-[9px] uppercase tracking-[0.18em] sm:tracking-[0.2em] text-gray-400 font-medium mr-1 flex-shrink-0">Brands</span>
+            <div className="flex items-center gap-1 overflow-x-auto custom-scroll -mx-0.5 px-0.5 overscroll-x-contain touch-pan-x">
+              <span className="text-[9px] sm:text-[9px] uppercase tracking-[0.18em] sm:tracking-[0.2em] text-gray-400 font-medium mr-1 flex-shrink-0">Brands</span>
               {Array.from(new Set(BRAND_CATALOG.map(b => b.category))).map(cat => {
                 const brands = BRAND_CATALOG.filter(b => b.category === cat);
                 const isHighlighted = highlightedCategory === cat;
@@ -1904,7 +2092,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   <div key={cat} className="flex items-center gap-0.5 flex-shrink-0">
                     {brands.map(b => (
                       <a key={b.id} href={b.url} target="_blank" rel="noopener noreferrer"
-                        className={`px-1.5 py-1 rounded-md text-[8px] sm:text-[9px] tracking-[0.03em] sm:tracking-[0.04em] font-medium transition-all duration-300 whitespace-nowrap ${
+                        className={`px-2 py-1.5 sm:px-1.5 sm:py-1 rounded-md text-[9px] sm:text-[9px] tracking-[0.03em] sm:tracking-[0.04em] font-medium transition-all duration-300 whitespace-nowrap touch-manipulation min-h-[36px] sm:min-h-0 inline-flex items-center ${
                           isHighlighted ? 'text-gray-700 bg-gray-50 shadow-sm' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
                         }`}
                         onMouseEnter={() => setHoveredBrand(b.id)} onMouseLeave={() => setHoveredBrand(null)}
@@ -1917,7 +2105,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
               })}
             </div>
 
-            <p className="text-[7px] sm:text-[8px] text-gray-500 leading-tight px-0.5 border-t border-gray-100/80 pt-1 mt-0.5 tabular-nums">
+            <p className="text-[8px] sm:text-[8px] text-gray-500 leading-snug px-0.5 border-t border-gray-100/80 pt-1.5 sm:pt-1 mt-0.5 tabular-nums">
               <span className="uppercase tracking-[0.12em] text-gray-400 font-medium">Suggested</span>
               <span className="text-gray-300 mx-1">·</span>
               {state.params.category || 'Space type'}
@@ -1927,34 +2115,54 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
               {state.params.domain === 'architecture' ? 'Architecture' : 'Interior'}
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 text-left">
-              {([
-                { role: 'contractor' as const, label: 'Build & renovation' },
-                { role: 'architect' as const, label: 'Architects' },
-                { role: 'designer' as const, label: 'Interior designers' },
-              ]).map(({ role, label }) => (
-                <div key={role} className="min-w-0 rounded-md bg-gray-50/80 border border-gray-100/85 px-1.5 py-1 sm:px-2 sm:py-1.5">
-                  <div className="text-[7px] sm:text-[8px] font-semibold uppercase tracking-[0.14em] text-gray-500 mb-0.5 leading-none">
-                    {label}
-                  </div>
-                  <div className="flex flex-wrap gap-0.5">
-                    {professionalRecs[role].map(p => (
-                      <a
-                        key={p.id}
-                        href={p.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex max-w-full px-1 py-0.5 rounded text-[7px] sm:text-[8px] font-medium text-gray-500 hover:text-gray-800 hover:bg-white/95 border border-transparent hover:border-gray-200/90 transition-colors"
-                        title={p.specialty}
-                      >
-                        <span className="truncate">{p.name}</span>
-                      </a>
-                    ))}
-                  </div>
+            <div className="flex flex-col gap-1 text-left">
+              <div className="min-w-0 rounded-md bg-gray-50/80 border border-gray-100/85 px-1.5 py-0.5 sm:px-2 sm:py-1">
+                <div className="text-[7px] sm:text-[8px] font-semibold uppercase tracking-[0.14em] text-gray-500 mb-0.5 leading-none">
+                  Build & renovation
                 </div>
-              ))}
+                <div className="flex flex-wrap gap-1 sm:gap-0.5">
+                  {professionalRecs.contractor.map(p => (
+                    <a
+                      key={p.id}
+                      href={p.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center max-w-full min-h-[40px] sm:min-h-0 px-2 py-1.5 sm:px-1 sm:py-0 rounded-md sm:rounded text-[10px] sm:text-[8px] font-medium text-gray-600 sm:text-gray-500 hover:text-gray-800 hover:bg-white/95 border border-transparent hover:border-gray-200/90 transition-colors touch-manipulation active:bg-gray-100/80"
+                      title={p.specialty}
+                    >
+                      <span className="truncate">{p.name}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+              <div className="min-w-0 rounded-md bg-gray-50/80 border border-gray-100/85 px-1.5 py-0.5 sm:px-2 sm:py-1">
+                <div className="text-[8px] sm:text-[8px] font-semibold uppercase tracking-[0.1em] sm:tracking-[0.12em] text-gray-500 mb-1 sm:mb-0.5 leading-tight">
+                  Architects & interior designers
+                </div>
+                <div className="flex flex-wrap gap-1 sm:gap-0.5">
+                  {architectsAndDesigners.map(p => (
+                    <a
+                      key={p.id}
+                      href={p.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`inline-flex items-center gap-1 max-w-full min-h-[40px] sm:min-h-0 px-2 py-1.5 sm:px-1 sm:py-0 rounded-md sm:rounded text-[10px] sm:text-[8px] font-semibold sm:font-medium border transition-colors touch-manipulation active:bg-gray-100/80 ${
+                        p.id === 'shre-studio'
+                          ? 'text-gray-900 bg-white border-gray-200/90 shadow-sm hover:border-gray-300'
+                          : 'text-gray-600 sm:text-gray-500 border-transparent hover:text-gray-800 hover:bg-white/95 hover:border-gray-200/90'
+                      }`}
+                      title={`${p.specialty} · ${p.role === 'architect' ? 'Architecture' : 'Interior'}`}
+                    >
+                      <span className="truncate">{p.name}</span>
+                      <span className="flex-shrink-0 text-[7px] sm:text-[6px] uppercase tracking-wide text-gray-400 font-semibold">
+                        {p.role === 'architect' ? 'arch' : 'int'}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </div>
             </div>
-            <p className="text-[6px] sm:text-[7px] text-gray-400 leading-tight px-0.5 text-center sm:text-left">
+            <p className="text-[8px] sm:text-[7px] text-gray-400 leading-snug px-0.5 text-center sm:text-left">
               Informational links — verify scope and fit with each firm before engaging.
             </p>
           </div>

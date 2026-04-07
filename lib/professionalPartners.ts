@@ -18,6 +18,8 @@ export type ProfessionalPartner = {
   categoryKeywords?: string[];
   /** Match if domain is listed; omit = any */
   domains?: Domain[];
+  /** Lower sorts earlier within the same role (0 = first). */
+  pickOrder?: number;
 };
 
 const KW = {
@@ -43,6 +45,7 @@ export const PROFESSIONAL_PARTNERS: ProfessionalPartner[] = [
   { id: 'con-houzz', name: 'Houzz Pro', role: 'contractor', specialty: 'Find vetted pros & budget tools', url: 'https://www.houzz.com/pro', areaMax: 600, domains: ['interior'], categoryKeywords: [...KW.living, 'kitchen', 'bathroom'] },
 
   // Architects — programme scale
+  { id: 'shre-studio', name: 'SHRESTUDIO', role: 'architect', specialty: 'Architecture & interior design · Tbilisi', url: 'https://shre.ge', domains: ['architecture', 'interior'], pickOrder: 0 },
   { id: 'arc-foster', name: 'Foster + Partners', role: 'architect', specialty: 'Global large-scale architecture', url: 'https://www.fosterandpartners.com', areaMin: 1500, domains: ['architecture'] },
   { id: 'arc-sno', name: 'Snøhetta', role: 'architect', specialty: 'Cultural & landscape-integrated', url: 'https://snohetta.com', areaMin: 400, domains: ['architecture'], categoryKeywords: [...KW.cultural, 'coastal', 'mountain'] },
   { id: 'arc-big', name: 'BIG', role: 'architect', specialty: 'Experimental form & sustainability', url: 'https://big.dk', areaMin: 600, domains: ['architecture'] },
@@ -120,9 +123,20 @@ export function getRecommendedProfessionalPartners(
   for (const role of roles) {
     const pool = PROFESSIONAL_PARTNERS.filter(p => p.role === role)
       .map(p => ({ p, sc: scorePartner(p, area, category, domain) }))
-      .sort((a, b) => b.sc - a.sc)
+      .sort((a, b) => {
+        const oa = a.p.pickOrder ?? 1000;
+        const ob = b.p.pickOrder ?? 1000;
+        if (oa !== ob) return oa - ob;
+        return b.sc - a.sc;
+      })
       .map(({ p }) => p);
     out[role] = pool.slice(0, perRole);
+  }
+
+  const shreStudio = PROFESSIONAL_PARTNERS.find(p => p.id === 'shre-studio');
+  if (shreStudio) {
+    const rest = out.architect.filter(p => p.id !== 'shre-studio');
+    out.architect = [shreStudio, ...rest].slice(0, perRole);
   }
 
   return out;

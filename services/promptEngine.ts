@@ -17,12 +17,20 @@ export const formatSpaceConfigOneLiner = (p: UserState['params']): string => {
   const parts: string[] = [domainLabel, cat];
   if (rooms) parts.push(rooms);
   if (ctx) parts.push(ctx);
-  parts.push(`${area} m²`);
+  parts.push(p.rooms && p.rooms.length > 1 ? `${area} m² (this render — primary space)` : `${area} m²`);
   if (ceiling) parts.push(ceiling);
   if (light) parts.push(light);
   if (palette) parts.push(palette);
   return parts.join(' · ');
 };
+
+/** Stable sort: highest % first; ties follow catalog order earth → fire → water → air. */
+const sortElementsByDistribution = (activeDist: Vector4): Element[] =>
+  [...ELEMENTS].sort((a, b) => {
+    const d = activeDist[b] - activeDist[a];
+    if (Math.abs(d) < 0.01) return ELEMENTS.indexOf(a) - ELEMENTS.indexOf(b);
+    return d;
+  });
 
 // --- ADAPTER / LEGACY SUPPORT ---
 export const calculateAnalysis = (state: UserState): AnalysisResult => {
@@ -54,11 +62,7 @@ export const calculateAnalysis = (state: UserState): AnalysisResult => {
     percentages[el] = (scores[el] / totalScore) * 100;
   });
 
-  const sorted = [...ELEMENTS].sort((a, b) => {
-      const diff = percentages[b] - percentages[a];
-      if (Math.abs(diff) < 0.1) return ELEMENTS.indexOf(a) - ELEMENTS.indexOf(b);
-      return diff;
-  });
+  const sorted = sortElementsByDistribution(percentages as Vector4);
   
   const area = state.params.squareMeters || 100;
   const isInterior = state.params.domain === 'interior';
@@ -279,6 +283,14 @@ const SHARED_LIGHTING: string[] = [
   'Michael Anastassiades Mobile Chandelier — brass tubes with opal glass spheres, gravity-defying balance',
   'Flos Parentesi suspension — sliding adjustable spotlight on vertical wire, utilitarian chic',
   'Oluce Atollo 233 table lamp — gold hemisphere on cylinder, design icon since 1977',
+];
+
+/** Most passes (not every): one “everyone knows this” trust anchor — decor, lamp, chair, or tech — style-matched */
+const ICONIC_TRUST_ANCHOR_ROTATIONS: string[] = [
+  'Include ONE immediately readable design icon if it fits the program (correct scale, not forced): e.g. Eames Lounge & Ottoman (Herman Miller / Vitra), Barcelona chair (Knoll), Wassily or Cesca, Saarinen Tulip table, LC4 chaise, Camaleonda module, USM Haller unit, Noguchi Akari, Flos Arco, PH Artichoke or PH5 (Louis Poulsen), Atollo (Oluce), AJ lamp — single hero or coherent pair, not a collage.',
+  'Add one or two cultural “trust” props where logical: Diptyque / Le Labo / Aesop on tray, Alessi kettle or Juicy Salif, Vitra Eames House Bird, George Nelson Ball Clock, Smeg small appliance in kitchen/café, Bang & Olufsen or Devialet / high-end sculptural speaker, Apple Studio Display or iMac in office — nothing random; each must earn its place in frame.',
+  'Anchor the light or seating story with one famous silhouette: Panthella, IC Lights, Parentesi, Flowerpot (&Tradition), Tom Dixon Beat/Melt, Foscarini Caboche, Hay PC Portable, Random Light (Moooi) — pick ONE fixture family suited to ceiling height and energy; readable shape, real proportions.',
+  'Hospitality / kitchen / tech credibility when relevant: La Marzocco Linea or Victoria Arduino (café/bar), SMEG FAB or Gaggenau-style oven bank (kitchen), Fellow or Chemex barista pieces, Dyson on wall dock only if room fits — never a shelf of random unrelated gadgets.',
 ];
 
 // ── DECOR & STYLING ITEMS by element ──
@@ -560,12 +572,14 @@ const buildMaterialPlacement = (materials: { name: string }[]): string => {
   return placements.join('. ') + '.';
 };
 
-/** Hard requirement: every catalog pick is visible and matches what the user chose */
+/** Hard requirement: ≥80% of catalog picks clearly visible (rounded up); target 100%. */
 const buildUserSelectedMaterialsMandatory = (
   materials: Array<{ name: string }>,
   materialPlacement: string,
 ): string => {
   const exact = materials.map((m) => m.name).join('; ');
+  const n = materials.length;
+  const minVisible = Math.max(1, Math.ceil(n * 0.8));
   const anchors = materials
     .map((m) => {
       const prods = MATERIAL_PRODUCT_MAP[m.name];
@@ -575,12 +589,13 @@ const buildUserSelectedMaterialsMandatory = (
     })
     .join(' | ');
   return [
-    `USER-SELECTED FINISHES — NON-NEGOTIABLE DELIVERABLE`,
-    `The client chose these exact materials from the elemental catalog. The image must prove they were used — not a similar mood, not a generic substitute.`,
-    `SELECTED (each must appear visibly in-frame): ${exact}.`,
+    `USER-SELECTED FINISHES — NON-NEGOTIABLE (MINIMUM 80% VISIBLE, TARGET 100%)`,
+    `The client picked ${n} catalog material(s). At least ${minVisible} of ${n} (≥80%, rounded up — absolute floor for a passing image) must appear in the render with unmistakable visual evidence: correct identity, not a generic lookalike. Strongly prefer showing all ${n} — only if composition forces a tradeoff, omit at most ${Math.max(0, n - minVisible)} and never drop below ${minVisible} visible. Zero silent substitutions on any pick that appears.`,
+    `The client chose these exact materials from the elemental catalog. The image must prove they were used — not only a similar mood.`,
+    `SELECTED (≥${minVisible}/${n} must be clearly in-frame, target all): ${exact}.`,
     `REAL-PRODUCT VISUAL ANCHORS: ${anchors}.`,
     `ASSIGNED SURFACES: ${materialPlacement}`,
-    `VISIBILITY: Every item in SELECTED must be identifiable in the photograph — correct texture, color family, and finish (matte/polished/veined/weave/brushed as applicable). Compose framing and focal depth so each finish gets at least one clear read (hero plane, foreground edge, or mid-ground zone). Do not hide the user's picks in deep shadow, blur-only bokeh, or off-camera imagination.`,
+    `VISIBILITY: Each visible pick must be identifiable — texture, color family, finish (matte/polished/veined/weave/brushed as applicable). Compose camera, focal depth, and lighting so the minimum ${minVisible} finishes each get at least one clear read (hero plane, foreground edge, or mid-ground). Do not hide catalog picks in deep shadow, blur-only bokeh, or off-camera implication.`,
     `PRECEDENCE: If DOMINANT ENERGY text, furniture examples, or COMBO ACCENTS imply different materials on the same surface roles, the USER-SELECTED FINISHES win. Generic stone/wood/metal language is background only where it does not replace a selected finish.`,
     `Wood shows grain; stone shows veining or pore structure; metal shows brush/patina direction; plaster shows trowel; textile shows weave — tuned to the specific pick above.`,
   ].join('\n\n');
@@ -687,30 +702,64 @@ const getActiveDistribution = (input: PromptInput): Vector4 => {
   return input.baseDistribution;
 };
 
+/** Active elements ≥5% with max−min ≤ this → harmonious / near-equal blend (atmosphere stays multi-way). */
+const BALANCED_BLEND_MAX_SPREAD = 12;
+
+const isBalancedElementBlend = (activeDist: Vector4): boolean => {
+  const active = ELEMENTS.filter((el) => activeDist[el] >= 5);
+  if (active.length <= 1) return false;
+  const vals = active.map((el) => activeDist[el]);
+  return Math.max(...vals) - Math.min(...vals) <= BALANCED_BLEND_MAX_SPREAD;
+};
+
+const buildVisualWeightContractBlock = (activeDist: Vector4): string => {
+  const e = Math.round(activeDist.earth);
+  const f = Math.round(activeDist.fire);
+  const w = Math.round(activeDist.water);
+  const a = Math.round(activeDist.air);
+  return `VISUAL WEIGHT CONTRACT (mandatory): Earth ${e}%, Fire ${f}%, Water ${w}%, Air ${a}%. The image must reflect these shares in atmosphere and material/lighting presence — larger percentages earn larger readable zones and stronger character; smaller ones remain honest calibrated layers (accents, hardware, secondary surfaces, contrast pockets), never erased and never inflated into a false boss mood.`;
+};
+
 /** Build energy-weighted spatial rules from percentages (includes material expression) */
 const buildEnergySpatialRules = (activeDist: Vector4): string => {
   const parts: string[] = [];
-  const sorted = (['earth', 'fire', 'water', 'air'] as Element[]).sort((a, b) => activeDist[b] - activeDist[a]);
+  const sorted = sortElementsByDistribution(activeDist);
+  const activeSorted = sorted.filter((el) => activeDist[el] >= 5);
+  const maxPct = activeSorted.length ? Math.max(...activeSorted.map((el) => activeDist[el])) : 0;
   for (const el of sorted) {
     const pct = activeDist[el];
     if (pct < 5) continue;
     const rules = ENERGY_RULES[el];
-    const intensity = pct >= 40 ? "strongly" : pct >= 25 ? "clearly" : "subtly";
-    parts.push(`${el} (${Math.round(pct)}%): ${intensity} — ${rules.form}. ${rules.lighting}. ${rules.spatial}. Material: ${rules.material}.`);
+    const rel = maxPct > 0 ? pct / maxPct : 1;
+    const tier =
+      rel >= 0.92 ? "primary-tier (top share)" :
+      rel >= 0.7 ? "strong co-lead" :
+      rel >= 0.45 ? "clear supporting" :
+      "accent-tier";
+    parts.push(
+      `${el} (~${Math.round(pct)}% profile, ${tier}): Aim for comparable sensory weight to ~${Math.round(pct)}% of the scene’s material + light + spatial read — ${rules.form} ${rules.lighting} ${rules.spatial} Material: ${rules.material}.`,
+    );
   }
   return parts.join(" ");
 };
 
 /** Build structured architectural behavior block — geometry, material weight, lighting, spatial hierarchy */
 const buildArchitecturalBehaviorBlock = (activeDist: Vector4): string => {
-  const sorted = (['earth', 'fire', 'water', 'air'] as Element[]).sort((a, b) => activeDist[b] - activeDist[a]);
+  const sorted = sortElementsByDistribution(activeDist);
+  const activeSorted = sorted.filter((el) => activeDist[el] >= 5);
+  const maxPct = activeSorted.length ? Math.max(...activeSorted.map((el) => activeDist[el])) : 0;
   const parts: string[] = [];
   for (const el of sorted) {
     const pct = activeDist[el];
     if (pct < 5) continue;
     const b = ELEMENT_ARCH_BEHAVIOR[el];
-    const intensity = pct >= 40 ? "primary" : pct >= 25 ? "supporting" : "trace";
-    parts.push(`${el.toUpperCase()} (${intensity}): Geometry — ${b.geometry}. Material weight — ${b.materialWeight}. Lighting — ${b.lightingLogic}. Spatial hierarchy — ${b.spatialHierarchy}.`);
+    const rel = maxPct > 0 ? pct / maxPct : 1;
+    const role =
+      rel >= 0.92 ? "co-primary / top share" :
+      rel >= 0.7 ? "strong secondary" :
+      rel >= 0.45 ? "supporting" :
+      "trace-to-accent";
+    parts.push(`${el.toUpperCase()} (${Math.round(pct)}%, ${role}): Geometry — ${b.geometry}. Material weight — ${b.materialWeight}. Lighting — ${b.lightingLogic}. Spatial hierarchy — ${b.spatialHierarchy}.`);
   }
   return parts.join(" ");
 };
@@ -721,8 +770,8 @@ const SPACE_IDENTITY: Record<string, string> = {
   'Living / Residential': 'This is a PRIVATE RESIDENTIAL interior — a home where people live. It must feel domestic, personal, warm, and intimate. Residential furniture scale, personal belongings visible, homely comfort.',
   'Office / Workspace': 'This is a PROFESSIONAL WORKSPACE — an office environment for working. It must feel organized, functional, and corporate-appropriate. Desks, task chairs, monitors, meeting spaces. NOT a home.',
   'Hospitality': 'This is a HOSPITALITY venue — a hotel, boutique hotel, or hospitality space designed for guests. It must feel welcoming, luxurious, and service-oriented. Reception, concierge, guest amenities visible.',
-  'Restaurant / Cafe': 'This is a RESTAURANT or CAFE — a commercial dining/drinking establishment for paying customers. It MUST have MULTIPLE dining tables or cafe seating set for service, a visible bar or barista counter, menu/wine displays, commercial-grade furniture, service circulation. This is NOT a home dining room. It must feel like a real restaurant or coffee shop you would walk into. Barista equipment, espresso machines, pastry displays for cafe; full table settings for restaurant.',
-  'Retail / Public Interior': 'This is a RETAIL or PUBLIC COMMERCIAL space — a shop, showroom, or public interior. Display fixtures, product shelving, checkout counter, wayfinding signage, commercial-grade lighting. NOT a residential space.',
+  'Restaurant / Cafe': 'This is a RESTAURANT or CAFE — a commercial dining/drinking establishment for paying customers. It MUST have MULTIPLE dining tables or cafe seating set for service, a visible bar or barista counter, menu/wine displays, commercial-grade furniture, service circulation. This is NOT a home dining room. It must feel like a real restaurant or coffee shop you would walk into. Barista equipment, espresso machines, pastry displays for cafe; full table settings for restaurant. Façade and street-facing enclosure must read as COMMERCIAL: large-format glazing, curtain wall, clerestory, or integrated stained glass / art glass — never suburban house windows.',
+  'Retail / Public Interior': 'This is a RETAIL or PUBLIC COMMERCIAL space — a shop, showroom, or public interior. Display fixtures, product shelving, checkout counter, wayfinding signage, commercial-grade lighting. NOT a residential space. Storefront and public envelope must use commercial architectural glazing or feature stained glass / leaded glass as a primary design move where appropriate — not domestic PVC sash or cottage-style house windows.',
   'Private House': 'This is a PRIVATE HOUSE interior — a residential home. It must feel domestic, personal, and lived-in. Home furnishings, personal objects, family-scale spaces.',
   'Residential Building': 'This is a RESIDENTIAL BUILDING — an apartment or residential unit. Standard residential features: entryway, living spaces, domestic scale.',
   'Commercial Building': 'This is a COMMERCIAL BUILDING interior — professional, business-grade space. Corporate materials, commercial lighting, professional furniture, organized zones.',
@@ -735,8 +784,8 @@ const ROOM_CONTEXT_MODIFIERS: Record<string, Record<string, string>> = {
   'Restaurant / Cafe': {
     'Dining': 'This is a RESTAURANT DINING HALL — NOT a home dining room. It must have MULTIPLE separate dining tables (at least 4-8 visible), each with full table settings (plates, glasses, napkins, cutlery). Upholstered banquette seating along walls, loose chairs at center tables. Pendant lighting over each table. Service circulation between tables (min 120cm). Visible bar or service station in background. Commercial atmosphere — guests dining, wine bottles, candle holders.',
     'Bar': 'This is a RESTAURANT/CAFE BAR — a fully equipped cocktail/wine/coffee bar. Back-bar with shelved spirits or coffee equipment, bar counter with stools, ambient bar lighting. Commercial atmosphere.',
-    'Cafe': 'This is a CAFE SPACE — barista counter with espresso machine (La Marzocca or similar), grinder, drip station, pastry display case, POS system, cup stacks. Multiple small tables and lounge seating, menu boards, warm inviting lighting. Specialty coffee shop atmosphere.',
-    'Coffee Shop': 'This is a COFFEE SHOP — a cozy, specialty third-wave coffee environment. Prominent barista bar with professional espresso machine (La Marzocca, Victoria Arduino, or Synesso), hand-brew station (V60, Chemex), grinder setup. Pastry/bakery display, artisan cups and ceramics. Mix of communal wooden tables, window counter seating, and soft lounge corners. Exposed bulb or pendant warm lighting, chalkboard or minimal menu boards, potted plants, books, curated playlist vibe. Warm, inviting, indie-creative atmosphere — NOT a fast-food chain. Specialty coffee culture.',
+    'Cafe': 'This is a CAFE SPACE — barista counter with espresso machine (La Marzocca or similar), grinder, drip station, pastry display case, POS system, cup stacks. Multiple small tables with café chairs and/or stools (not residential sofas), menu boards, warm inviting lighting. Specialty coffee shop atmosphere.',
+    'Coffee Shop': 'This is a COFFEE SHOP — a cozy, specialty third-wave coffee environment. Prominent barista bar with professional espresso machine (La Marzocca, Victoria Arduino, or Synesso), hand-brew station (V60, Chemex), grinder setup. Pastry/bakery display, artisan cups and ceramics. Seating = café chairs, stools, window counter, communal table with chairs/stools — NOT sofas or sectional lounge as primary furniture. Exposed bulb or pendant warm lighting, chalkboard or minimal menu boards, potted plants, books, curated playlist vibe. Warm, inviting, indie-creative atmosphere — NOT a fast-food chain. Specialty coffee culture. Façade: full-height commercial storefront or curtain-wall bays, OR stained glass / art-glass on façade, entrance, or clerestory (logical light architecture) — if vitrage is used, the bar sits on a different service-capable wall or island, not stacked on the stained-glass plane. Never a house-like living-room window.',
     'Terrace': 'This is a RESTAURANT/CAFE TERRACE — an outdoor dining area for guests. Multiple tables with weather-appropriate settings, outdoor lighting, planters or greenery, protective canopy or parasols. Commercial outdoor dining.',
     'VIP Lounge': 'This is a VIP LOUNGE in a restaurant — private or semi-private seating area with premium furniture, ambient mood lighting, curated art, wine display or private bar. Intimate, exclusive, refined atmosphere.',
     'Restroom': 'This is a RESTAURANT/CAFE RESTROOM — designer-grade guest restroom with premium fixtures, statement mirror, quality tiles, ambient lighting, designer soap dispenser. Must feel curated and on-brand with the venue.',
@@ -766,6 +815,55 @@ const ROOM_CONTEXT_MODIFIERS: Record<string, Record<string, string>> = {
     'Restroom': 'This is a PUBLIC RESTROOM in a retail space — clean, modern, accessible, quality fixtures, good lighting.',
   },
 };
+
+// ── COMMERCIAL / PUBLIC VENUE — vitrage, façade glazing, MEP realism ──
+const COMMERCIAL_PUBLIC_INTERIOR_CATEGORIES = new Set<string>([
+  'Restaurant / Cafe',
+  'Retail / Public Interior',
+  'Hospitality',
+  'Commercial Building',
+  'Cultural / Public Architecture',
+]);
+
+const isCommercialPublicInteriorCategory = (category: string): boolean =>
+  COMMERCIAL_PUBLIC_INTERIOR_CATEGORIES.has(category);
+
+/** Stained glass + commercial glazing vs residential window clichés */
+const COMMERCIAL_GLAZING_VITRAGE_BLOCK = `COMMERCIAL FAÇADE, VITRAGE & GLAZING (MANDATORY for this project class): Coffee shops, restaurants, bars, cafés, bakeries, and similar PUBLIC commercial venues must read as built for paying guests — not a private house. Where exterior light or street context appears, the envelope must be ARCHITECTURAL COMMERCIAL: structural glass walls, slim steel or aluminum curtain-wall mullions, ribbon or clerestory glazing, brise-soleil, or deep façade bays — never suburban cottage sash, tilt-turn PVC “home” windows, or living-room curtains on domestic frames.
+
+STAINED GLASS / VITRAGE: Treat art glass as a CORE design element when appropriate — full-height or large-format leaded/stained glass panels, laminated art-glass feature walls, heritage revival tracery, or contemporary abstract vitrage integrated into partitions and entrances. It must be a complete architectural surface (readable cames, joints, support structure, realistic transmission of light), not a tiny hung picture. If the brief does not specify vitrage, still avoid residential window typology: default to commercial storefront or curtain-wall composition.
+
+VITRAGE PLACEMENT — LOGICAL ONLY (mandatory when stained glass / vitrage appears): Put vitrage where real buildings put architectural glazing or art glass — street façade, entrance portal, clerestory band, partition between public zones, or a dedicated feature wall meant for light and identity. Do NOT run the primary bar, barista counter, or drink rail along the same plane as a full stained-glass feature in a way that stacks shelves, equipment, or back-bar storage on the art-glass surface. Where vitrage exists, that surface stays readable as glass/light architecture — the bar belongs on a different wall or on a freestanding island with a service-capable substrate (solid wall, stone, tile, metal, joinery) for MEP, drainage, and ergonomics. Vitrage zone ≠ bar zone unless separated orthogonally (e.g. vitrage on façade wall, bar along side wall).
+
+FORBIDDEN for this category: façades that look like a detached house, domestic French doors with net curtains, or small punched openings that belong in residential living rooms.`;
+
+/** All interiors: circulation, bar logic, simplicity — complements program-specific rules */
+const PRACTICAL_LAYOUT_SIMPLICITY_BLOCK = `PRACTICAL LAYOUT & OPERATIONAL REALISM (mandatory): Design for real entry, movement, and daily operation. Clear paths: ingress from entrance toward service and seating; egress and staff routes readable; customer aisles typically ≥90 cm, service/tray paths ≥120 cm where F&B applies. Bars and counters sit on walls or islands that logically carry power, water, drainage, and storage — not arbitrary floating sculptures. If stained glass or vitrage is in the scene, keep it on façade, entrance, clerestory, or dedicated feature surface — never use the stained-glass plane as the main bar back with equipment mounted through it. Avoid dead-end furniture, blocked doors, purely decorative volumes that waste floor plate, and formal gimmicks that contradict running the space. Prefer straightforward zoning (serve / sit / wait / circulate) with modest complexity — legible and easy to operate, not a maze.`;
+
+const FURNITURE_SERVICE_LINE_SANITY_BLOCK = `FURNITURE vs BAR / SERVICE COUNTER (mandatory wherever a bar, barista counter, or long service run appears): NEVER place sofas, sectionals, or deep lounge upholstery leaning on, fused to, or jammed against the bar face — that creates fake “living room” staging, blocks knee space, and leaves absurd unreachable voids behind furniture. Bar seating = stools with proper overhang and aisle; nearby loose seating = chairs and small tables on walkable floor, with full perimeter circulation for staff and guests. Every seat must be reachable and usable — no purely decorative clusters that ignore ergonomics.`;
+
+const CAFE_COFFEE_SEATING_BLOCK = `CAFÉ / COFFEE SHOP TYPOLOGY (mandatory when the room is Café or Coffee Shop): Residential-scale sofas and sectionals are NOT appropriate — omit them by default. Seating vocabulary = café chairs, bar stools, counter stools, small 2-top and 4-top tables, communal high table with stools, optional compact bench along a wall or short window perch — never a bulky sofa as the hero. Armchairs at most in low count if m² allows and always away from the service line. The image must read as a working specialty-coffee floor, not a living room with an espresso machine.`;
+
+const buildCommercialCeilingMepBlock = (
+  areaM2: number,
+  ceilingH: number,
+  firePct: number,
+  primary: Element,
+): string => {
+  const fireHeavy = primary === 'fire' || firePct >= 32;
+  const volumeHint = `Approximate treated volume scales with ~${areaM2}m² floor plate and ~${ceilingH}m ceiling — diffuser count, grille size, and equipment scale must feel credible (not one toy vent in a large hall).`;
+
+  const base = `CEILING & MEP / HVAC REALISM (COMMERCIAL — construction-grade): Show believable building services integrated with architecture. Include visible SUPPLY air: linear slot diffusers, square perforated supply grilles, or plenum slot details coordinated with lighting. Include RETURN / EXHAUST: return grilles, perforated metal ceiling zones, or paired bar grilles in logical locations relative to supply. ${volumeHint} Sprinklers: pendant heads or concealed cover plates on a believable grid where suspended ceiling or open slab rules apply. Coordination: diffusers, lights, and sprinklers share orthogonal grids or clear axes — no random floating services.`;
+
+  const fireIndustrial = fireHeavy
+    ? ` FIRE-DOMINANT OR HIGH-FIRE SHARE: Prefer stronger industrial / hospitality-kitchen language where it fits: OPEN SLAB or EXPOSED MEP — blackened or galvanized duct mains, cable tray, acoustic baffles, expanded-metal or mesh ceiling zones, or spray-fireproofed structure. Where cooking, open flame, or bar-kitchen back-of-house is implied, show EXHAUST CANOPY / grease-rated hood geometry, larger extract grilles, and heavier duct scale. Heating & cooling: plausible terminal layout — cassettes, linear active chilled beams, high-wall FCUs, or bulkhead-concealed duct with linear grilles — multiple terminals or large-format units sized for the room volume, not a single undersized residential split indoor unit unless the space is tiny.`
+
+    : ` Heating/cooling terminals should still be visible or implied with correct scale for the room — commercial cassette, slot, or bulkhead linear grilles — distributed in a logical engineer’s layout.`;
+
+  return `${base}${fireIndustrial}`;
+};
+
+const COMMERCIAL_RENDER_EXCELLENCE_BLOCK = `OUTPUT QUALITY (COMMERCIAL / PUBLIC): Aim for ultra-high-end contemporary arch-viz and editorial photography — tack-sharp materials, refined global illumination, no plastic CGI gloss, no floating objects. Furnish with current-market, professional-grade FF&E and recognizable fixture families. Glass, metal, stone, and wood must show real depth, micro-reflection, and installation detail (gaskets, mullions, shadow gaps). The frame must feel like a photograph of a finished venue ready to open — believable occupancy, code-plausible services, and objects that exist at premium contract standards.`;
 
 // ── ROOM-TYPE INTELLIGENCE ──
 // Each room type defines its architectural program: required furniture, forbidden items,
@@ -843,7 +941,7 @@ const ROOM_PROGRAMS: Record<string, {
     layoutLogic: 'Transit space — minimal furniture, maximum flow. Wall art or feature materials for visual interest. Lighting recessed or wall-mounted.',
   },
   'Lobby': {
-    requiredElements: ['reception or focal point', 'seating area', 'clear wayfinding', 'feature lighting'],
+    requiredElements: ['reception or focal point', 'seating area', 'clear wayfinding', 'feature lighting', 'large-format commercial glazing, curtain-wall entry, or grand stained glass / art-glass feature appropriate to a public lobby'],
     forbiddenItems: ['bed', 'kitchen appliances', 'bathroom fixtures'],
     materialPriority: 'premium stone flooring, feature wall in stone or wood, metal accents, statement lighting',
     cameraHint: 'eye-level from entrance showing reception and volume, 24-30mm',
@@ -851,19 +949,19 @@ const ROOM_PROGRAMS: Record<string, {
     layoutLogic: 'Arrival experience. Reception desk visible immediately. Seating grouped but not blocking flow. Dramatic vertical lighting.',
   },
   'Restaurant': {
-    requiredElements: ['MULTIPLE dining tables (at least 4-6 visible, set with plates/glasses/napkins)', 'upholstered banquette seating along at least one wall', 'bar counter or service station with stools', 'pendant or candle lighting over each table', 'waiter circulation paths between tables'],
+    requiredElements: ['MULTIPLE dining tables (at least 4-6 visible, set with plates/glasses/napkins)', 'upholstered banquette seating along at least one wall', 'bar counter or service station with stools', 'pendant or candle lighting over each table', 'waiter circulation paths between tables', 'commercial envelope glazing: full-height storefront/curtain-wall OR large stained glass / art-glass feature (integral, not house windows)'],
     forbiddenItems: ['bed', 'bathtub', 'office desk', 'residential wardrobe', 'residential sofa', 'home bookshelf'],
     materialPriority: 'mix of textures — wood or marble tables, upholstered banquettes in leather or velvet, stone or tile floor, metal/glass bar, acoustic ceiling panels',
     cameraHint: 'eye-level from entry showing depth of dining room with multiple tables receding into space, 28-35mm',
-    spatialRules: 'Min 120cm between table edges for service circulation. Bar area distinct from dining. Acoustic treatment on ceiling or walls. Mix of 2-top and 4-top arrangements. Tables set with full place settings.',
+    spatialRules: 'Min 120cm between table edges for service circulation. Bar or open-kitchen counter scaled to m² — large dining hall = long service front + real back-of-house read; small venue = shorter but still functional line. Bar area distinct from dining. Acoustic treatment on ceiling or walls. Mix of 2-top and 4-top arrangements. Tables set with full place settings.',
     layoutLogic: 'Zones: bar, intimate dining, group dining. Banquette along walls. Loose tables in center. Lighting creates intimacy per table. Wine storage or display visible.',
   },
   'Bar': {
-    requiredElements: ['long bar counter with bar stools (at least 6-8 seats)', 'back-bar with shelved spirits and glassware', 'cocktail preparation area', 'ambient/mood lighting', 'small cocktail tables or high-tops'],
+    requiredElements: ['long bar counter with bar stools (at least 6-8 seats)', 'back-bar with shelved spirits and glassware', 'cocktail preparation area', 'ambient/mood lighting', 'small cocktail tables or high-tops', 'street-facing or perimeter glazing reads as commercial bar (curtain wall, steel windows, or stained glass feature — not residential sash)'],
     forbiddenItems: ['bed', 'bathtub', 'office desk', 'kitchen stove', 'residential furniture'],
     materialPriority: 'dark wood or stone bar top, metal bar rail, leather or upholstered bar stools, tile or stone floor, moody wall treatment',
     cameraHint: 'eye-level showing length of bar counter with back-bar visible, 28-32mm',
-    spatialRules: 'Bar counter height 105-110cm. Bar stools 75cm height. Min 150cm behind bar for bartender. Back-bar within arm reach. Cocktail tables off main bar area.',
+    spatialRules: 'Bar counter height 105-110cm. Bar stools 75cm height. Min 150cm behind bar for bartender. Back-bar within arm reach. Cocktail tables off main bar area. BAR FRONTAGE MUST SCALE WITH ROOM m² — long room = long continuous rail (or segmented) with believable stool count; never a short toy bar in a large volume.',
     layoutLogic: 'Bar is the focal point. Stools face bartender. Back-bar lit for display. Lounge seating creates secondary zone. Low intimate lighting.',
   },
   'Lounge': {
@@ -891,20 +989,20 @@ const ROOM_PROGRAMS: Record<string, {
     layoutLogic: 'Outdoor living. Seating oriented toward best view. Greenery creates privacy/enclosure. Lighting for evening use.',
   },
   'Cafe': {
-    requiredElements: ['barista counter with espresso machine', 'pastry display case', 'multiple small tables and chairs', 'menu board or display', 'ambient lighting'],
-    forbiddenItems: ['bed', 'bathtub', 'office cubicle', 'residential wardrobe'],
-    materialPriority: 'warm wood surfaces, tile or concrete counter, copper/brass accents, comfortable seating mix',
+    requiredElements: ['barista counter with espresso machine', 'pastry display case', 'multiple small tables with café chairs and/or stools (sofas omitted)', 'menu board or display', 'ambient lighting', 'large-format commercial glazing or integrated stained glass / art-glass (venue character — not domestic windows)'],
+    forbiddenItems: ['bed', 'bathtub', 'office cubicle', 'residential wardrobe', 'residential sofa or sectional as main seating', 'sofa leaning on bar counter'],
+    materialPriority: 'warm wood surfaces, tile or concrete counter, copper/brass accents, café chairs and stools',
     cameraHint: 'eye-level from entrance showing counter and seating depth, 28-32mm',
-    spatialRules: 'Counter prominent from entrance. Mix of bar stools at window, small 2-tops, and lounge seating. Queue space in front of counter. Min 90cm circulation.',
+    spatialRules: 'Barista counter prominent from entrance — LENGTH and DEPTH proportional to stated m² (large café = long service run + real back bar; small = compact but still operator-usable). Mix of bar stools at window, small 2-tops with café chairs — no sofa clusters. Queue strip 1.2m+ clear in front. Min 90cm circulation aisles.',
     layoutLogic: 'Coffee shop flow: enter, queue, order, sit. Counter as hero element. Varied seating for solo and groups. Warm inviting atmosphere.',
   },
   'Coffee Shop': {
-    requiredElements: ['professional espresso machine (La Marzocca/Victoria Arduino)', 'hand-brew station (V60, Chemex)', 'coffee grinder setup', 'pastry/bakery display', 'artisan ceramic cups', 'communal wooden table', 'window counter with stools', 'soft lounge corner', 'pendant or exposed-bulb warm lighting', 'chalkboard or minimal menu'],
-    forbiddenItems: ['bed', 'bathtub', 'office cubicle', 'formal dining table settings', 'fast-food branding'],
+    requiredElements: ['professional espresso machine (La Marzocca/Victoria Arduino)', 'hand-brew station (V60, Chemex)', 'coffee grinder setup', 'pastry/bakery display', 'artisan ceramic cups', 'communal table with café chairs or stools (not a sofa)', 'window counter with stools', 'café chairs and/or bar stools at small tables', 'pendant or exposed-bulb warm lighting', 'chalkboard or minimal menu', 'façade reads as specialty café: storefront/curtain-wall OR prominent stained glass / leaded glass feature wall or partition (full composition)'],
+    forbiddenItems: ['bed', 'bathtub', 'office cubicle', 'formal dining table settings', 'fast-food branding', 'residential sofa or sectional', 'sofa or sectional against or merged with the bar'],
     materialPriority: 'natural oak or walnut surfaces, exposed brick or raw plaster walls, terrazzo or concrete floors, copper/brass barista fixtures, woven textiles, ceramic and stoneware',
     cameraHint: 'eye-level from entrance capturing barista bar and seating depth, warm natural light from window, 28-32mm',
-    spatialRules: 'Barista counter as focal hero element near entrance. Window counter seating for solo guests. Communal table in center. Soft lounge area in back. Min 90cm circulation. Plants and greenery accents.',
-    layoutLogic: 'Third-wave coffee experience: enter, admire the bar, order, choose your seat type (solo window, communal, lounge). Warm indie-creative atmosphere. Books, plants, curated objects. NOT a chain — artisan specialty culture.',
+    spatialRules: 'Barista bar is the spatial anchor — its customer-facing run must LOOK sized for the room m² (wide/deep plate → long or L-shaped bar, multiple machine groups + grinder bank + brew bar + display; tiny kiosk → short but thick counter, not a dollhouse strip in a warehouse). Queue + order zone in front. Window counter + stools; tables with café chairs — no sofa blocking or leaning on the bar; no dead trapped space behind furniture. Min 90cm circulation; staff paths ~120cm where possible. Plants and greenery accents.',
+    layoutLogic: 'Third-wave coffee experience: enter, admire the bar, order, sit at stool, window, or table with chairs. Warm indie-creative atmosphere. Books, plants, curated objects. NOT a chain — artisan specialty culture. NOT a living room.',
   },
   'VIP Lounge': {
     requiredElements: ['premium upholstered seating', 'cocktail or wine service area', 'mood lighting', 'curated art or decor'],
@@ -955,7 +1053,7 @@ const ROOM_PROGRAMS: Record<string, {
     layoutLogic: 'Variety of work modes: focus, collaborate, socialize. Hot-desk area, lounge, meeting pods, kitchen.',
   },
   'Shop': {
-    requiredElements: ['product display fixtures or shelving', 'checkout counter', 'fitting room or consultation area', 'commercial lighting highlighting products'],
+    requiredElements: ['product display fixtures or shelving', 'checkout counter', 'fitting room or consultation area', 'commercial lighting highlighting products', 'public-facing glazing: display windows, curtain-wall shopfront, or feature art-glass — not residential house windows'],
     forbiddenItems: ['bed', 'bathtub', 'office desk', 'residential furniture'],
     materialPriority: 'display-focused — clean shelving, branded fixtures, spot lighting, premium floor',
     cameraHint: 'eye-level from entrance showing product displays and depth, 24-28mm',
@@ -1067,20 +1165,32 @@ const buildClientEnergyHarmonyBlock = (
   const a = Math.round(activeDist.air);
   const primPct = Math.round(activeDist[primary]);
   const secPct = Math.round(activeDist[secondary]);
+  const balanced = isBalancedElementBlend(activeDist as Vector4);
+
+  if (balanced) {
+    const orderHint =
+      primPct === secPct
+        ? `${primary.toUpperCase()} / ${secondary.toUpperCase()} order is a UI tie-break only — perceived visual shares must stay close to the stated percentages.`
+        : `${primary.toUpperCase()} (${primPct}%) and ${secondary.toUpperCase()} (${secPct}%) lead numerically but stay within a tight band — do not collapse the room into a single-element story.`;
+    return `CLIENT ENERGY PROFILE (balanced / near-equal blend — adapt; never illustrate literal elements): Earth ${e}%, Fire ${f}%, Water ${w}%, Air ${a}%. This is a HARMONIOUS MULTI-WAY MIX: each energy owns roughly its share of readable atmosphere — distribute across zones and layers (floor plane, wall treatments, furniture mass, joinery, lighting temperature, metal accents, reflective vs matte passages). ${orderHint} Earth ≈ tactile warmth & mass; Fire ≈ contrast & drama; Water ≈ fluid reflectivity & calm; Air ≈ light, openness & futurist clarity — all co-present in proportion. One photographable interior, intentionally fusion — not four unrelated styles fighting.`;
+  }
+
   const tertiary = sorted.filter((el) => el !== primary && el !== secondary && Math.round(activeDist[el]) >= 8);
   const trace =
     tertiary.length > 0
-      ? ` Weaker shares (${tertiary.map((x) => `${x} ${Math.round(activeDist[x])}%`).join(', ')}) appear only as subtle traces — texture, object choice, or lighting nuance — never as a competing style.`
+      ? ` Weaker shares (${tertiary.map((x) => `${x} ${Math.round(activeDist[x])}%`).join(', ')}) stay honest to their percentage — present as calibrated layers (texture, object choice, lighting nuance, selective zones), never erased and never pretending to be a second dominant.`
       : '';
-  return `CLIENT ENERGY PROFILE (adapt — never illustrate literal elements): Earth ${e}%, Fire ${f}%, Water ${w}%, Air ${a}%. ${primary.toUpperCase()} at ${primPct}% DOMINATES — largest surfaces, spatial proportions, and overall light mood follow this logic first. ${secondary.toUpperCase()} at ${secPct}% HARMONIZES as the designed counter-accent (furniture, metal temperature, selective zones, focal contrast) — coordinated, not fighting the dominant.${trace} One coherent narrative a photographer could caption in one sentence.`;
+  return `CLIENT ENERGY PROFILE (adapt — never illustrate literal elements): Earth ${e}%, Fire ${f}%, Water ${w}%, Air ${a}%. ${primary.toUpperCase()} at ${primPct}% leads — largest surfaces, spatial proportions, and overall light mood follow this logic first. ${secondary.toUpperCase()} at ${secPct}% harmonizes as the designed counter-accent (furniture, metal temperature, focal contrast) at a strength matching its share.${trace} One coherent narrative a photographer could caption in one sentence.`;
 };
 
 const buildSessionPassBlock = (ordinal: number): string => {
   const pass = ordinal + 1;
+  const dimLock =
+    ' Stated floor area (m²) and ceiling height are fixed brief datums — do not enlarge or shrink the room versus prior passes; only refine detail, materials, and realism.';
   if (ordinal <= 0) {
     return `SESSION GENERATION PASS ${pass}: Establish elemental hierarchy and a fully buildable, photographable space. Favor contractor-grade realism over stylization.`;
   }
-  return `SESSION GENERATION PASS ${pass} (progressive refinement): Increase micro-realism versus a generic visualization — sharper material transitions, clearer manufacturer-level product reads, more disciplined lighting, calmer coordination so secondary energies support (not dilute) the dominant. Every specified finish must be visible and correctly zoned.`;
+  return `SESSION GENERATION PASS ${pass} (progressive refinement): Increase micro-realism versus a generic visualization — sharper material transitions, clearer manufacturer-level product reads, more disciplined lighting, calmer coordination so secondary energies support (not dilute) the dominant. Every specified finish must be visible and correctly zoned.${dimLock}`;
 };
 
 const COMPOSITION_STRATEGIES = [
@@ -1091,6 +1201,156 @@ const COMPOSITION_STRATEGIES = [
   { name: 'window-focal', desc: 'Window or glass wall as primary light source and focal point. Interior arranged toward and lit by this natural light source. Strong light-to-dark gradient.' },
   { name: 'sectional-divide', desc: 'Room visually divided into foreground zone and background zone by a material change, level change, or furniture arrangement. Two distinct but connected spatial experiences.' },
 ] as const;
+
+// ── HUMAN-READABLE SCALE (authoritative floor + ceiling — model must obey) ──
+const buildHumanScaleAndProportionBlock = (
+  areaM2: number,
+  ceilingH: number,
+  spaceCategory: string,
+  primaryRoom: string | null,
+): string => {
+  const vol = Math.round(areaM2 * ceilingH);
+  const program = primaryRoom ? `${primaryRoom} (${spaceCategory})` : spaceCategory;
+  const side = Math.sqrt(Math.max(areaM2, 1));
+  const sideStr = side.toFixed(2);
+
+  const footprint =
+    areaM2 < 28
+      ? 'This is a SMALL, TIGHT footprint: show essentially one main usable zone in frame — not a vast hall, not multiple unrelated wings. Furniture count and circulation stay minimal and believable.'
+      : areaM2 < 65
+        ? 'This is a COMPACT-TO-MEDIUM room: one clear primary zone plus perhaps a secondary nook — avoid duplicate “second rooms” stretching unrealistically far.'
+        : areaM2 < 130
+          ? 'This is a MEDIUM-LARGE open plate: you may show two related zones (e.g. seating + bar) with honest spacing — still proportional to the m² count, not endless depth.'
+          : areaM2 < 280
+            ? 'This is a LARGE venue floor: multiple seating clusters, clear circulation spine, repeated structural or lighting rhythm — density of furniture and services must scale up; never a near-empty aircraft hangar with one sofa.'
+            : 'This is a VERY LARGE public or commercial plate: grand volume, bays, possible double-height or mezzanine hints — MEP and lighting counts must look like a real engineered space, not an oversized void with tiny props.';
+
+  const vertical =
+    ceilingH < 2.55
+      ? 'Ceiling is RELATIVELY LOW: human figures nearly touch the perceived headroom; shallow coffers or flush services; door/window heads align with this datum — no double-height drama.'
+      : ceilingH < 3.05
+        ? 'Ceiling is TYPICAL residential / small commercial: ~2.5–3.0 m mentality — standard doors ~2.1 m, pendants and services in normal proportion.'
+        : ceilingH < 4.2
+          ? 'Ceiling is TALL / loft-like: show the extra vertical air — taller glazing heads, longer pendants, mezzanine edge or clerestory only if it fits the program; do not compose as if the room were 2.8 m high.'
+          : 'Ceiling is VERY HIGH or double-height: monumentality is appropriate — feature stair, gallery rail, industrial roof structure, or layered lighting; verticals must read tall in the frame.';
+
+  return [
+    'ROOM SIZE — READ THIS LIKE A REAL CLIENT BRIEF (mandatory for proportions; plain language):',
+    `• The space you are photographing is ${areaM2} m² on the floor plan, with a clear ceiling height of ${ceilingH} m — treat these as exact design datums, not loose hints.`,
+    `• FLOOR PLATE ANCHOR: If this plan were a square, each side would be ~${sideStr} m (√${areaM2}); elongated plans must keep the same total floor area — the visible room must not read like 2× or 3× this footprint (no aircraft-hangar void for a small m² count).`,
+    `• Rough enclosed volume ~${vol} m³ — diffuser counts, fixture density, and how filled the room feels must match this volume.`,
+    `• Program label for sanity check: ${program}. If the program would not physically fit this m², simplify: realism and these dimensions win over cramming impossible furniture.`,
+    footprint,
+    vertical,
+    'Do not output dollhouse scale, endless empty floors, or ceilings that visibly contradict the stated height. Every person, door, window, and chair must look consistent with these dimensions.',
+    'EQUIPMENT & BUILT-IN SCALE: Bars, barista counters, reception desks, kitchen/service lines, pastry/display cases, and back-bar volumes are ARCHITECTURAL JOINERY — their frontage length and depth must track the stated m² (large plate = long or multi-station run + real back-of-house depth; small plate = compact but still code-plausible). Never a toy-sized bar floating in a large empty room; never a banquet block that eats an implausible share of a tiny footprint. Circulation stays practical (typically ≥90 cm customer aisles, ≥120–150 cm where staff pass with trays).',
+  ].join(' ');
+};
+
+/**
+ * Program-specific front-of-house dimensions vs floor plate — fixes café/bar renders that read as dollhouse props.
+ */
+const buildProgramEquipmentScaleBlock = (
+  areaM2: number,
+  ceilingH: number,
+  primaryRoom: string | null,
+  spaceCategory: string,
+): string => {
+  const room = primaryRoom || '';
+  const coffeeLike = room === 'Coffee Shop' || room === 'Cafe';
+  const barLike = room === 'Bar';
+  const restaurantLike = room === 'Restaurant' || room === 'Seating';
+  const counterLike = room === 'Counter';
+  const lobbyLike = room === 'Lobby' || room === 'Reception';
+  const shopLike = room === 'Shop';
+  const categoryRestaurantCafe = spaceCategory === 'Restaurant / Cafe';
+
+  const explicitProgram =
+    coffeeLike || barLike || restaurantLike || counterLike || lobbyLike || shopLike;
+
+  if (!explicitProgram && !categoryRestaurantCafe) {
+    return '';
+  }
+
+  const head =
+    `PROGRAM EQUIPMENT SCALE (mandatory — match ~${areaM2} m² × ~${ceilingH} m): ` +
+    `Lay out like a real operator brief: front-of-house run length, equipment count, and seat count must feel credible for this footprint. ` +
+    `The bar/counter must occupy a convincing fraction of the room width or depth in frame — proportional, practical circulation, no miniature hero counter in a hall.`;
+
+  const chunks: string[] = [];
+
+  if (coffeeLike) {
+    if (areaM2 < 32) {
+      chunks.push(
+        `COFFEE / CAFÉ (compact ~${areaM2} m²): customer-facing barista front typically ~2.4–4.5 m total (straight or short L); one professional espresso group line + grinders + compact brew/rinse; pastry case ~0.9–1.6 m; clear queue/order zone ~1.2–2.2 m in front; ~4–16 seats (2-tops, window rail, small bench) — believable density, not a corridor of empty floor.`,
+      );
+    } else if (areaM2 < 75) {
+      chunks.push(
+        `COFFEE / CAFÉ (medium ~${areaM2} m²): main service front ~4–8.5 m (L or straight + optional second POS); grinder bank + pour-over bar + display readable; queue depth ~2–3.5 m; ~16–40 seats in mixed typologies (2-top, 4-top, communal).`,
+      );
+    } else if (areaM2 < 140) {
+      chunks.push(
+        `COFFEE / CAFÉ (large ~${areaM2} m²): extended bar run ~7–14 m or segmented stations; back counter depth ~90–140 cm workable; secondary cold case or retail wall possible; seating scales up with multiple clusters — still a full venue, not one tiny island.`,
+      );
+    } else {
+      chunks.push(
+        `COFFEE / CAFÉ (venue / flagship ~${areaM2} m²): very long or multi-module bar, possible duplicate service line or central island; displays and seating at real commercial density — dozens of covers in distinct zones; MEP and lighting count match volume.`,
+      );
+    }
+  }
+
+  if (barLike) {
+    if (areaM2 < 45) {
+      chunks.push(
+        `BAR (compact): main drink rail ~3–5.5 m with 5–12 stools; back-bar and speed rail scaled to length — not a postage-stamp counter.`,
+      );
+    } else if (areaM2 < 120) {
+      chunks.push(
+        `BAR (medium–large ~${areaM2} m²): continuous or broken front ~6–14 m; 12–35+ stools where layout allows; underbar, ice, and glasswasher implied by length; lounge high-tops secondary.`,
+      );
+    } else {
+      chunks.push(
+        `BAR (venue ~${areaM2} m²): long run, island, or multiple bars; several bartender work zones; back-bar wall or gantry at architectural scale.`,
+      );
+    }
+  }
+
+  if (restaurantLike && !coffeeLike) {
+    chunks.push(
+      `RESTAURANT / DINING: cover count and aisle width scale with ${areaM2} m² — larger floor = more tables with ~120–150 cm service aisles; small floor = fewer tables, still real place settings and working server paths.`,
+    );
+  }
+
+  if (counterLike) {
+    const runLo = Math.max(2.4, Math.min(14, 2 + areaM2 * 0.055));
+    const runHi = Math.max(runLo + 0.5, Math.min(16, 2.8 + areaM2 * 0.07));
+    chunks.push(
+      `SERVICE COUNTER: target customer-facing counter front ~${runLo.toFixed(1)}–${runHi.toFixed(1)} m for ~${areaM2} m² (narrow vs square plan may use L-shape); prep zone behind ~90–150 cm deep.`,
+    );
+  }
+
+  if (lobbyLike) {
+    const deskLo = Math.max(2.2, Math.min(11, 1.6 + areaM2 * 0.045));
+    const deskHi = Math.max(deskLo + 0.4, Math.min(14, 2.2 + areaM2 * 0.055));
+    chunks.push(
+      `RECEPTION / LOBBY: desk or concierge run ~${deskLo.toFixed(1)}–${deskHi.toFixed(1)} m band for ~${areaM2} m² — must read as built for the volume, not a tiny podium lost in space.`,
+    );
+  }
+
+  if (shopLike) {
+    chunks.push(
+      `RETAIL: checkout counter and service run proportional to shop width and ${areaM2} m² — fixture density and aisle length believable for the format.`,
+    );
+  }
+
+  if (chunks.length === 0 && categoryRestaurantCafe) {
+    chunks.push(
+      `RESTAURANT / CAFÉ (room type unspecified): scale any visible bar, barista counter, back-bar, and seating to ~${areaM2} m² — long frontage and believable equipment density on large floors; compact but complete station on small floors — never a miniature counter in an oversized empty volume.`,
+    );
+  }
+
+  return [head, ...chunks].join(' ');
+};
 
 // ── CAMERA SPECIFICATIONS BY ROOM SIZE ──
 const getCameraSpec = (areaM2: number, ceilingH: number, roomHint: string) => {
@@ -1120,15 +1380,20 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   const categoryModifiers = ROOM_CONTEXT_MODIFIERS[input.spaceCategory];
   const contextOverride = categoryModifiers && primaryRoom ? (categoryModifiers[primaryRoom] || '') : '';
 
-  const areaM2 = input.areaM2 || 100;
-  const ceilingH = input.constraints?.ceilingHeightM || 2.8;
+  const areaM2 = Math.max(8, Math.min(50000, Math.round(Number(input.areaM2) > 0 ? Number(input.areaM2) : 100)));
+  const rawCeil = input.constraints?.ceilingHeightM;
+  const ceilingH =
+    typeof rawCeil === 'number' && Number.isFinite(rawCeil) && rawCeil > 0
+      ? Math.max(2, Math.min(12, Math.round(rawCeil * 10) / 10))
+      : 2.8;
   const naturalLight = input.constraints?.naturalLight || 'medium';
   const colorPalette = input.constraints?.colorPalette || 'auto';
   const budgetLevel = input.constraints?.budgetLevel || 'premium';
 
-  const sorted = (['earth', 'fire', 'water', 'air'] as Element[]).sort((a, b) => activeDist[b] - activeDist[a]);
+  const sorted = sortElementsByDistribution(activeDist);
   const primary = sorted[0];
   const secondary = sorted[1];
+  const balancedBlend = isBalancedElementBlend(activeDist);
   const earthPct = Math.round(activeDist.earth);
   const firePct = Math.round(activeDist.fire);
   const waterPct = Math.round(activeDist.water);
@@ -1141,10 +1406,16 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   const genIdx = input.generationIndex ?? 0;
   const primaryPool = FURNITURE_BY_ELEMENT[primary];
   const secondaryPool = secondary !== primary ? FURNITURE_BY_ELEMENT[secondary] : [];
+  const tertiaryEl = sorted[2];
+  const tertiaryPool =
+    balancedBlend && tertiaryEl && FURNITURE_BY_ELEMENT[tertiaryEl]?.length
+      ? FURNITURE_BY_ELEMENT[tertiaryEl]
+      : [];
   const furnitureItems = [
     primaryPool[genIdx % primaryPool.length],
     primaryPool[(genIdx + 1) % primaryPool.length],
     ...(secondaryPool.length > 0 ? [secondaryPool[(genIdx + 2) % secondaryPool.length]] : []),
+    ...(tertiaryPool.length > 0 ? [tertiaryPool[(genIdx + 3) % tertiaryPool.length]] : []),
   ];
   const primaryLights = LIGHTING_BY_ELEMENT[primary];
   const secondaryLights = secondary !== primary ? LIGHTING_BY_ELEMENT[secondary] : [];
@@ -1158,10 +1429,14 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   // Decor items — cycle through for variety
   const decorPool = DECOR_BY_ELEMENT[primary];
   const secDecorPool = secondary !== primary ? DECOR_BY_ELEMENT[secondary] : [];
+  const quatEl = sorted[3];
+  const quatDecorPool =
+    balancedBlend && quatEl && DECOR_BY_ELEMENT[quatEl]?.length ? DECOR_BY_ELEMENT[quatEl] : [];
   const decorItems = [
     decorPool[genIdx % decorPool.length],
     decorPool[(genIdx + 3) % decorPool.length],
     ...(secDecorPool.length > 0 ? [secDecorPool[(genIdx + 1) % secDecorPool.length]] : []),
+    ...(quatDecorPool.length > 0 ? [quatDecorPool[(genIdx + 4) % quatDecorPool.length]] : []),
   ];
 
   // Wall treatment — cycle through for variety
@@ -1196,7 +1471,7 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   const userAdjectives = input.adjectivesSelected.map(a => a.label);
   const atmosphereBlock = userAdjectives.length > 0
     ? `Atmosphere requirements: ${userAdjectives.join(', ')}. These define the experiential character — every material, light source, and spatial proportion must reinforce these qualities.`
-    : `Atmosphere: ${profile.atmospherePhrases.slice(0, 4).join(', ')}.`;
+    : `Atmosphere: ${profile.atmospherePhrases.slice(0, balancedBlend ? 6 : 4).join(', ')}. Blend strength must track the Earth/Fire/Water/Air percentages — no single phrase may erase a sizeable share.`;
 
   // Composition cycling
   const compIdx = (input.generationIndex ?? 0) % COMPOSITION_STRATEGIES.length;
@@ -1246,15 +1521,21 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
     P.push(`SPACE CONFIG SUMMARY (active one-line brief from workspace or user edit — treat as authoritative for project type, rooms/context, scale, and atmosphere cues; keep the image consistent with it): ${spaceConfigLine}`);
   }
 
+  P.push(buildHumanScaleAndProportionBlock(areaM2, ceilingH, input.spaceCategory, primaryRoom));
+  const programEquipScale = buildProgramEquipmentScaleBlock(areaM2, ceilingH, primaryRoom, input.spaceCategory);
+  if (programEquipScale) P.push(programEquipScale);
+
   // [0b] ELEMENT ENERGY AS ABSTRACT SPATIAL LOGIC — not literal
   P.push(`ELEMENT ENERGY IS ABSTRACT DESIGN LOGIC — translated EXCLUSIVELY into REAL, BUILDABLE architectural decisions. Earth, Fire, Water, Air = materiality, atmosphere, form, contrast, softness, openness, lighting behavior. They are NEVER literal — no flames, no water waves, no wind effects, no soil or dirt, no element symbols, no conceptual art installations. Translate elemental energy into CONSTRUCTABLE architectural and design choices: real materials from real manufacturers, real construction methods, real furniture from real brands, real lighting systems, real spatial proportions that follow building codes. Every design decision inspired by element energy must pass the test: "Could an architecture firm specify this in construction documents and a contractor build it?"`);
 
   // [0c] CLIENT PROFILE + SESSION REFINEMENT — hierarchy and progressive tightening
+  P.push(buildVisualWeightContractBlock(activeDist));
   P.push(buildClientEnergyHarmonyBlock(activeDist, primary, secondary, sorted));
+  P.push(`PERCENT-LOCKED SPATIAL TRANSLATION: ${buildEnergySpatialRules(activeDist)}`);
   P.push(buildSessionPassBlock(input.sessionGenerationOrdinal ?? 0));
 
   // [1] PHOTOGRAPHIC IDENTITY
-  P.push(`Ultra-realistic editorial architectural photograph of a completed, physically built ${spaceLabel}. ${areaM2}m², ceiling height ${ceilingH}m. Published in Dezeen / ArchDaily / AD Magazine. Shot on location by an elite architectural photographer (Hélène Binet / Iwan Baan / Fernando Guerra caliber). The space is REAL, BUILT, INHABITED — not a render or concept. This is a DELIVERED PROJECT by a real architecture firm for a real client — it went through design development, construction documents, building permits, contractor bidding, and physical construction. Years of design: patina on materials, wear on floors, curated objects. Light enters naturally through real windows creating authentic shadow patterns. Every material is identifiable — stone veining, wood grain, plaster trowel marks, metal reflections, fabric weave. CONSTRUCTION EVIDENCE: visible material joints, shadow gaps where different finishes meet, real grout lines, edge trims, expansion joints, proper baseboards or shadow details. The image shows how materials were ACTUALLY INSTALLED — not floating surfaces but real construction with depth, layers, and substrate.`);
+  P.push(`Ultra-realistic editorial architectural photograph of a completed, physically built ${spaceLabel}. EXACT floor area ${areaM2} m² (not approximate — match furniture count, circulation, and depth of field to this number; ~${Math.sqrt(Math.max(areaM2, 1)).toFixed(1)} m per side if roughly square), ceiling height ${ceilingH} m. Published in Dezeen / ArchDaily / AD Magazine. Shot on location by an elite architectural photographer (Hélène Binet / Iwan Baan / Fernando Guerra caliber). The space is REAL, BUILT, INHABITED — not a render or concept. This is a DELIVERED PROJECT by a real architecture firm for a real client — it went through design development, construction documents, building permits, contractor bidding, and physical construction. Years of design: patina on materials, wear on floors, curated objects. Light enters naturally through real windows creating authentic shadow patterns. Every material is identifiable — stone veining, wood grain, plaster trowel marks, metal reflections, fabric weave. CONSTRUCTION EVIDENCE: visible material joints, shadow gaps where different finishes meet, real grout lines, edge trims, expansion joints, proper baseboards or shadow details. The image shows how materials were ACTUALLY INSTALLED — not floating surfaces but real construction with depth, layers, and substrate.`);
 
   // [1b] SPACE IDENTITY (critical — prevents a restaurant from looking like a living room)
   if (spaceIdentity) {
@@ -1264,6 +1545,13 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   // [1c] CONTEXT OVERRIDE (room within category — e.g. "Dining" in a "Restaurant" context)
   if (contextOverride) {
     P.push(`CONTEXT OVERRIDE (highest priority for room character): ${contextOverride}`);
+  }
+
+  // [1c-bis] Commercial / public venues — stained glass, storefront glazing, ceiling MEP, premium output bar
+  if (input.domain !== 'architecture' && isCommercialPublicInteriorCategory(input.spaceCategory)) {
+    P.push(COMMERCIAL_GLAZING_VITRAGE_BLOCK);
+    P.push(buildCommercialCeilingMepBlock(areaM2, ceilingH, firePct, primary));
+    P.push(COMMERCIAL_RENDER_EXCELLENCE_BLOCK);
   }
 
   // [1c-arch] ARCHITECTURE LANDSCAPE CONTEXT
@@ -1300,25 +1588,41 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
 
   // [2] ROOM PROGRAM & LAYOUT
   P.push(`Room contains: ${roomProgram.requiredElements.join('; ')}. ${roomProgram.layoutLogic} ${roomProgram.spatialRules}`);
+  if (input.domain !== 'architecture') {
+    P.push(PRACTICAL_LAYOUT_SIMPLICITY_BLOCK);
+    P.push(FURNITURE_SERVICE_LINE_SANITY_BLOCK);
+    if (primaryRoom === 'Coffee Shop' || primaryRoom === 'Cafe') {
+      P.push(CAFE_COFFEE_SEATING_BLOCK);
+    }
+  }
 
   // [3] MATERIAL SPECIFICATION (the user's actual choices — highest priority)
   if (input.materialsSelected.length > 0 && materialPlacement) {
     P.push(buildUserSelectedMaterialsMandatory(input.materialsSelected, materialPlacement));
   } else {
-    P.push(`Material palette: ${roomProgram.materialPriority}. Elevated selections: ${profile.materialBehaviorPhrases.slice(0, 4).join(', ')}. Every surface shows realistic texture depth — no flat, uniform, or digitally perfect surfaces.`);
+    P.push(`Material palette: ${roomProgram.materialPriority}. Elevated selections: ${profile.materialBehaviorPhrases.slice(0, balancedBlend ? 5 : 4).join(', ')}. Every surface shows realistic texture depth — no flat, uniform, or digitally perfect surfaces.`);
   }
 
-  // [4] DOMINANT ELEMENT BRIEF — the architectural DNA of this space
+  // [4] DOMINANT ELEMENT BRIEF — the architectural DNA of this space (softened when mix is balanced)
   const domBrief = ELEMENT_ARCH_BEHAVIOR[primary];
-  P.push(`DOMINANT ENERGY: ${primary.toUpperCase()} (${Math.round(activeDist[primary])}%) — this defines the entire spatial character.\nGeometry: ${domBrief.geometry}\nMaterials: ${domBrief.materialWeight}\nForms: ${domBrief.formLanguage}\nMaterial application: ${domBrief.materialApplication}\nLighting: ${domBrief.lightingLogic}\nSpatial feel: ${domBrief.spatialHierarchy}\nSTRICTLY AVOID: ${domBrief.avoidStrict}`);
+  const domHead = balancedBlend
+    ? `STRONGEST-SHARE ELEMENT (UI order when ties — percentages are near-balanced; spatial character must stay multi-way, not single-style): ${primary.toUpperCase()} (${Math.round(activeDist[primary])}%)`
+    : `DOMINANT ENERGY: ${primary.toUpperCase()} (${Math.round(activeDist[primary])}%) — this defines the entire spatial character`;
+  P.push(`${domHead}.\nGeometry: ${domBrief.geometry}\nMaterials: ${domBrief.materialWeight}\nForms: ${domBrief.formLanguage}\nMaterial application: ${domBrief.materialApplication}\nLighting: ${domBrief.lightingLogic}\nSpatial feel: ${domBrief.spatialHierarchy}\nSTRICTLY AVOID: ${domBrief.avoidStrict}`);
 
-  // [4b] Secondary + supporting energy influences
+  // [4b] Secondary + supporting energy influences (intensity scales with share vs top element)
   const supportParts: string[] = [];
+  const maxShare = Math.max(...sorted.map((el) => activeDist[el]), 1);
   for (const el of sorted.slice(1)) {
     const pct = Math.round(activeDist[el]);
-    if (pct < 8) continue;
+    if (pct < 5) continue;
     const brief = ELEMENT_ARCH_BEHAVIOR[el];
-    const intensity = pct >= 25 ? 'significant supporting' : pct >= 15 ? 'noticeable' : 'subtle trace';
+    const rel = activeDist[el] / maxShare;
+    const intensity =
+      rel >= 0.92 ? 'near-co-primary' :
+      rel >= 0.7 ? 'strong supporting' :
+      rel >= 0.45 ? 'clear layer' :
+      'calibrated trace';
     supportParts.push(`${el.toUpperCase()} (${pct}%, ${intensity}): ${brief.formLanguage} ${brief.materialWeight.split('.')[0]}.`);
   }
   if (supportParts.length > 0) {
@@ -1342,20 +1646,34 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   };
   const comboKey = `${primary}+${secondary}`;
   const secondaryPct = Math.round(activeDist[secondary]);
-  if (secondaryPct >= 15 && COMBO_ACCENTS[comboKey]) {
+  const primaryPctCombo = Math.round(activeDist[primary]);
+  const skipPairAccent =
+    balancedBlend || (Math.abs(primaryPctCombo - secondaryPct) <= 3 && primaryPctCombo >= 15 && secondaryPct >= 15);
+  if (!skipPairAccent && secondaryPct >= 15 && COMBO_ACCENTS[comboKey]) {
     const intensity = secondaryPct >= 30 ? 'prominently' : secondaryPct >= 20 ? 'noticeably' : 'subtly';
     P.push(`ELEMENT COMBINATION (${primary}+${secondary}, ${secondaryPct}% ${secondary}): ${intensity} integrate these accent elements: ${COMBO_ACCENTS[comboKey]}`);
   }
 
   // [5] FURNITURE & OBJECTS
-  const furnitureFormNote = primary === 'water' ? 'Furniture should have gently organic, sculptural forms achievable through REAL MANUFACTURING — serpentine bouclé sofas (Edra Boa, B&B Italia Bend), polished stainless steel counter fronts fabricated from sheet metal over welded subframes, chrome-legged coffee tables with kidney/organic shapes (Minotti, Living Divani), caramel leather accent chairs (Poltrona Frau). Counters and reception desks are the star — polished steel fronts with gentle curves achievable through sheet metal brake-forming and roll-bending, seam-welded and mechanically polished. Hammered metal panels (De Castelli) on island faces. Glass blocks (Seves) for accent walls. Forms reference BUILT neo-futurism — projects that were actually constructed, not just rendered. Every curve has a feasible fabrication method.'
+  const isCafeCoffeeRoom = primaryRoom === 'Coffee Shop' || primaryRoom === 'Cafe';
+  const furnitureFormNote = isCafeCoffeeRoom
+    ? 'CAFÉ / COFFEE SHOP: Seating is chair- and stool-scale only — Hay, Vitra, Muuto, Fritz Hansen contract chairs; bar stools at counter; small café tables. Do NOT default to sofas, sectionals, or lounge upholstery; never lean bulky seating on the bar. Keep knee zones and staff access honest.'
+    : primary === 'water' ? 'Furniture should have gently organic, sculptural forms achievable through REAL MANUFACTURING — serpentine bouclé sofas (Edra Boa, B&B Italia Bend), polished stainless steel counter fronts fabricated from sheet metal over welded subframes, chrome-legged coffee tables with kidney/organic shapes (Minotti, Living Divani), caramel leather accent chairs (Poltrona Frau). Counters and reception desks are the star — polished steel fronts with gentle curves achievable through sheet metal brake-forming and roll-bending, seam-welded and mechanically polished. Hammered metal panels (De Castelli) on island faces. Glass blocks (Seves) for accent walls. Forms reference BUILT neo-futurism — projects that were actually constructed, not just rendered. Every curve has a feasible fabrication method.'
     : primary === 'earth' ? 'Furniture should feel chunky, low-slung, and grounded — deep modular sofas in natural linen, olive/sage velvet, or warm cream (Baxter, Flexform, Meridiani). Thick solid wood tables — real walnut or reclaimed oak with proper joinery (mortise-and-tenon, doweled). Bar stools with rounded padded forms in sage velvet. Handmade ceramic collections on open shelving. Heavy woven or jute rugs. Wabi-sabi aesthetic: surfaces show real age, warmth, and patina — not artificially distressed but genuinely aged or handcrafted.'
     : primary === 'fire' ? 'Furniture should have dramatic material contrast — deep rust/cognac/copper-toned velvet (Dedar, Rubelli) or full-grain leather (Poltrona Frau, Baxter) upholstery against dark marble and blackened steel frames. Warm oxidized metal finishes on real branded fixtures. Bold, curated, intense — every piece from an identifiable manufacturer.'
     : 'Furniture should feel refined, forward-looking, and buildable — metallic silver upholstered armchairs (Fritz Hansen Egg in silver, Cassina LC7), stainless steel pedestal tables (Fritz Hansen Series, Vitra), thermoformed white Corian counters (within real bending limits), tinted laminated glass partitions (standard architectural glass with colored PVB interlayer). Dichroic glass panels (real 3M Dichroic Film product) as art accents. LED cove lighting in standard aluminum extrusion channels (iGuzzini, Deltalight). 3D textured wall panels (commercially manufactured relief tiles). White opal globe lights (Flos Glo-Ball) and LED ring pendants (Flos Arrangements, Artemide Discovery). Fluted GRC or MDF columns with CNC-milled profiles. AIR is forward-looking minimalism grounded in REAL PRODUCTS — natural wood and airy organic textures welcome for warmth. Every element is sourceable from real manufacturers and installable by real trades.';
-  P.push(`Furniture: ${furnitureItems.join('; ')}. Lighting fixtures: ${lightItems.join('; ')}. ${furnitureFormNote} BRAND REQUIREMENT (critical): Every object MUST look like a recognizable famous designer product — furniture by B&B Italia, Minotti, Poliform, Cassina, Vitra, Fritz Hansen, Moroso, Flos, Molteni&C, Kartell, Hay, Living Divani, Edra, Baxter, or equivalent premium tier. Lighting by Flos, Artemide, Tom Dixon, Louis Poulsen, &Tradition, Foscarini, Luceplan, Lee Broom, or equivalent. NO generic unbranded furniture — every piece must have a distinctive designer silhouette. Correct proportions: seating 42-45cm height, dining tables 72-75cm, counters 90cm. All furniture rests firmly on the floor with visible contact shadows. Nothing floats, intersects walls, or blocks circulation.`);
+  P.push(`Furniture: ${furnitureItems.join('; ')}. Lighting fixtures: ${lightItems.join('; ')}. ${furnitureFormNote} BRAND & SILHOUETTE: Primary seating, main tables, and hero lighting must read as real premium contract or designer pieces — distinctive silhouettes associated with known manufacturers (B&B Italia, Minotti, Poliform, Cassina, Vitra, Fritz Hansen, Moroso, Molteni&C, Hay, Living Divani, Edra, Baxter, Poltrona Frau tier; lighting Flos, Artemide, Louis Poulsen, &Tradition, Foscarini, Luceplan, Tom Dixon, etc.) — not anonymous blob furniture for those focal roles. Secondary pieces may be quieter. Correct proportions: seating 42-45cm seat height, dining tables 72-75cm, bars/counters ~90-105cm as appropriate. Everything sits on real surfaces with contact shadows; nothing floats or blocks code-clear circulation.`);
+
+  // [5a-bis] Occasional iconic “trust” object — most generations, skip ~1 in 4 for calmer scenes
+  if (genIdx % 4 !== 3) {
+    const trustCue = ICONIC_TRUST_ANCHOR_ROTATIONS[genIdx % ICONIC_TRUST_ANCHOR_ROTATIONS.length];
+    P.push(
+      `TRUST & RECOGNITION (this pass — frequent but not mandatory clutter): ${trustCue} If the brief or layout leaves no honest place for it, skip rather than crowding. Goal: warmth and credibility — viewers sense familiar, loved, real-world design culture, not a generic render.`,
+    );
+  }
 
   // [5b] DECOR & STYLING — makes the space feel lived-in, curated, inviting
-  P.push(`Decor and styling details (must be visible in the image): ${decorItems.join('; ')}. These objects should be placed naturally — on tables, shelves, counters — making the space feel inhabited and warm, not staged or empty. Minimalist but considered: every item has purpose.`);
+  P.push(`Decor and styling details (must be visible in the image): ${decorItems.join('; ')}. These objects should be placed naturally — on tables, shelves, counters — making the space feel inhabited and warm, not staged or empty. Where a famous design-world accessory (ceramics, fragrance, book imprint, tray) fits the element language, prefer names viewers know — still sparse; every visible object earns its place.`);
 
   // [5c] WALL TREATMENTS — key to achieving reference-quality depth
   P.push(`Wall treatment (creates depth and character): Primary wall — ${wallTreatment}.${secWallTreatment ? ` Secondary wall — ${secWallTreatment}.` : ''} Walls must NOT be flat painted surfaces — they must show real texture, material joints, and construction depth. Wall panels should have visible shadow gaps where they meet the floor and ceiling.`);
@@ -1382,7 +1700,7 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   P.push(atmosphereBlock);
 
   // [7] LIGHTING — natural + artificial
-  P.push(`Lighting: ${lightScenario} ${profile.lightPhrases.slice(0, 2).join(', ')}. Light behaves with physical accuracy: warm golden glow absorbed by wood grain, soft milky diffusion across plaster walls, crisp specular highlights on polished metal reflecting the room, translucent glow through glass casting colored shadows. One dominant natural light direction with soft gradual shadow falloff. Secondary fill light from opposite direction at 1/3 intensity. Warm ambient pools (2700K) from concealed architectural lighting in shadow gaps and shelf edges. The lighting alone tells you the time of day and the atmosphere of the space.`);
+  P.push(`Lighting: ${lightScenario} ${profile.lightPhrases.slice(0, balancedBlend ? 3 : 2).join(', ')}. Light behaves with physical accuracy: warm golden glow absorbed by wood grain, soft milky diffusion across plaster walls, crisp specular highlights on polished metal reflecting the room, translucent glow through glass casting colored shadows. One dominant natural light direction with soft gradual shadow falloff. Secondary fill light from opposite direction at 1/3 intensity. Warm ambient pools (2700K) from concealed architectural lighting in shadow gaps and shelf edges. The lighting alone tells you the time of day and the atmosphere of the space.`);
 
   // [7b] CEILING — clean by default
   const ceilingIntensity = activeDist[primary] >= 60 ? 'high' : activeDist[primary] >= 40 ? 'medium' : 'low';
@@ -1396,8 +1714,8 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   P.push(`CEILING TREATMENT (important): ${ceilingDirective} The ceiling should NOT be overloaded or visually heavy unless the design brief specifically calls for a dramatic overhead statement. Default is always clean and architecturally resolved.`);
 
   // [8] CAMERA & PHOTOGRAPHY
-  const focalLength = areaM2 >= 120 ? '24mm' : areaM2 >= 60 ? '28mm' : '32mm';
-  P.push(`Photography: ${focalLength} tilt-shift lens on Phase One IQ4 150MP digital back. Camera height 110cm (standing eye level). PERFECTLY CORRECTED VERTICALS — all vertical lines are absolutely straight. f/8–f/11 aperture, deep focus with slight natural bokeh on distant planes. Color science: neutral with warm bias, no post-processing filters, no HDR, no saturation boost, no Instagram look. Light behaves physically — soft shadow gradients from windows, warm amber pools from recessed downlights, material-accurate reflections (mirror-polish shows room reflections, matte absorbs light). Depth composition: clear foreground detail (edge of table, plant leaf), sharp mid-ground (main furniture group), soft atmospheric background (distant wall or window view). The image quality matches Dezeen's "House of the Year" photography standard.`);
+  const focalLength = areaM2 >= 120 ? '24mm' : areaM2 >= 80 ? '28mm' : areaM2 >= 40 ? '30mm' : '35mm';
+  P.push(`Photography: ${focalLength} tilt-shift lens on Phase One IQ4 150MP digital back. Camera height 110cm (standing eye level). Use a slightly longer focal for small m² so the frame does not exaggerate width — match lens to stated footprint. PERFECTLY CORRECTED VERTICALS — all vertical lines are absolutely straight. f/8–f/11 aperture, deep focus with slight natural bokeh on distant planes. Color science: neutral with warm bias, no post-processing filters, no HDR, no saturation boost, no Instagram look. Light behaves physically — soft shadow gradients from windows, warm amber pools from recessed downlights, material-accurate reflections (mirror-polish shows room reflections, matte absorbs light). Depth composition: clear foreground detail (edge of table, plant leaf), sharp mid-ground (main furniture group), soft atmospheric background (distant wall or window view). The image quality matches Dezeen's "House of the Year" photography standard.`);
 
   // [9] FRAMING
   P.push(`Composition: ${composition.desc} Full-frame with 15% breathing margin. All furniture fully visible — NOTHING cropped at frame edge. Clear foreground-midground-background depth layering. A curated vignette element in the near foreground (plant leaf edge, book corner, ceramic edge) creates editorial depth. The composition follows the rule of thirds with the primary furniture group at the golden ratio intersection.`);
@@ -1445,8 +1763,8 @@ The generated interior must feel like a direct 3D realization of this exact floo
 - REAL-WORLD RELEVANCE: every architectural solution must be something a professional architecture firm would actually specify for a client. No conceptual art installations disguised as architecture. No impossible cantilevers, no gravity-defying forms, no materials used in ways that contradict their physical properties.
 - STRUCTURAL INTEGRITY: all forms must be structurally plausible — visible columns where needed, proper load paths, realistic spans, credible connection details between different materials. Walls have thickness. Cantilevers have limits. Glass has frames or visible structural silicone joints.
 - MATERIAL HONESTY: materials behave as they do in reality. Stone has weight and needs support. Metal has gauge thickness and visible joining methods (welding, bolting, folding). Wood has grain direction and joinery. Plaster has substrate. Nothing floats without structure.
-- USER-SELECTED CATALOG FINISHES: When USER-SELECTED FINISHES are specified, each pick must be clearly visible and recognizable — not swapped for a lookalike. Frame and light the shot so the client can confirm every chosen material appears in the render.
-- The dominant element energy must be clearly READABLE through design choices (material selection, color temperature, spatial proportion, light quality) — not through literal symbols or decorative gimmicks.
+- USER-SELECTED CATALOG FINISHES: When materials were chosen in the catalog, at least 80% of picks (count rounded up, minimum 1) must be clearly visible, recognizable, and used as specified — target every pick; no generic substitutes for those finishes. Frame and light so the client can verify each one that appears. VITRAGE / STAINED GLASS: only on architecturally logical surfaces (façade, entrance, clerestory, dedicated feature); do not mount the main bar or barista line on the stained-glass plane. BAR / COUNTER: on service-capable walls or islands with believable circulation for entry, exit, and queues.
+- ${balancedBlend ? 'All elemental energies with ≥5% share must remain READABLE at strengths aligned with the stated percentages — harmonious multi-way identity, not chaos or a single-mood takeover.' : 'The dominant element energy must be clearly READABLE through design choices (material selection, color temperature, spatial proportion, light quality) — not through literal symbols or decorative gimmicks.'}
 - If this is INTERIOR: the camera is inside a room. No exterior building facades visible. Windows show realistic exterior views (landscape, city, garden) but the composition is interior.
 - If this is ARCHITECTURE: the camera is outside. Show the building in its context. No room interiors visible beyond what's naturally seen through windows from outside.
 - The result must look like it was designed by a top-tier architecture firm (Olson Kundig, John Pawson, Tadao Ando, Studio Mumbai, Norm Architects caliber) and photographed for publication. It must look like a COMPLETED, DELIVERED PROJECT — not a concept render or competition entry.`);
@@ -1503,7 +1821,7 @@ The generated interior must feel like a direct 3D realization of this exact floo
 
 // --- ARTIFACT PROMPT BUILDER (STRICT SPRITE SHEET + MANUFACTURABLE REALISM) ---
 export const buildArtifactPrompt = (distribution: Vector4, materials: MaterialDef[]): string => {
-  const sorted = (['earth', 'fire', 'water', 'air'] as Element[]).sort((a,b) => distribution[b] - distribution[a]);
+  const sorted = sortElementsByDistribution(distribution);
   const primary = sorted[0];
   const secondary = sorted[1];
   
@@ -1559,6 +1877,8 @@ export const buildTargetedEditPrompt = (
   adjectives: { label: string; element: Element }[],
   domain: string,
   spaceCategory: string,
+  /** Earlier edit instructions on this render (chronological). Disambiguates "it", "there", "more", etc. */
+  priorInstructions?: string[],
 ): string => {
   const domPct = Math.round(dist[dominant]);
   const sorted = (['earth', 'fire', 'water', 'air'] as Element[]).sort((a, b) => dist[b] - dist[a]);
@@ -1595,17 +1915,34 @@ export const buildTargetedEditPrompt = (
     `— Shadow direction and ambient light character`,
   ];
 
-  const styleFallback =
-    `Fallback only (if the user request does not already specify material, form, or product): ` +
-    `bias replacements toward ${dominant}-dominant (${domPct}%), secondary ${secondary} (${secPct}%) — ${ELEMENT_AESTHETIC[dominant].slice(0, 120)}… ` +
-    `Keep real-world buildable photorealism. ` +
-    `If the user named a specific color, material, object, or action, obey the USER REQUEST exactly and ignore conflicting hints.`;
+  const distBalanced = isBalancedElementBlend(dist as Vector4);
+  const styleFallback = distBalanced
+    ? `Fallback only (if the user request does not already specify material, form, or product): ` +
+      `keep the edit consistent with a BALANCED elemental mix — Earth ${Math.round(dist.earth)}%, Fire ${Math.round(dist.fire)}%, Water ${Math.round(dist.water)}%, Air ${Math.round(dist.air)}% — preserve proportional presence of each language; do not let one strand take over unless the user asked. ` +
+      `Keep real-world buildable photorealism. If the user named a specific target, obey it exactly.`
+    : `Fallback only (if the user request does not already specify material, form, or product): ` +
+      `bias replacements toward ${dominant}-dominant (${domPct}%), secondary ${secondary} (${secPct}%) — ${ELEMENT_AESTHETIC[dominant].slice(0, 120)}… ` +
+      `Keep real-world buildable photorealism. ` +
+      `If the user named a specific color, material, object, or action, obey the USER REQUEST exactly and ignore conflicting hints.`;
+
+  const prior = (priorInstructions || []).map((s) => s.trim()).filter(Boolean);
+  const priorBlock =
+    prior.length > 0
+      ? [
+          `EDIT THREAD — SAME IMAGE / SAME TOPIC (chronological; the current picture already reflects these changes):`,
+          ...prior.map((t, i) => `${i + 1}. "${t}"`),
+          ``,
+          `How to use this thread: resolve vague follow-ups (e.g. "make it warmer", "there", "even more", "revert that") against what was changed before. The CURRENT USER REQUEST below is the new task — it may refine or extend prior edits. Do NOT undo earlier edits unless the new text explicitly asks to revert or replace them.`,
+          ``,
+        ]
+      : [];
 
   const lines: string[] = [
     `SURGICAL EDIT — LITERAL SCOPE`,
     `Implement ONLY what the user request says. Do not reinterpret, redesign, or "upgrade" the scene. No fantasy or utopian features unless explicitly asked.`,
     ``,
-    `USER REQUEST (absolute priority; narrow reading):`,
+    ...priorBlock,
+    `USER REQUEST (absolute priority; narrow reading — THIS turn):`,
     `"${userInstruction.trim()}"`,
     ``,
     `CONTEXT (for identification only — do not expand the task): ${isArch ? 'exterior / architecture' : 'interior'} · ${spaceCategory}`,
@@ -1619,7 +1956,9 @@ export const buildTargetedEditPrompt = (
     `- No new objects, surfaces, or effects beyond what the user request implies.`,
     ``,
     styleFallback,
-    matList ? `Project materials (reference if relevant; do not replace unspecified areas with these): ${matList}.` : '',
+    matList
+      ? `Project materials: keep at least 80% of these finishes clearly identifiable after the edit (same material identity) unless the user explicitly asked to remove or replace them: ${matList}.`
+      : '',
     adjList ? `Mood notes (secondary — only if request is vague): ${adjList}.` : '',
   ].filter(Boolean);
 
@@ -1642,7 +1981,7 @@ export const buildUniversalPrompt = (state: UserState, options?: PromptOptions):
     ? state.refinement.refinedPercentages 
     : (state.analysis?.percentages || { earth: 25, fire: 25, water: 25, air: 25 });
     
-  const sorted = (['earth', 'fire', 'water', 'air'] as Element[]).sort((a,b) => p[b] - p[a]);
+  const sorted = sortElementsByDistribution(p as Vector4);
 
   const adjectiveInputs = state.refinement.selectedAdjectives.map(adj => {
     const vec: Vector4 = { earth: 0, fire: 0, water: 0, air: 0 };
@@ -1661,12 +2000,19 @@ export const buildUniversalPrompt = (state: UserState, options?: PromptOptions):
     return { id: mat.id, name: mat.name, category: 'finish', vec, imagePath: mat.image };
   });
 
+  const area = Math.max(8, Math.min(50000, Math.round(Number(state.params.squareMeters) > 0 ? Number(state.params.squareMeters) : 100)));
+  const ceilParam = state.params.ceilingHeight;
+  const ceilHuman =
+    typeof ceilParam === 'number' && Number.isFinite(ceilParam) && ceilParam > 0
+      ? Math.max(2, Math.min(12, Math.round(ceilParam * 10) / 10))
+      : 2.8;
+
   const input: PromptInput = {
     domain: state.params.domain || 'interior',
     spaceCategory: state.params.category || 'Space',
     rooms: state.params.rooms,
     archContext: state.params.archContext,
-    areaM2: state.params.squareMeters || 100,
+    areaM2: area,
     baseDistribution: state.analysis?.percentages || { earth: 25, fire: 25, water: 25, air: 25 },
     refinedDistribution: state.refinement.refinedPercentages,
     primaryElement: sorted[0],
@@ -1683,7 +2029,7 @@ export const buildUniversalPrompt = (state: UserState, options?: PromptOptions):
     spaceNote: state.params.spaceNote,
     spaceSummaryLine: state.params.spaceSummaryLine?.trim() || formatSpaceConfigOneLiner(state.params),
     constraints: {
-      ceilingHeightM: state.params.ceilingHeight,
+      ceilingHeightM: ceilHuman,
       naturalLight: state.params.naturalLight,
       colorPalette: state.params.colorPalette,
       budgetLevel: state.params.budgetLevel,
@@ -1707,13 +2053,12 @@ export const buildUniversalPrompt = (state: UserState, options?: PromptOptions):
     : null;
   const adjNames = state.refinement.selectedAdjectives.slice(0, 3).map(a => a.label).join(', ');
   const roomLabel = state.params.rooms?.[0] || state.params.category || 'Space';
-  const area = state.params.squareMeters || 100;
   const palette = state.params.colorPalette && state.params.colorPalette !== 'auto'
     ? state.params.colorPalette.replace('-', ' ')
     : null;
   const budget = state.params.budgetLevel || 'premium';
   const conceptParts = [
-    `${roomLabel} · ${area}m²`,
+    `${roomLabel} · ${area} m² · ceiling ${ceilHuman} m`,
     `${prim} ${primPct}% / ${sec} ${secPct}%`,
     matNames || null,
     adjNames || null,

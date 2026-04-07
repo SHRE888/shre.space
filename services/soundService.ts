@@ -446,6 +446,70 @@ export const softThud = (muted?: boolean) => {
   o.start(); o.stop(c.currentTime + 0.12);
 };
 
+/** Hover on DNA nucleus — low, weighty “premium” resonance (rotation affordance) */
+export const dnaNucleusResonance = (muted?: boolean) => {
+  if (muted) return;
+  const c = resumeCtx();
+  if (!c) return;
+  const t0 = c.currentTime;
+  const mix = c.createGain();
+  mix.gain.value = 0.92;
+
+  const lp = c.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(240, t0);
+  lp.frequency.exponentialRampToValueAtTime(1100, t0 + 0.35);
+  lp.Q.value = 0.65;
+  mix.connect(lp).connect(c.destination);
+
+  const gEnv = (peak: number, attack: number, decay: number) => {
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + attack);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + decay);
+    return g;
+  };
+
+  const fund = c.createOscillator();
+  fund.type = 'sine';
+  fund.frequency.setValueAtTime(58, t0);
+  fund.frequency.exponentialRampToValueAtTime(46, t0 + 0.72);
+  fund.connect(gEnv(0.42, 0.028, 0.82)).connect(mix);
+
+  const fifth = c.createOscillator();
+  fifth.type = 'sine';
+  fifth.frequency.setValueAtTime(87, t0);
+  fifth.connect(gEnv(0.11, 0.02, 0.76)).connect(mix);
+
+  const sub = c.createOscillator();
+  sub.type = 'sine';
+  sub.frequency.setValueAtTime(29, t0);
+  sub.connect(gEnv(0.28, 0.035, 0.62)).connect(mix);
+
+  const bufLen = Math.floor(c.sampleRate * 0.1);
+  const buf = c.createBuffer(1, bufLen, c.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / bufLen) * 0.85;
+  const ns = c.createBufferSource();
+  ns.buffer = buf;
+  const nf = c.createBiquadFilter();
+  nf.type = 'lowpass';
+  nf.frequency.value = 380;
+  const ng = c.createGain();
+  ng.gain.setValueAtTime(0.085, t0);
+  ng.gain.exponentialRampToValueAtTime(0.001, t0 + 0.11);
+  ns.connect(nf).connect(ng).connect(mix);
+  ns.start(t0);
+  ns.stop(t0 + 0.12);
+
+  fund.start(t0);
+  fund.stop(t0 + 0.84);
+  fifth.start(t0);
+  fifth.stop(t0 + 0.8);
+  sub.start(t0);
+  sub.stop(t0 + 0.66);
+};
+
 export const brilliantShimmer = (muted?: boolean) => {
   if (muted) return;
   const c = resumeCtx();
