@@ -560,10 +560,17 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
         setShowAtmoRefs(false); setNucleusTooltip(false); setExpandedRing(null);
       }}
     >
-      {/* ═══ Outer scene container — scales to fit viewport ═══ */}
+      {/* ═══ Outer scene container — zoom shrinks layout box in Chromium/WebKit; scale() does not ═══ */}
       <div
-        className="relative"
-        style={{ width: canvasSize, height: canvasSize, transform: diagramScale < 1 ? `scale(${diagramScale})` : undefined, transformOrigin: 'center center', flexShrink: 0 }}
+        className="relative mx-auto diagram-scene-root"
+        style={{
+          width: canvasSize,
+          height: canvasSize,
+          flexShrink: 0,
+          ...(diagramScale < 1
+            ? { zoom: diagramScale, maxWidth: '100%', marginLeft: 'auto', marginRight: 'auto' }
+            : {}),
+        }}
         onMouseMove={handleOrbitDiagramMouseMove}
         onMouseLeave={handleOrbitDiagramMouseLeave}
       >

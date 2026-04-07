@@ -786,7 +786,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
   
 
   return (
-    <div className={`flex h-[calc(100vh-72px)] h-[calc(100dvh-72px)] overflow-hidden relative transition-opacity duration-700 ${mounted ? 'opacity-100' : 'opacity-0'}`} style={{ background: '#f4f7fc' }}>
+    <div className={`flex h-[calc(100dvh-2.75rem)] min-h-0 overflow-hidden relative transition-opacity duration-700 ${mounted ? 'opacity-100' : 'opacity-0'}`} style={{ background: '#f4f7fc' }}>
       {/* Workspace Area */}
       <div className={`flex-1 flex flex-col relative overflow-hidden transition-all duration-700 ease-out ${activeSidePanel || isMatrixOpen ? 'lg:mr-[300px]' : ''} ${isDomainPanelOpen ? 'lg:ml-[280px]' : ''}`} style={{ minHeight: 0 }}>
 
@@ -1193,8 +1193,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
           );
         })()}
 
-        {/* Central Core Diagram */}
-        <div className="flex-grow flex items-center justify-center transition-all duration-500 pt-0 pb-1 sm:pt-1 sm:pb-2" style={{ minHeight: 0 }}>
+        {/* Central Core Diagram — reserve bottom space on phone for fixed Generate dock */}
+        <div className="flex-grow flex items-center justify-center transition-all duration-500 pt-0 pb-1 max-sm:pb-[min(9rem,22vh)] sm:pt-1 sm:pb-2" style={{ minHeight: 0 }}>
           <div className="flex-1 flex items-center justify-center w-full h-full min-h-0">
           <CoreDiagram
             distribution={state.refinement.refinedPercentages}
@@ -1391,8 +1391,15 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
           );
         })()}
 
-        {/* Generate + Brilliant — bottom center on mobile, left side on desktop */}
-        <div ref={diagRef} className="absolute bottom-2 sm:bottom-8 z-20 workspace-content-reveal flex flex-col items-center left-1/2 -translate-x-1/2 sm:left-[44px] sm:translate-x-0 w-[180px] sm:w-[180px]" style={{ opacity: coreTutorialDone ? 1 : 0, pointerEvents: coreTutorialDone ? 'auto' : 'none', transition: 'opacity 0.8s ease' }}>
+        {/* Generate + Brilliant — fixed dock on phone (always in viewport); absolute on sm+ */}
+        <div
+          ref={diagRef}
+          className="workspace-content-reveal z-[70] flex flex-col items-center w-[min(100%,220px)] sm:w-[180px]
+            fixed left-1/2 -translate-x-1/2 bottom-0 pb-[max(10px,env(safe-area-inset-bottom,0px))] pt-2 px-3
+            rounded-t-2xl border-t border-gray-200/50 bg-[#f4f7fc]/92 backdrop-blur-md shadow-[0_-8px_32px_rgba(0,0,0,0.08)]
+            sm:rounded-none sm:border-0 sm:bg-transparent sm:backdrop-blur-none sm:shadow-none sm:p-0 sm:pb-0
+            sm:absolute sm:bottom-8 sm:left-[44px] sm:translate-x-0"
+        >
           {/* Brilliant explanation panel — appears above on click */}
           {showDiagnosticPanel && (
             <div className="mb-2 w-[260px] max-w-[calc(100vw-24px)] rounded-2xl border backdrop-blur-xl shadow-lg overflow-hidden animate-scale-in fixed sm:relative bottom-auto sm:bottom-auto left-1/2 sm:left-auto -translate-x-1/2 sm:translate-x-0 top-16 sm:top-auto z-[60] sm:z-auto" style={{ background: 'rgba(255,255,255,0.92)', borderColor: brilliant ? 'rgba(53,88,160,0.15)' : 'rgba(230,230,230,0.5)', maxHeight: 'calc(100dvh - 140px)', overflowY: 'auto' }}>
