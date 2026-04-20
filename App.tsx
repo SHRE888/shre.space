@@ -622,10 +622,6 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   /** DNA panel open by default on phones too — collapsed 30vh cap hid sliders, orbit, and palette. */
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  useEffect(() => {
-    if (materialPickerOpen) setSidebarOpen(true);
-  }, [materialPickerOpen]);
-
   /** Material DNA orbital — static diagram (no drag-to-rotate) */
   const [dnaOrbitHover, setDnaOrbitHover] = useState(false);
   const [dnaNucleusNear, setDnaNucleusNear] = useState(false);
@@ -650,6 +646,9 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   const [hoveredBrand, setHoveredBrand] = useState<string | null>(null);
   const [activeHotspot, setActiveHotspot] = useState<string | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  useEffect(() => {
+    if (materialPickerOpen) setSidebarOpen(true);
+  }, [materialPickerOpen]);
   const [materialsChanged, setMaterialsChanged] = useState(false);
   const [pctEditOpen, setPctEditOpen] = useState(false);
   const [generationKey, setGenerationKey] = useState(0);
