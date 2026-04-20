@@ -21,7 +21,7 @@ export const AboutPage = () => {
   const fade = `transition-all duration-[900ms] ease-out ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`;
 
   return (
-    <div className="min-h-[calc(100vh-92px)] min-h-[calc(100dvh-92px)] bg-[#fdfdfd] overflow-y-auto custom-scroll">
+    <div className="min-h-app-main bg-[#fdfdfd] overflow-y-auto overflow-x-hidden custom-scroll pb-[max(2rem,env(safe-area-inset-bottom,0px))]">
       <div className="max-w-[600px] mx-auto px-4 sm:px-6 md:px-8 pt-10 sm:pt-16 md:pt-24 pb-16 sm:pb-20">
 
         {/* ── Origin ── */}

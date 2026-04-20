@@ -786,7 +786,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
   
 
   return (
-    <div className={`flex h-[calc(100dvh-2.75rem)] min-h-0 overflow-hidden relative transition-opacity duration-700 ${mounted ? 'opacity-100' : 'opacity-0'}`} style={{ background: '#f4f7fc' }}>
+    <div className={`flex h-app-workspace min-h-0 overflow-hidden relative transition-opacity duration-700 ${mounted ? 'opacity-100' : 'opacity-0'}`} style={{ background: '#f4f7fc' }}>
       {/* Workspace Area */}
       <div className={`flex-1 flex flex-col relative overflow-hidden transition-all duration-700 ease-out ${activeSidePanel || isMatrixOpen ? 'lg:mr-[300px]' : ''} ${isDomainPanelOpen ? 'lg:ml-[280px]' : ''}`} style={{ minHeight: 0 }}>
 

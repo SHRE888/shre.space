@@ -71,9 +71,10 @@ export interface PresetCombo {
   prompt: string; angle: number; dominant?: Element; reinforcer?: Element; supporter?: Element;
 }
 
-/** Layout radius (~half of bead + rim) — keeps materials off sector lines & neighbors. */
-const MATERIAL_ORBIT_ORB_RADIUS_PX = 34;
-const ATMOSPHERE_ORBIT_ORB_RADIUS_PX = 20;
+/** Used only for angular spacing math (smaller ⇒ more room in narrow sectors); visuals are larger. */
+/** ~half of on-screen material bead for angular clearance */
+const MATERIAL_RING_PACKING_RADIUS_PX = 30;
+const ATMOSPHERE_RING_PACKING_RADIUS_PX = 14;
 
 const MAT_TEX: Record<string, string> = MATERIAL_SPHERE_IMAGES;
 
@@ -81,20 +82,73 @@ const MAT_TEX: Record<string, string> = MATERIAL_SPHERE_IMAGES;
 const SECTOR_ORDER: Element[] = ['air', 'fire', 'earth', 'water'];
 const ELEMENTS: Element[] = ['earth', 'fire', 'water', 'air'];
 
+/** First symbol index uses this base (historical quadrant layout). */
+const SECTOR_LAYOUT_ANGULAR_START = (-3 * Math.PI) / 4;
+
+/**
+ * Fixed compass angle per stychia symbol (equal 25% slice centers).
+ * Sectors are laid out so boundaries stay in the four quadrants between these rays; symbols do not move.
+ */
+function fixedStychiaAngleRad(el: Element): number {
+  const i = SECTOR_ORDER.indexOf(el);
+  const quarter = Math.PI / 2;
+  return SECTOR_LAYOUT_ANGULAR_START + i * quarter + quarter / 2;
+}
+
 type ElementSectorLayout = Record<Element, { start: number; end: number; center: number; half: number }>;
 
+const TWO_PI = 2 * Math.PI;
+
+function normAngleMinusPiToPi(a: number): number {
+  let x = a;
+  while (x > Math.PI) x -= TWO_PI;
+  while (x <= -Math.PI) x += TWO_PI;
+  return x;
+}
+
+/**
+ * Sectors tile the circle with boundaries only inside the π/2 gaps between adjacent fixed symbols.
+ * Each sector grows/shrinks symmetrically toward/away from its two neighbors — stychia marks stay fixed.
+ */
 function buildSectorLayout(dist: Record<Element, number>): ElementSectorLayout {
-  const weights = SECTOR_ORDER.map(el => Math.max(dist[el], 4));
-  const sum = weights.reduce((a, b) => a + b, 0);
-  let start = (-3 * Math.PI) / 4;
-  const layout = {} as ElementSectorLayout;
-  SECTOR_ORDER.forEach((el, i) => {
-    const span = (weights[i] / sum) * 2 * Math.PI;
-    const end = start + span;
-    const center = (start + end) / 2;
-    layout[el] = { start, end, center, half: span / 2 };
-    start = end;
+  const w = {} as Record<Element, number>;
+  SECTOR_ORDER.forEach((el) => {
+    w[el] = Math.max(dist[el], 4);
   });
+
+  const b_af = (-Math.PI / 2) + (Math.PI / 2) * (w.air / (w.air + w.fire));
+  const b_fe = 0 + (Math.PI / 2) * (w.fire / (w.fire + w.earth));
+  const b_ew = (Math.PI / 2) + (Math.PI / 2) * (w.earth / (w.earth + w.water));
+  const b_wa = Math.PI + (Math.PI / 2) * (w.water / (w.water + w.air));
+
+  let a0 = b_wa;
+  let a1 = b_af;
+  if (a1 <= a0) a1 += TWO_PI;
+  let a2 = b_fe;
+  if (a2 <= a1) a2 += TWO_PI;
+  let a3 = b_ew;
+  if (a3 <= a2) a3 += TWO_PI;
+  const aClose = a0 + TWO_PI;
+
+  const layout = {} as ElementSectorLayout;
+  const segments: { el: Element; start: number; end: number }[] = [
+    { el: 'air', start: a0, end: a1 },
+    { el: 'fire', start: a1, end: a2 },
+    { el: 'earth', start: a2, end: a3 },
+    { el: 'water', start: a3, end: aClose },
+  ];
+
+  segments.forEach(({ el, start, end }) => {
+    const span = end - start;
+    const geoMid = start + span / 2;
+    layout[el] = {
+      start,
+      end,
+      center: normAngleMinusPiToPi(geoMid),
+      half: span / 2,
+    };
+  });
+
   return layout;
 }
 
@@ -117,36 +171,65 @@ function sectorRingArcPath(r: number, start: number, end: number): string {
   return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
 }
 
-type RingOrbitLayoutOpts = { orbRadiusPx: number; edgeFrac?: number; minEdgeRad?: number };
+type RingOrbitLayoutOpts = {
+  orbRadiusPx: number;
+  edgeFrac?: number;
+  minEdgeRad?: number;
+  /** Radial offset between stacked rows when many items share one sector (px, diagram space). */
+  ringStepPx?: number;
+};
 
-/** Materials / ring items: inset from sector edges, symmetric spread, min angular gap between orbs. */
+/**
+ * Places ring items on one or more concentric rows: each row gets as many evenly spaced angles
+ * as fit in the sector arc (min angular step from orb diameter). Avoids piling every bead on one angle.
+ */
 function sectorPosRingItemsInLayout(
-  el: Element, idx: number, total: number, orbit: number, layout: ElementSectorLayout, opts: RingOrbitLayoutOpts,
+  _el: Element, idx: number, total: number, orbit: number, layout: ElementSectorLayout, opts: RingOrbitLayoutOpts,
 ) {
-  const { center, start, end } = layout[el];
+  const { start, end } = layout[_el];
   const span = end - start;
   const edgeFrac = opts.edgeFrac ?? 0.14;
   const minEdgeRad = opts.minEdgeRad ?? Math.PI / 18;
-  const edgeMargin = Math.max(span * edgeFrac, minEdgeRad);
-  const usableHalf = Math.max(0, span / 2 - edgeMargin);
-  if (total <= 1 || usableHalf < 1e-6) {
-    return { x: Math.cos(center) * orbit, y: Math.sin(center) * orbit };
-  }
-  const minStep = 2 * Math.atan((opts.orbRadiusPx * 1.06) / Math.max(orbit, 1));
-  let half = usableHalf;
-  if (total > 1) {
-    const stepIfFull = (2 * half) / (total - 1);
-    if (stepIfFull < minStep) {
-      half = Math.min(usableHalf, ((total - 1) * minStep) / 2);
-    }
-  }
-  const step = total > 1 ? (2 * half) / (total - 1) : 0;
-  const offset = -half + idx * step;
-  let a = center + offset;
+  let edgeMargin = Math.max(span * edgeFrac, minEdgeRad);
+  edgeMargin = Math.min(edgeMargin, Math.max(0, span * 0.36 - 0.02));
+  edgeMargin = Math.max(0, edgeMargin);
+
   const lo = start + edgeMargin;
   const hi = end - edgeMargin;
-  if (hi >= lo) a = Math.max(lo, Math.min(hi, a));
-  return { x: Math.cos(a) * orbit, y: Math.sin(a) * orbit };
+  const width = Math.max(hi - lo, 1e-5);
+
+  const ringStep = opts.ringStepPx ?? 22;
+  const minStep = 2 * Math.atan((opts.orbRadiusPx * 1.14) / Math.max(orbit, 1));
+  const maxSlots = Math.max(1, Math.floor(width / minStep));
+
+  const row = Math.floor(idx / maxSlots);
+  const idxRow0 = row * maxSlots;
+  const nThis = Math.min(maxSlots, total - idxRow0);
+  const col = idx - idxRow0;
+
+  const effOrbit = Math.max(orbit * 0.62, orbit - row * ringStep);
+
+  /** One bead in this sector: bisector of the sector arc (same as inset midpoint when margins are symmetric). */
+  if (total <= 1) {
+    const mid = start + span / 2;
+    return { x: Math.cos(mid) * effOrbit, y: Math.sin(mid) * effOrbit };
+  }
+
+  if (nThis <= 1) {
+    const a = lo + width / 2 + (row % 2 === 1 ? minStep * 0.2 : 0);
+    const ac = Math.max(lo + width * 0.02, Math.min(hi - width * 0.02, a));
+    return { x: Math.cos(ac) * effOrbit, y: Math.sin(ac) * effOrbit };
+  }
+
+  let a = lo + (col + 0.5) * (width / nThis);
+  if (row > 0) {
+    const rowStagger = ((row % 2) * 2 - 1) * (minStep * 0.35);
+    a += rowStagger;
+  }
+  const pad = Math.min(minStep * 0.12, width / (4 * nThis));
+  a = Math.max(lo + pad, Math.min(hi - pad, a));
+
+  return { x: Math.cos(a) * effOrbit, y: Math.sin(a) * effOrbit };
 }
 
 function hexToRgba(hex: string, a: number): string {
@@ -262,7 +345,7 @@ const CONCEPT_HEADLINES: Record<Element, string[]> = {
 
 const ATMO_REFS: Record<Element, { title: string; style: string; desc: string; img?: string }[]> = {
   earth: [
-    { title: 'Wabi-Sabi Retreat', style: 'Aged patina, reclaimed timber, raw plaster', desc: 'Weathered wood beams, cracked plaster walls, jute rugs, handmade ceramics — imperfect beauty', img: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&q=80&fit=crop' },
+    { title: 'Wabi-Sabi Retreat', style: 'Aged patina, reclaimed timber, raw plaster', desc: 'Weathered wood beams, cracked plaster walls, jute rugs, handmade ceramics — imperfect beauty', img: 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=600&q=80&fit=crop' },
     { title: 'Green Stone Kitchen', style: 'Dramatic veined marble with warm walnut', desc: 'Green onyx island, walnut cabinetry, woven pendants, sage velvet stools, aged brass', img: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80&fit=crop' },
     { title: 'Desert Earth Villa', style: 'Rammed earth, terracotta, desert planting', desc: 'Warm ochre plaster walls, cacti courtyard, teak loungers, lap pool — primal warmth', img: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&q=80&fit=crop' },
     { title: 'Restored Stone Palazzo', style: 'Ancient walls with modern intervention', desc: 'Double-height rough stone, heavy timber beams, linen sofas, glass table — time layered', img: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=600&q=80&fit=crop' },
@@ -272,16 +355,16 @@ const ATMO_REFS: Record<Element, { title: string; style: string; desc: string; i
   fire: [
     { title: 'Corten Living Room', style: 'Corten steel wall, dark marble, rust velvet', desc: 'Full-height corten rust panel, nero marquina marble accent, deep cognac velvet sofa, blackened steel shelving with warm LED glow', img: 'https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?w=600&q=80&fit=crop' },
     { title: 'Dark Copper Kitchen', style: 'Oxidized copper fronts, dark herringbone, brass pendants', desc: 'Copper-clad island, dark wood herringbone floor, polished copper sphere pendants, matte black cabinet wall — warm industrial luxury', img: 'https://images.unsplash.com/photo-1556909172-54557c7e4fb7?w=600&q=80&fit=crop' },
-    { title: 'Corten Exterior Portal', style: 'Monumental corten facade, deep entry portal', desc: 'Full-facade corten cladding with natural rust patina, tall slot windows, dark wood portal entry, reflecting pool — monumental warmth', img: 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=600&q=80&fit=crop' },
+    { title: 'Corten Exterior Portal', style: 'Monumental corten facade, deep entry portal', desc: 'Full-facade corten cladding with natural rust patina, tall slot windows, dark wood portal entry, reflecting pool — monumental warmth', img: 'https://images.unsplash.com/photo-1600607687644-c7171b42498f?w=600&q=80&fit=crop' },
     { title: 'Moody Brass Living', style: 'Polished brass tables, concrete, rust sofa', desc: 'Cylindrical polished brass coffee tables, exposed concrete wall, gold leaf panel, brown leather sofa, warm directional light — cinematic moody', img: 'https://images.unsplash.com/photo-1600210492493-0946911123ea?w=600&q=80&fit=crop' },
     { title: 'Dramatic Fireplace Lounge', style: 'Statement fireplace, dark tones, warm amber', desc: 'Oversized linear fireplace, charcoal plaster walls, cognac leather seating, warm pendant lights — intense evening atmosphere', img: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=600&q=80&fit=crop' },
     { title: 'Industrial Loft', style: 'Exposed brick, steel beams, Edison bulbs', desc: 'Raw brick walls, blackened steel staircase, warm filament bulbs, concrete floor, vintage leather — bold urban warmth', img: 'https://images.unsplash.com/photo-1600607687644-c7171b42498f?w=600&q=80&fit=crop' },
   ],
   water: [
     { title: 'Reflective Spa Lounge', style: 'Polished surfaces, calm pools, soft light', desc: 'Mirror-polished stone floors, still water features, diffused ambient light, cream bouclé sofas — immersive reflective serenity', img: 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=600&q=80&fit=crop' },
-    { title: 'Minimal Pool Villa', style: 'Infinity edge, white stone, blue reflection', desc: 'Clean-edged infinity pool, white limestone deck, sheer curtains, Mediterranean blue — fluid calm luxury', img: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&q=80&fit=crop&crop=bottom' },
+    { title: 'Minimal Pool Villa', style: 'Infinity edge, white stone, blue reflection', desc: 'Clean-edged infinity pool, white limestone deck, sheer curtains, Mediterranean blue — fluid calm luxury', img: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=600&q=80&fit=crop' },
     { title: 'Glass & Steel Bathroom', style: 'Floor-to-ceiling glass, polished chrome, rain shower', desc: 'Frameless glass enclosure, polished stainless fixtures, microcement walls, floating vanity — sculptural water ritual', img: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=600&q=80&fit=crop' },
-    { title: 'Coastal Living Room', style: 'Ocean tones, natural linen, driftwood', desc: 'Pale blue-grey walls, linen sofas, shell accents, panoramic ocean view, bleached wood — serene coastal living', img: 'https://images.unsplash.com/photo-1615529328331-f8917597711f?w=600&q=80&fit=crop' },
+    { title: 'Coastal Living Room', style: 'Ocean tones, natural linen, driftwood', desc: 'Pale blue-grey walls, linen sofas, shell accents, panoramic ocean view, bleached wood — serene coastal living', img: 'https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=600&q=80&fit=crop' },
     { title: 'Marble & Water Feature', style: 'Flowing water wall, veined marble, ambient glow', desc: 'Floor-to-ceiling water cascade over honed marble, recessed LED coves, floating bench — meditative fluid space', img: 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=600&q=80&fit=crop' },
     { title: 'Nordic Blue Kitchen', style: 'Deep blue cabinetry, brass hardware, cool tones', desc: 'Midnight blue lacquer fronts, veined marble counters, brushed brass pulls, pendant globes — calm sophisticated depth', img: 'https://images.unsplash.com/photo-1556909114-44e3e70034e2?w=600&q=80&fit=crop' },
   ],
@@ -405,9 +488,11 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
 
   const matsByEl = useMemo(() => {
     const g: Record<Element, MaterialDef[]> = { earth: [], fire: [], water: [], air: [] };
-    selectedMaterials.forEach(m => { if (distribution[m.element] >= 5) g[m.element].push(m); });
+    selectedMaterials.forEach(m => {
+      g[m.element].push(m);
+    });
     return g;
-  }, [selectedMaterials, distribution]);
+  }, [selectedMaterials]);
 
   const sectorLayout = useMemo(() => buildSectorLayout(distribution), [distribution]);
 
@@ -474,9 +559,10 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
     ELEMENTS.forEach(el => {
       matsByEl[el].forEach((m, i) => {
         map[m.name] = sectorPosRingItemsInLayout(el, i, matsByEl[el].length, matOrbR, sectorLayout, {
-          orbRadiusPx: MATERIAL_ORBIT_ORB_RADIUS_PX,
-          edgeFrac: 0.175,
-          minEdgeRad: Math.PI / 13,
+          orbRadiusPx: MATERIAL_RING_PACKING_RADIUS_PX,
+          edgeFrac: 0.09,
+          minEdgeRad: Math.PI / 22,
+          ringStepPx: 26,
         });
       });
     });
@@ -494,9 +580,10 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
     ELEMENTS.forEach(el => {
       adjsByEl[el].forEach((a, i) => {
         map[`${a.label}-${a.element}`] = sectorPosRingItemsInLayout(el, i, adjsByEl[el].length, atmoOrbR, sectorLayout, {
-          orbRadiusPx: ATMOSPHERE_ORBIT_ORB_RADIUS_PX,
-          edgeFrac: 0.125,
-          minEdgeRad: Math.PI / 17,
+          orbRadiusPx: ATMOSPHERE_RING_PACKING_RADIUS_PX,
+          edgeFrac: 0.085,
+          minEdgeRad: Math.PI / 22,
+          ringStepPx: 20,
         });
       });
     });
@@ -582,6 +669,10 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
               <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
               <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
             </filter>
+            <filter id="orbit-arc-soft" x="-8%" y="-8%" width="116%" height="116%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" result="b" />
+              <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
             {[matOrbR, atmoOrbR].flatMap((ringR, ri) =>
               ELEMENTS.map(el => {
                 const { start, end } = sectorLayout[el];
@@ -596,9 +687,11 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 return (
                   <linearGradient key={gid} id={gid} gradientUnits="userSpaceOnUse" x1={x1} y1={y1} x2={x2} y2={y2}>
                     <stop offset="0%" stopColor={mc} stopOpacity={0} />
-                    <stop offset="18%" stopColor={mc} stopOpacity={peak * 0.35} />
+                    <stop offset="12%" stopColor={mc} stopOpacity={peak * 0.22} />
+                    <stop offset="28%" stopColor={mc} stopOpacity={peak * 0.72} />
                     <stop offset="50%" stopColor={mc} stopOpacity={peak} />
-                    <stop offset="82%" stopColor={mc} stopOpacity={peak * 0.35} />
+                    <stop offset="72%" stopColor={mc} stopOpacity={peak * 0.72} />
+                    <stop offset="88%" stopColor={mc} stopOpacity={peak * 0.22} />
                     <stop offset="100%" stopColor={mc} stopOpacity={0} />
                   </linearGradient>
                 );
@@ -623,8 +716,8 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 </linearGradient>
               );
             })}
-            <path id="orbit-textpath-atmo" d={`M ${-(atmoOrbR - 14)} 0 A ${atmoOrbR - 14} ${atmoOrbR - 14} 0 0 0 ${atmoOrbR - 14} 0`} fill="none" />
-            <path id="orbit-textpath-mat" d={`M ${-(matOrbR - 10)} 0 A ${matOrbR - 10} ${matOrbR - 10} 0 0 0 ${matOrbR - 10} 0`} fill="none" />
+            <path id="orbit-textpath-atmo" d={`M ${-(atmoOrbR - 22)} 0 A ${atmoOrbR - 22} ${atmoOrbR - 22} 0 0 0 ${atmoOrbR - 22} 0`} fill="none" />
+            <path id="orbit-textpath-mat" d={`M ${-(matOrbR - 26)} 0 A ${matOrbR - 26} ${matOrbR - 26} 0 0 0 ${matOrbR - 26} 0`} fill="none" />
           </defs>
           {/* Sector zone tints — hierarchy when cursor on nucleus; subtle orbit-sector hover */}
           {ELEMENTS.map(el => {
@@ -659,7 +752,11 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           {/* Nucleus boundary */}
           <circle cx="0" cy="0" r={nR + 4} fill="none" stroke={dc} strokeWidth="0.35" opacity={0.08} />
 
-          {/* Orbit rings — element-colored arcs per sector */}
+          {/* Static orbit tracks — subtle full rings (symbols align to fixed quadrants; sectors slide underneath) */}
+          <circle cx="0" cy="0" r={matOrbR} fill="none" stroke="rgba(88,88,98,0.045)" strokeWidth="0.5" />
+          <circle cx="0" cy="0" r={atmoOrbR} fill="none" stroke="rgba(88,88,98,0.04)" strokeWidth="0.45" />
+
+          {/* Orbit rings — element-colored arcs per sector (geometry follows distribution) */}
           {[matOrbR, atmoOrbR].map((ringR, ri) => (
             <React.Fragment key={`ring-${ri}`}>
               {ELEMENTS.map(el => {
@@ -667,9 +764,18 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 const arcD = sectorRingArcPath(ringR, start, end);
                 const gid = `orbit-arc-${ri}-${el}`;
                 return (
-                  <path key={`ring-${ri}-${el}`} d={arcD} fill="none" stroke={`url(#${gid})`}
-                    strokeWidth={ri === 0 ? 0.72 : 0.55} strokeLinecap="round"
-                    style={{ transition: 'opacity 0.6s ease' }}
+                  <path
+                    key={`ring-${ri}-${el}`}
+                    d={arcD}
+                    fill="none"
+                    stroke={`url(#${gid})`}
+                    strokeWidth={ri === 0 ? 0.88 : 0.62}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    filter="url(#orbit-arc-soft)"
+                    style={{
+                      transition: 'opacity 0.55s ease, d 0.55s cubic-bezier(0.22, 0.61, 0.36, 1)',
+                    }}
                   />
                 );
               })}
@@ -680,7 +786,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           <circle cx="0" cy="0" r={atmoOrbR + 5} fill="none" stroke="rgba(88,88,98,0.1)" strokeWidth="0.55" />
           <circle cx="0" cy="0" r={atmoOrbR - 4} fill="none" stroke="rgba(88,88,98,0.06)" strokeWidth="0.45" />
           {SECTOR_ORDER.map(el => {
-            const ca = sectorLayout[el].center;
+            const ca = fixedStychiaAngleRad(el);
             const rBase = atmoOrbR - 0.5;
             const rTip = atmoOrbR + 12;
             const xm = Math.cos(ca);
@@ -704,10 +810,10 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           <text
             className="pointer-events-none"
             fill={dc}
-            fillOpacity={hoveredRing === 'atmo' || expandedRing === 'atmo' ? 0.95 : 0.78}
-            fontSize="11.5"
-            fontWeight="700"
-            letterSpacing="0.42em"
+            fillOpacity={hoveredRing === 'atmo' || expandedRing === 'atmo' ? 0.92 : 0.62}
+            fontSize="9.5"
+            fontWeight="600"
+            letterSpacing="0.34em"
             style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif", textTransform: 'uppercase' }}
           >
             <textPath href="#orbit-textpath-atmo" startOffset="50%" textAnchor="middle">atmosphere</textPath>
@@ -715,10 +821,10 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           <text
             className="pointer-events-none"
             fill={dc}
-            fillOpacity={hoveredRing === 'mat' || expandedRing === 'mat' ? 0.95 : 0.78}
-            fontSize="11"
-            fontWeight="700"
-            letterSpacing="0.4em"
+            fillOpacity={hoveredRing === 'mat' || expandedRing === 'mat' ? 0.92 : 0.62}
+            fontSize="9.25"
+            fontWeight="600"
+            letterSpacing="0.3em"
             style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif", textTransform: 'uppercase' }}
           >
             <textPath href="#orbit-textpath-mat" startOffset="50%" textAnchor="middle">materials</textPath>
@@ -726,7 +832,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
 
           {/* Subtle radial spokes toward outer hints (ties copy to each sector when dwell completes) */}
           {nucleusHintsVisible && ELEMENTS.map(el => {
-            const ca = sectorLayout[el].center;
+            const ca = fixedStychiaAngleRad(el);
             const mc = MUTED_COLORS[el];
             const rInner = atmoOrbR + 4;
             const rOuter = atmoOrbR + 40;
@@ -752,14 +858,15 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           onMouseLeave={() => setHoveredRing(null)}
           onClick={(e) => { e.stopPropagation(); setExpandedRing(expandedRing === 'mat' ? null : 'mat'); }}
         >
-          <div className="absolute rounded-full transition-all duration-400" style={{
+          <div className="absolute rounded-full" style={{
             inset: 8,
             borderRadius: '50%',
             background: ringConicMat,
             opacity: hoveredRing === 'mat' || expandedRing === 'mat' ? 1 : 0.88,
             boxShadow: hoveredRing === 'mat' || expandedRing === 'mat'
-              ? `0 0 22px ${dc}25, inset 0 0 20px ${dc}0C`
-              : `0 0 10px ${dc}10`,
+              ? `0 0 28px ${dc}22, 0 0 12px ${dc}12, inset 0 0 24px ${dc}0A`
+              : `0 0 14px ${dc}0C, inset 0 0 18px rgba(255,255,255,0.35)`,
+            transition: 'opacity 0.45s ease, box-shadow 0.45s ease, background 0.55s cubic-bezier(0.22,0.61,0.36,1)',
             WebkitMask: `radial-gradient(circle closest-side, transparent calc(100% - ${expandedRing === 'mat' ? 5 : hoveredRing === 'mat' ? 4 : 3}px), #000 100%)`,
             mask: `radial-gradient(circle closest-side, transparent calc(100% - ${expandedRing === 'mat' ? 5 : hoveredRing === 'mat' ? 4 : 3}px), #000 100%)`,
           }} />
@@ -774,14 +881,15 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           onMouseLeave={() => setHoveredRing(null)}
           onClick={(e) => { e.stopPropagation(); setExpandedRing(expandedRing === 'atmo' ? null : 'atmo'); }}
         >
-          <div className="absolute rounded-full transition-all duration-400" style={{
+          <div className="absolute rounded-full" style={{
             inset: 8,
             borderRadius: '50%',
             background: ringConicAtmo,
             opacity: hoveredRing === 'atmo' || expandedRing === 'atmo' ? 1 : 0.82,
             boxShadow: hoveredRing === 'atmo' || expandedRing === 'atmo'
-              ? `0 0 26px ${dc}20, inset 0 0 22px ${dc}08`
-              : `0 0 12px ${dc}0C`,
+              ? `0 0 30px ${dc}1A, 0 0 14px ${dc}10, inset 0 0 26px ${dc}08`
+              : `0 0 14px ${dc}08, inset 0 0 20px rgba(255,255,255,0.28)`,
+            transition: 'opacity 0.45s ease, box-shadow 0.45s ease, background 0.55s cubic-bezier(0.22,0.61,0.36,1)',
             WebkitMask: `radial-gradient(circle closest-side, transparent calc(100% - ${expandedRing === 'atmo' ? 5 : hoveredRing === 'atmo' ? 4 : 3}px), #000 100%)`,
             mask: `radial-gradient(circle closest-side, transparent calc(100% - ${expandedRing === 'atmo' ? 5 : hoveredRing === 'atmo' ? 4 : 3}px), #000 100%)`,
           }} />
@@ -789,7 +897,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
 
         {/* ═══ Element symbol triangles — uniform size ═══ */}
         {ELEMENTS.map(el => {
-          const a = sectorLayout[el].center;
+          const a = fixedStychiaAngleRad(el);
           const mc = MUTED_COLORS[el];
           const cx = ctr + Math.cos(a) * symOrbR;
           const cy = ctr + Math.sin(a) * symOrbR;
@@ -814,7 +922,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           const pct = distribution[el];
           return (
             <div key={`sym-${el}`} className="absolute flex flex-col items-center group orb-item"
-              style={{ left: cx, top: cy, transform: `translate(-50%, -50%) scale(${scale})`, zIndex: 20, transition: 'all 0.3s ease' }}
+              style={{ left: cx, top: cy, transform: `translate(-50%, -50%) scale(${scale})`, zIndex: 20, transition: 'transform 0.3s ease, opacity 0.3s ease' }}
               onMouseEnter={e => { if (!isAct) (e.currentTarget as HTMLElement).style.transform = 'translate(-50%, -50%) scale(1.15)'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = `translate(-50%, -50%) scale(${scale})`; }}>
               <button className="flex items-center justify-center transition-all opacity-0 group-hover:opacity-70 hover:!opacity-100 hover:scale-125"
@@ -829,7 +937,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                   {hasBar && <line x1={leftX + side * 0.2} y1={barY} x2={rightX - side * 0.2} y2={barY} stroke={mc} strokeWidth={sw} strokeLinecap="round" opacity={op} />}
                 </svg>
               </button>
-              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', color: mc, opacity: isAct ? 0.75 : isDom ? 0.5 : 0.3, lineHeight: 1, transition: 'all 0.3s ease', background: 'rgba(255,255,255,0.7)', padding: '1px 5px', borderRadius: 3 }}>{el}</span>
+              <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: mc, opacity: isAct ? 0.78 : isDom ? 0.48 : 0.28, lineHeight: 1, transition: 'opacity 0.3s ease, transform 0.3s ease', background: 'rgba(255,255,255,0.82)', padding: '0 4px', borderRadius: 2 }}>{el}</span>
               <button className="flex items-center justify-center transition-all opacity-0 group-hover:opacity-70 hover:!opacity-100 hover:scale-125"
                 style={{ width: 22, height: 16, color: mc, background: 'none', border: 'none', padding: 0, cursor: 'pointer', marginTop: 2 }}
                 onClick={e => { e.stopPropagation(); snap(isMuted); onAdjust(el, Math.max(5, pct - 5)); }}>
@@ -847,14 +955,17 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           const tex = MAT_TEX[mat.name];
           const isExp = expMat === mat.name;
           const ringExp = expandedRing === 'mat';
-          const baseSz = 48;
-          const sz = isExp ? 88 : ringExp ? baseSz + 10 : baseSz;
+          const baseSz = 54;
+          const sz = isExp ? 92 : ringExp ? baseSz + 8 : baseSz;
           const cx = ctr + p.x;
           const cy = ctr + p.y;
           const ang = Math.atan2(p.y, p.x);
-          const labelR = sz / 2 + 10 + (ringExp || isExp ? 16 : 12);
-          const labelDx = Math.cos(ang) * labelR;
-          const labelDy = Math.sin(ang) * labelR;
+          const rBead = Math.hypot(p.x, p.y);
+          const labelOutR = Math.max(rBead + sz / 2 + 22, symOrbR + 54);
+          const ox = Math.cos(ang) * labelOutR;
+          const oy = Math.sin(ang) * labelOutR;
+          const labelDx = ox - p.x;
+          const labelDy = oy - p.y;
           const handleMatClick = (e: React.MouseEvent) => {
             e.stopPropagation();
             snap(isMuted);
@@ -913,10 +1024,13 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           const cy = ctr + p.y;
           const ang = Math.atan2(p.y, p.x);
           const atmoRingExp = expandedRing === 'atmo';
-          const sphereSz = atmoRingExp ? 24 : 17;
-          const labelDist = sphereSz / 2 + 14 + (atmoRingExp ? 10 : 4);
-          const lblX = Math.cos(ang) * labelDist;
-          const lblY = Math.sin(ang) * labelDist;
+          const sphereSz = atmoRingExp ? 28 : 21;
+          const rBead = Math.hypot(p.x, p.y);
+          const labelOutR = Math.max(rBead + sphereSz / 2 + 18, symOrbR + 52);
+          const ox = Math.cos(ang) * labelOutR;
+          const oy = Math.sin(ang) * labelOutR;
+          const lblX = ox - p.x;
+          const lblY = oy - p.y;
           return (
             <div key={`${key}-${i}`} className="absolute cursor-pointer orb-item"
               style={{ left: cx, top: cy, transform: `translate(-50%, -50%)${atmoRingExp ? ' scale(1.15)' : ''}`, zIndex: atmoRingExp ? 12 : 8, transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)' }}
@@ -957,10 +1071,10 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 <div style={{ position: 'absolute', width: '40%', height: '35%', top: '12%', left: '16%', borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(255,255,255,0.35) 0%, transparent 75%)' }} />
               </div>
               <span data-atmo-label="" className="absolute pointer-events-none" style={{
-                fontSize: atmoRingExp ? 12 : 11, fontWeight: atmoRingExp ? 500 : 400, fontStyle: 'italic',
+                fontSize: atmoRingExp ? 11.5 : 10.5, fontWeight: atmoRingExp ? 500 : 400, fontStyle: 'italic',
                 color: atmoRingExp ? ec : mc, fontFamily: "'IBM Plex Serif', Georgia, serif",
-                whiteSpace: 'nowrap', letterSpacing: '0.04em', opacity: atmoRingExp ? 0.88 : 0.62,
-                maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap', letterSpacing: '0.03em', opacity: atmoRingExp ? 0.9 : 0.68,
+                maxWidth: 128, overflow: 'hidden', textOverflow: 'ellipsis',
                 textShadow: '0 1px 2px rgba(255,255,255,0.95), 0 0 12px rgba(255,255,255,0.65)',
                 transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)',
                 left: `calc(50% + ${lblX}px)`, top: `calc(50% + ${lblY}px)`, transform: 'translate(-50%, -50%) scale(1)',
@@ -1075,7 +1189,31 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                   </svg>
                 );
               })()}
-              <span className="uppercase tracking-[0.4em] font-light mt-1" style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.35em' }}>{dom}</span>
+              <div className="flex flex-col items-center justify-center mt-1" style={{ gap: 3 }}>
+                <span
+                  className="uppercase font-medium text-center leading-tight"
+                  style={{
+                    fontSize: 9,
+                    color: 'rgba(255,255,255,0.5)',
+                    letterSpacing: '0.32em',
+                    textShadow: '0 1px 6px rgba(0,0,0,0.12)',
+                  }}
+                >
+                  {dom}
+                </span>
+                <span
+                  className="tabular-nums font-extralight leading-none text-center"
+                  style={{
+                    fontSize: 14,
+                    color: 'rgba(255,255,255,0.88)',
+                    letterSpacing: '0.04em',
+                    textShadow: '0 1px 6px rgba(0,0,0,0.15)',
+                  }}
+                >
+                  {Math.round(distribution[dom])}
+                  <span style={{ fontSize: 9, fontWeight: 500, opacity: 0.5, marginLeft: 1 }}>%</span>
+                </span>
+              </div>
             </div>
 
             {/* Active state — spinning rings + headline + generate */}
@@ -1148,7 +1286,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           const mc = MUTED_COLORS[el];
           const stagger = sorted.findIndex(([e]) => e === el);
           const safeStagger = stagger < 0 ? 0 : stagger;
-          const ca = sectorLayout[el].center;
+          const ca = fixedStychiaAngleRad(el);
           const c = Math.cos(ca), s = Math.sin(ca);
           const pad = 44;
           const innerR = atmoOrbR + 24;
@@ -1292,7 +1430,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
       {/* ═══ Material picker ═══ */}
       {matPicker && (() => {
         const mc = MUTED_COLORS[matPicker];
-        const a = sectorLayout[matPicker].center;
+        const a = fixedStychiaAngleRad(matPicker);
         const midR = (symOrbR + matOrbR) / 2;
         const rawX = Math.cos(a) * (midR + 70);
         const rawY = Math.sin(a) * (midR + 70);
@@ -1348,7 +1486,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
       {/* ═══ Atmosphere picker — triggered by clicking atmo sphere ═══ */}
       {atmoPicker && (() => {
         const mc = MUTED_COLORS[atmoPicker];
-        const a = sectorLayout[atmoPicker].center;
+        const a = fixedStychiaAngleRad(atmoPicker);
         const midR = (matOrbR + atmoOrbR) / 2;
         const rawX = Math.cos(a) * (midR + 30);
         const rawY = Math.sin(a) * (midR + 30);

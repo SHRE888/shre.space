@@ -100,32 +100,48 @@ export const CANONICAL_ATMOSPHERE: Record<Element | 'shared', string[]> = CANONI
 
 const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
+/** Square macro crop for material-step options (2×2 grid); keeps framing symmetric on all viewports. */
+const surveyTex = (photoId: string) =>
+  `https://images.unsplash.com/${photoId}?auto=format&w=720&h=720&fit=crop&q=85`;
+
+/** Landscape / nature step — outdoor scenes only, square crop for survey grid. */
+const surveyScene = (photoId: string) =>
+  `https://images.unsplash.com/${photoId}?auto=format&w=900&h=900&fit=crop&q=85`;
+
+/** Interior / room step — real indoor spaces only (never building exteriors for “room” copy). */
+const surveyRoom = (photoId: string) =>
+  `https://images.unsplash.com/${photoId}?auto=format&w=800&h=800&fit=crop&q=85`;
+
+/** Architecture / season step — exteriors, buildings, or seasonal landscapes. */
+const surveyArch = (photoId: string) =>
+  `https://images.unsplash.com/${photoId}?auto=format&w=800&h=520&fit=crop&q=85`;
+
 const Q1_VARIANTS: Question[] = [
   {
     id: 'q1', text: 'Which nature calls to you?', subtitle: 'Feel the energy — each landscape holds an element', visual: true,
     options: [
-      { text: 'Canyon & clay', weights: { earth: 5, fire: 1 }, image: 'https://images.unsplash.com/photo-1474044159687-1ee9f3a51722?w=480&h=360&fit=crop&q=80' },
-      { text: 'Volcanic glow', weights: { fire: 5, earth: 1 }, image: 'https://images.unsplash.com/photo-1476390893418-4c88ecc5a945?w=480&h=360&fit=crop&q=80' },
-      { text: 'Still lake', weights: { water: 5, air: 1 }, image: 'https://images.unsplash.com/photo-1439066615861-d1af74d74000?w=480&h=360&fit=crop&q=80' },
-      { text: 'Misty peaks', weights: { air: 5, water: 1 }, image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=480&h=360&fit=crop&q=80' },
+      { text: 'Canyon & clay', weights: { earth: 5, fire: 1 }, image: surveyScene('photo-1474044159687-1ee9f3a51722') },
+      { text: 'Volcanic glow', weights: { fire: 5, earth: 1 }, image: surveyScene('photo-1476390893418-4c88ecc5a945') },
+      { text: 'Still lake', weights: { water: 5, air: 1 }, image: surveyScene('photo-1439066615861-d1af74d74000') },
+      { text: 'Misty peaks', weights: { air: 5, water: 1 }, image: surveyScene('photo-1464822759023-fed622ff2c3b') },
     ]
   },
   {
     id: 'q1', text: 'Where does your soul rest?', subtitle: 'Nature reveals your inner element', visual: true,
     options: [
-      { text: 'Desert dunes', weights: { earth: 5, air: 1 }, image: 'https://images.unsplash.com/photo-1509316785289-025f5b846b35?w=480&h=360&fit=crop&q=80' },
-      { text: 'Sunset cliffs', weights: { fire: 5, earth: 2 }, image: 'https://images.unsplash.com/photo-1506929562872-bb421503ef21?w=480&h=360&fit=crop&q=80' },
-      { text: 'Ocean horizon', weights: { water: 5, air: 2 }, image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=480&h=360&fit=crop&q=80' },
-      { text: 'Cloud forest', weights: { air: 5, water: 1, earth: 1 }, image: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=480&h=360&fit=crop&q=80' },
+      { text: 'Desert dunes', weights: { earth: 5, air: 1 }, image: surveyScene('photo-1509316785289-025f5b846b35') },
+      { text: 'Sunset cliffs', weights: { fire: 5, earth: 2 }, image: surveyScene('photo-1506929562872-bb421503ef21') },
+      { text: 'Ocean horizon', weights: { water: 5, air: 2 }, image: surveyScene('photo-1507525428034-b723cf961d3e') },
+      { text: 'Cloud forest', weights: { air: 5, water: 1, earth: 1 }, image: surveyScene('photo-1501785888041-af3ef285b470') },
     ]
   },
   {
     id: 'q1', text: 'Which landscape is yours?', subtitle: 'The place that feels like home', visual: true,
     options: [
-      { text: 'Ancient forest', weights: { earth: 5, water: 1 }, image: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=480&h=360&fit=crop&q=80' },
-      { text: 'Savanna heat', weights: { fire: 5, air: 1 }, image: 'https://images.unsplash.com/photo-1516026672322-bc52d61a55d5?w=480&h=360&fit=crop&q=80' },
-      { text: 'Fjord silence', weights: { water: 5, earth: 1 }, image: 'https://images.unsplash.com/photo-1513519245088-0e12902e35ca?w=480&h=360&fit=crop&q=80' },
-      { text: 'Alpine air', weights: { air: 5, fire: 1 }, image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=480&h=360&fit=crop&q=80' },
+      { text: 'Ancient forest', weights: { earth: 5, water: 1 }, image: surveyScene('photo-1448375240586-882707db888b') },
+      { text: 'Savanna heat', weights: { fire: 5, air: 1 }, image: surveyScene('photo-1516026672322-bc52d61a55d5') },
+      { text: 'Fjord silence', weights: { water: 5, earth: 1 }, image: surveyScene('photo-1513519245088-0e12902e35ca') },
+      { text: 'Alpine air', weights: { air: 5, fire: 1 }, image: surveyScene('photo-1506905925346-21bda4d32df4') },
     ]
   },
 ];
@@ -134,28 +150,28 @@ const Q2_VARIANTS: Question[] = [
   {
     id: 'q2', text: 'Which surface do you want to touch?', subtitle: 'The material that resonates with your nature', visual: true,
     options: [
-      { text: 'Natural stone', weights: { earth: 5, water: 1 }, image: 'https://images.unsplash.com/photo-1584184200374-73d7f6c6a175?w=480&h=360&fit=crop&q=80' },
-      { text: 'Oxidized metal', weights: { fire: 5, earth: 2 }, image: 'https://images.unsplash.com/photo-1523447704114-37cea08ee064?w=480&h=360&fit=crop&q=80' },
-      { text: 'Dark walnut', weights: { water: 5, earth: 2 }, image: 'https://images.unsplash.com/photo-1577226298604-ef918f9733e2?w=480&h=360&fit=crop&q=80' },
-      { text: 'White marble', weights: { air: 5, water: 1 }, image: 'https://images.unsplash.com/photo-1544967082-d9d25d867d66?w=480&h=360&fit=crop&q=80' },
+      { text: 'Natural stone', weights: { earth: 5, water: 1 }, image: surveyTex('photo-1618220179428-22790b461013') },
+      { text: 'Oxidized metal', weights: { fire: 5, earth: 2 }, image: surveyTex('photo-1523447704114-37cea08ee064') },
+      { text: 'Dark walnut', weights: { earth: 5, water: 1 }, image: surveyTex('photo-1631889993954-87b1b128edfe') },
+      { text: 'White marble', weights: { air: 5, water: 1 }, image: surveyTex('photo-1600210491892-03d3c28da189') },
     ]
   },
   {
     id: 'q2', text: 'Which texture speaks to you?', subtitle: 'Close your eyes and feel', visual: true,
     options: [
-      { text: 'Raw clay', weights: { earth: 5, fire: 1 }, image: 'https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?w=480&h=360&fit=crop&q=80' },
-      { text: 'Brushed copper', weights: { fire: 5, air: 1 }, image: 'https://images.unsplash.com/photo-1594896733292-9a77b5809c63?w=480&h=360&fit=crop&q=80' },
-      { text: 'Aged oak', weights: { water: 5, earth: 1 }, image: 'https://images.unsplash.com/photo-1644931551533-02906718127f?w=480&h=360&fit=crop&q=80' },
-      { text: 'Polished concrete', weights: { air: 5, earth: 1 }, image: 'https://images.unsplash.com/photo-1536566482680-fca31930a0bd?w=480&h=360&fit=crop&q=80' },
+      { text: 'Raw clay', weights: { earth: 5, fire: 1 }, image: surveyTex('photo-1615529328331-f8917597711f') },
+      { text: 'Brushed copper', weights: { fire: 5, air: 1 }, image: surveyTex('photo-1594896733292-9a77b5809c63') },
+      { text: 'Aged oak', weights: { earth: 4, water: 2 }, image: surveyTex('photo-1586075010923-2dd4570fb338') },
+      { text: 'Polished concrete', weights: { air: 5, earth: 1 }, image: surveyTex('photo-1536566482680-fca31930a0bd') },
     ]
   },
   {
     id: 'q2', text: 'Pick a material palette', subtitle: 'What your hands want to feel', visual: true,
     options: [
-      { text: 'Terracotta', weights: { earth: 5, fire: 2 }, image: 'https://images.unsplash.com/photo-1585314062340-f1a5a7c9328d?w=480&h=360&fit=crop&q=80' },
-      { text: 'Black steel', weights: { fire: 5, water: 1 }, image: 'https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?w=480&h=360&fit=crop&q=80' },
-      { text: 'Smooth wood', weights: { water: 5, air: 1 }, image: 'https://images.unsplash.com/photo-1546484396-fb3fc6f95f98?w=480&h=360&fit=crop&q=80' },
-      { text: 'Frosted glass', weights: { air: 5, water: 2 }, image: 'https://images.unsplash.com/photo-1543393716-375f47996a77?w=480&h=360&fit=crop&q=80' },
+      { text: 'Terracotta', weights: { earth: 5, fire: 2 }, image: surveyTex('photo-1585314062340-f1a5a7c9328d') },
+      { text: 'Black steel', weights: { fire: 5, water: 1 }, image: surveyTex('photo-1533035353720-f1c6a75cd8ab') },
+      { text: 'Smooth wood', weights: { earth: 3, water: 3 }, image: surveyTex('photo-1546484396-fb3fc6f95f98') },
+      { text: 'Frosted glass', weights: { air: 5, water: 2 }, image: surveyTex('photo-1543393716-375f47996a77') },
     ]
   },
 ];
@@ -164,28 +180,28 @@ const Q3_VARIANTS: Question[] = [
   {
     id: 'q3', text: 'Where would you feel at home?', subtitle: 'The interior that speaks your language', visual: true,
     options: [
-      { text: 'Warm & textured', weights: { earth: 5, fire: 1 }, image: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=480&h=360&fit=crop&q=80' },
-      { text: 'Bold & dramatic', weights: { fire: 5, earth: 1 }, image: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=480&h=360&fit=crop&q=80' },
-      { text: 'Soft & fluid', weights: { water: 5, air: 2 }, image: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=480&h=360&fit=crop&q=80' },
-      { text: 'Bright & open', weights: { air: 5, water: 1 }, image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=480&h=360&fit=crop&q=80' },
+      { text: 'Warm & textured', weights: { earth: 5, fire: 1 }, image: surveyRoom('photo-1600210492486-724fe5c67fb0') },
+      { text: 'Bold & dramatic', weights: { fire: 5, earth: 1 }, image: surveyRoom('photo-1600607687939-ce8a6c25118c') },
+      { text: 'Soft & fluid', weights: { water: 5, air: 2 }, image: surveyRoom('photo-1616486338812-3dadae4b4ace') },
+      { text: 'Bright & open', weights: { air: 5, water: 1 }, image: surveyRoom('photo-1600566753190-17f0baa2a6c3') },
     ]
   },
   {
     id: 'q3', text: 'Which room draws you in?', subtitle: 'Imagine spending a day here', visual: true,
     options: [
-      { text: 'Rustic retreat', weights: { earth: 5, water: 2 }, image: 'https://images.unsplash.com/photo-1618219908412-a29a1bb7b86e?w=480&h=360&fit=crop&q=80' },
-      { text: 'Dark elegance', weights: { fire: 5, water: 1 }, image: 'https://images.unsplash.com/photo-1615874694520-474822394e73?w=480&h=360&fit=crop&q=80' },
-      { text: 'Serene comfort', weights: { water: 5, earth: 1 }, image: 'https://images.unsplash.com/photo-1617325247661-675ab4b64ae2?w=480&h=360&fit=crop&q=80' },
-      { text: 'Airy loft', weights: { air: 5, fire: 1 }, image: 'https://images.unsplash.com/photo-1741394546743-2d64519ba0d3?w=480&h=360&fit=crop&q=80' },
+      { text: 'Rustic retreat', weights: { earth: 5, water: 2 }, image: surveyRoom('photo-1618219908412-a29a1bb7b86e') },
+      { text: 'Dark elegance', weights: { fire: 5, water: 1 }, image: surveyRoom('photo-1615874694520-474822394e73') },
+      { text: 'Serene comfort', weights: { water: 5, earth: 1 }, image: surveyRoom('photo-1617325247661-675ab4b64ae2') },
+      { text: 'Airy loft', weights: { air: 5, fire: 1 }, image: surveyRoom('photo-1502672260266-1c1ef2d93688') },
     ]
   },
   {
     id: 'q3', text: 'Which space is your sanctuary?', subtitle: 'The atmosphere you crave', visual: true,
     options: [
-      { text: 'Earth tones', weights: { earth: 5, fire: 1, water: 1 }, image: 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=480&h=360&fit=crop&q=80' },
-      { text: 'Moody contrast', weights: { fire: 5, earth: 2 }, image: 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=480&h=360&fit=crop&q=80' },
-      { text: 'Calm waters', weights: { water: 5, air: 1 }, image: 'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=480&h=360&fit=crop&q=80' },
-      { text: 'Pure light', weights: { air: 5, earth: 1 }, image: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=480&h=360&fit=crop&q=80' },
+      { text: 'Earth tones', weights: { earth: 5, fire: 1, water: 1 }, image: surveyRoom('photo-1600585154526-990dced4db0d') },
+      { text: 'Moody contrast', weights: { fire: 5, earth: 2 }, image: surveyRoom('photo-1600607687920-4e2a09cf159d') },
+      { text: 'Calm waters', weights: { water: 5, air: 1 }, image: surveyRoom('photo-1540555700478-4be289fbecef') },
+      { text: 'Pure light', weights: { air: 5, earth: 1 }, image: surveyRoom('photo-1595526114035-0d45ed16cfbc') },
     ]
   },
 ];
@@ -194,19 +210,19 @@ const Q4_ARCHITECTURE: Question[] = [
   {
     id: 'q4', text: 'Which form inspires you?', subtitle: 'Architecture as frozen energy', visual: true,
     options: [
-      { text: 'Grounded mass', weights: { earth: 5, fire: 1 }, image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=480&h=360&fit=crop&q=80' },
-      { text: 'Dynamic edge', weights: { fire: 5, air: 2 }, image: 'https://images.unsplash.com/photo-1511818966892-d7d671e672a2?w=480&h=360&fit=crop&q=80' },
-      { text: 'Organic curve', weights: { water: 5, earth: 1 }, image: 'https://images.unsplash.com/photo-1510554318937-cd0860bf68c2?w=480&h=360&fit=crop&q=80' },
-      { text: 'Glass & sky', weights: { air: 5, water: 1 }, image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=480&h=360&fit=crop&q=80' },
+      { text: 'Grounded mass', weights: { earth: 5, fire: 1 }, image: surveyArch('photo-1600596542815-ffad4c1539a9') },
+      { text: 'Dynamic edge', weights: { fire: 5, air: 2 }, image: surveyArch('photo-1511818966892-d7d671e672a2') },
+      { text: 'Organic curve', weights: { water: 5, earth: 1 }, image: surveyArch('photo-1510554318937-cd0860bf68c2') },
+      { text: 'Glass & sky', weights: { air: 5, water: 1 }, image: surveyArch('photo-1486406146926-c627a92ad1ab') },
     ]
   },
   {
     id: 'q4', text: 'Which building would you enter?', subtitle: 'Structure reveals character', visual: true,
     options: [
-      { text: 'Stone fortress', weights: { earth: 5, water: 1 }, image: 'https://images.unsplash.com/photo-1760294750243-600533dfc8c0?w=480&h=360&fit=crop&q=80' },
-      { text: 'Steel & fire', weights: { fire: 5, earth: 1 }, image: 'https://images.unsplash.com/photo-1759828089087-8f71d977b11e?w=480&h=360&fit=crop&q=80' },
-      { text: 'Flowing form', weights: { water: 5, air: 2 }, image: 'https://images.unsplash.com/photo-1510554318937-cd0860bf68c2?w=480&h=360&fit=crop&q=80' },
-      { text: 'Open frame', weights: { air: 5, fire: 1 }, image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=480&h=360&fit=crop&q=80' },
+      { text: 'Stone fortress', weights: { earth: 5, water: 1 }, image: surveyArch('photo-1564013799919-ab600027ffc6') },
+      { text: 'Steel & fire', weights: { fire: 5, earth: 1 }, image: surveyArch('photo-1487958449943-2427ede8e615') },
+      { text: 'Flowing form', weights: { water: 5, air: 2 }, image: surveyArch('photo-1510554318937-cd0860bf68c2') },
+      { text: 'Open frame', weights: { air: 5, fire: 1 }, image: surveyArch('photo-1486406146926-c627a92ad1ab') },
     ]
   },
 ];
@@ -215,19 +231,19 @@ const Q4_SEASONS: Question[] = [
   {
     id: 'q4', text: 'Which season feels like you?', subtitle: 'Your energy has a rhythm', visual: true,
     options: [
-      { text: 'Autumn warmth', weights: { earth: 5, fire: 2 }, image: 'https://images.unsplash.com/photo-1508193638397-1c4234db14d8?w=480&h=360&fit=crop&q=80' },
-      { text: 'Summer blaze', weights: { fire: 5, air: 1 }, image: 'https://images.unsplash.com/photo-1504701954957-2010ec3bcec1?w=480&h=360&fit=crop&q=80' },
-      { text: 'Winter stillness', weights: { water: 5, earth: 1 }, image: 'https://images.unsplash.com/photo-1457269449834-928af64c684d?w=480&h=360&fit=crop&q=80' },
-      { text: 'Spring breeze', weights: { air: 5, water: 2 }, image: 'https://images.unsplash.com/photo-1490750967868-88aa4f44baee?w=480&h=360&fit=crop&q=80' },
+      { text: 'Autumn warmth', weights: { earth: 5, fire: 2 }, image: surveyArch('photo-1508193638397-1c4234db14d8') },
+      { text: 'Summer blaze', weights: { fire: 5, air: 1 }, image: surveyArch('photo-1504300718067-1b364ea51846') },
+      { text: 'Winter stillness', weights: { water: 5, earth: 1 }, image: surveyArch('photo-1457269449834-928af64c684d') },
+      { text: 'Spring breeze', weights: { air: 5, water: 2 }, image: surveyArch('photo-1490750967868-88aa4f44baee') },
     ]
   },
   {
     id: 'q4', text: 'Your time of year?', subtitle: 'Seasons mirror elemental energy', visual: true,
     options: [
-      { text: 'Golden autumn', weights: { earth: 5, water: 1 }, image: 'https://images.unsplash.com/photo-1508193638397-1c4234db14d8?w=480&h=360&fit=crop&q=80' },
-      { text: 'Burning summer', weights: { fire: 5, earth: 2 }, image: 'https://images.unsplash.com/photo-1504701954957-2010ec3bcec1?w=480&h=360&fit=crop&q=80' },
-      { text: 'Deep winter', weights: { water: 5, air: 1 }, image: 'https://images.unsplash.com/photo-1457269449834-928af64c684d?w=480&h=360&fit=crop&q=80' },
-      { text: 'Fresh spring', weights: { air: 5, earth: 1 }, image: 'https://images.unsplash.com/photo-1490750967868-88aa4f44baee?w=480&h=360&fit=crop&q=80' },
+      { text: 'Golden autumn', weights: { earth: 5, water: 1 }, image: surveyArch('photo-1508193638397-1c4234db14d8') },
+      { text: 'Burning summer', weights: { fire: 5, earth: 2 }, image: surveyArch('photo-1504300718067-1b364ea51846') },
+      { text: 'Deep winter', weights: { water: 5, air: 1 }, image: surveyArch('photo-1457269449834-928af64c684d') },
+      { text: 'Fresh spring', weights: { air: 5, earth: 1 }, image: surveyArch('photo-1490750967868-88aa4f44baee') },
     ]
   },
 ];

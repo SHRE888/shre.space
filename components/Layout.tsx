@@ -29,7 +29,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   return (
     <div className={`min-h-screen min-h-[100dvh] flex flex-col font-light layout-root ${brilliant ? 'brilliant-mode' : 'bg-white text-[#1a1a1a]'}`} data-brilliant={brilliant ? 'true' : 'false'}>
       {!isLanding && (
-        <header className="fixed top-0 left-0 w-full h-11 border-b border-gray-100/50 bg-white/85 backdrop-blur-xl z-50 px-3 sm:px-6 md:px-8 flex items-center justify-between animate-fade-in-down header-bar safe-top">
+        <header className="fixed top-0 left-0 w-full h-11 border-b border-gray-100/50 bg-white/85 backdrop-blur-xl z-50 px-3 sm:px-6 md:px-8 flex items-center justify-between animate-fade-in-down header-bar safe-top safe-x">
           <div className="flex items-center gap-2 sm:gap-4 min-w-0">
             <div
               className="text-[11px] sm:text-[13px] tracking-[0.2em] sm:tracking-[0.4em] cursor-pointer font-medium text-black uppercase hover:opacity-60 transition-opacity truncate"
@@ -148,7 +148,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       )}
 
       <main
-        className={`${isLanding ? 'flex-grow' : 'flex flex-1 flex-col min-h-0 overflow-y-auto pt-11'}`}
+        className={`${isLanding ? 'flex-grow' : 'flex flex-1 flex-col min-h-0 overflow-y-auto overflow-x-hidden pt-11 safe-x'}`}
       >
         <div
           className={`transition-opacity duration-500 ${isLanding ? '' : 'flex-1 flex flex-col min-h-0'} ${mounted ? 'opacity-100' : 'opacity-0'}`}
@@ -166,7 +166,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <span className="hidden sm:inline">Four Element System</span>
             <span className="sm:hidden">4E System</span>
             <span className="text-gray-200/50">·</span>
-            <span>2025</span>
+            <span>2026</span>
           </div>
         </footer>
       )}

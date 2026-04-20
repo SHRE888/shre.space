@@ -3,6 +3,13 @@
   box-sizing: border-box;
 }
 
+:root {
+  /* Fixed header (h-11) + footer (h-7) — use for min-h / h calc on every routed page */
+  --app-header-h: 2.75rem;
+  --app-footer-h: 1.75rem;
+  --app-chrome-h: calc(var(--app-header-h) + var(--app-footer-h));
+}
+
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -22,6 +29,23 @@ html {
 @supports (padding: env(safe-area-inset-bottom)) {
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
   .safe-top { padding-top: env(safe-area-inset-top); }
+  .safe-x {
+    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+  }
+}
+
+/* Usable viewport under fixed chrome (notch + home indicator aware via dvh) */
+.min-h-app-main {
+  min-height: calc(100dvh - var(--app-chrome-h));
+  min-height: calc(100svh - var(--app-chrome-h));
+}
+.h-app-workspace {
+  /* svh/dvh: stable viewport on mobile URL bar show/hide */
+  height: calc(100dvh - var(--app-chrome-h));
+  height: calc(100svh - var(--app-chrome-h));
+  max-height: calc(100dvh - var(--app-chrome-h));
+  max-height: calc(100svh - var(--app-chrome-h));
 }
 
 /* Focus-visible: accessible keyboard focus ring */
@@ -710,14 +734,19 @@ input[type="range"]::-moz-range-thumb {
 
 /* ── Responsive mobile utilities ── */
 
-/* Mobile-friendly touch targets */
+/* Compact controls: opt out of any parent min-touch rules */
+.touch-target-auto {
+  min-height: auto;
+  min-width: auto;
+}
+
+/* Optional ≥44px tap zone on phones/tablets */
 @media (pointer: coarse) {
-  button, a, [role="button"] {
+  .touch-target-min {
     min-height: 44px;
     min-width: 44px;
+    box-sizing: border-box;
   }
-  /* Exception for tiny inline elements like dots, chips, etc. */
-  .touch-target-auto { min-height: auto; min-width: auto; }
 }
 
 /* Mobile sidebar overlay */

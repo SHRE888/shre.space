@@ -204,7 +204,10 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
     const headline = ENERGY_HEADLINES[domEl][Math.floor(Math.random() * 3)];
     const total = sorted.reduce((s, [, v]) => s + v, 0);
     return (
-      <div className="min-h-[calc(100vh-92px)] min-h-[calc(100dvh-92px)] flex flex-col items-center justify-center bg-[#fafafa] px-4 sm:px-6">
+      <div
+        className="min-h-app-main flex flex-col items-center justify-center bg-[#fafafa] px-4 sm:px-6"
+        style={{ paddingLeft: 'max(1rem, env(safe-area-inset-left))', paddingRight: 'max(1rem, env(safe-area-inset-right))', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}
+      >
         <style>{`
           @keyframes resultFadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
           @keyframes barGrow{from{width:0}to{width:var(--bar-w)}}
@@ -276,24 +279,39 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
   }
 
   return (
-    <div className="min-h-[calc(100vh-92px)] min-h-[calc(100dvh-92px)] flex flex-col bg-[#fafafa]">
-      {/* Numbered step progress */}
-      <div className="pt-4 sm:pt-6 pb-3 sm:pb-4 px-3 sm:px-4">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+    <div
+      className="min-h-app-main flex flex-col bg-[#fafafa]"
+      style={{ paddingLeft: 'max(0.75rem, env(safe-area-inset-left))', paddingRight: 'max(0.75rem, env(safe-area-inset-right))' }}
+    >
+      {/* Numbered step progress — symmetric connectors, readable on narrow phones */}
+      <div className="pt-3 sm:pt-6 pb-2 sm:pb-4 px-2 sm:px-4 shrink-0">
+        <div className="max-w-lg sm:max-w-xl mx-auto flex items-start justify-between gap-0">
           {stepLabels.map((label, i) => (
-            <div key={i} className="flex flex-col items-center gap-1.5 relative" style={{ flex: 1 }}>
+            <div key={i} className="flex flex-col items-center gap-1 sm:gap-1.5 relative min-w-0 flex-1 max-w-[25%]">
               {i > 0 && (
-                <div className="absolute top-[14px] right-1/2 w-full h-[1.5px]"
-                  style={{ background: qIndex > i - 1 ? '#1a1a1a' : '#e5e5e5', transition: 'background 0.4s ease' }} />
+                <div
+                  className="absolute h-[1.5px] z-0"
+                  style={{
+                    top: 14,
+                    right: '50%',
+                    width: '100%',
+                    background: qIndex > i - 1 ? '#1a1a1a' : '#e5e5e5',
+                    transition: 'background 0.4s ease',
+                  }}
+                />
               )}
-              <div className="relative z-10 flex items-center justify-center rounded-full transition-all duration-400"
+              <div
+                className="relative z-10 flex shrink-0 items-center justify-center rounded-full transition-all duration-400"
                 style={{
-                  width: 28, height: 28,
+                  width: 28,
+                  height: 28,
                   background: qIndex > i ? '#1a1a1a' : qIndex === i ? '#1a1a1a' : '#fff',
                   border: qIndex >= i ? '2px solid #1a1a1a' : '2px solid #d4d4d4',
                   color: qIndex >= i ? '#fff' : '#aaa',
-                  fontSize: '12px', fontWeight: 600,
-                }}>
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
                 {qIndex > i ? (
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M3 8.5 L6.5 12 L13 4" />
@@ -302,8 +320,10 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                   i + 1
                 )}
               </div>
-              <span className="text-[10px] uppercase tracking-[0.15em] font-medium transition-colors duration-300"
-                style={{ color: qIndex >= i ? '#1a1a1a' : '#b0b0b0' }}>
+              <span
+                className="w-full text-center uppercase font-medium transition-colors duration-300 leading-tight text-[9px] sm:text-[10px] tracking-[0.08em] sm:tracking-[0.12em] break-words px-0.5"
+                style={{ color: qIndex >= i ? '#1a1a1a' : '#b0b0b0' }}
+              >
                 {label}
               </span>
             </div>
@@ -312,23 +332,23 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
       </div>
 
       {/* Question + visual grid — full page */}
-      <div className="flex-grow flex items-center justify-center px-3 sm:px-8 py-2 sm:py-4">
-        <div className="max-w-5xl w-full">
+      <div className="flex-grow flex min-h-0 items-center justify-center px-2 sm:px-6 md:px-8 py-1 sm:py-4">
+        <div className="max-w-5xl w-full min-h-0">
           <div className={`transition-all duration-400 ease-out ${transitioning ? 'opacity-0 translate-y-3 scale-[0.98]' : 'opacity-100 translate-y-0 scale-100'}`}>
             {/* Question text */}
-            <div className="text-center mb-4 sm:mb-8">
-              <h2 className="text-xl sm:text-2xl md:text-3xl font-light tracking-tight text-black leading-snug">
+            <div className="text-center mb-3 sm:mb-6 md:mb-8 px-1">
+              <h2 className="text-[clamp(1.05rem,4.2vw,1.875rem)] font-light tracking-tight text-black leading-snug">
                 {q.text}
               </h2>
               {q.subtitle && (
-                <p className="mt-2 sm:mt-3 text-[11px] sm:text-[16px] uppercase tracking-[0.2em] sm:tracking-[0.35em] text-gray-300 font-light">
+                <p className="mt-1.5 sm:mt-3 text-[10px] sm:text-xs md:text-sm uppercase tracking-[0.18em] sm:tracking-[0.28em] md:tracking-[0.35em] text-neutral-400 font-light max-w-xl mx-auto">
                   {q.subtitle}
                 </p>
               )}
             </div>
 
-            {/* Visual image grid — 2×2, compact */}
-            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 md:gap-3 max-w-2xl mx-auto">
+            {/* Visual image grid — 2×2 square tiles, equal gaps (symmetry) */}
+            <div className="grid w-full max-w-[min(100%,28rem)] sm:max-w-xl md:max-w-2xl mx-auto grid-cols-2 gap-[clamp(0.5rem,2vw,0.75rem)]">
               {q.options.map((opt, i) => {
                 const isSelected = answers[q.id] === i;
                 const isHovered = hoveredOption === i;
@@ -338,13 +358,14 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                 return (
                   <button
                     key={i}
+                    type="button"
                     onClick={() => handleAnswer(i)}
                     onMouseEnter={() => setHoveredOption(i)}
                     onMouseLeave={() => setHoveredOption(null)}
-                    className="group relative overflow-hidden rounded-xl focus:outline-none"
+                    className="group relative w-full min-h-[44px] min-w-0 overflow-hidden rounded-[12px] focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40 focus-visible:ring-offset-2 touch-manipulation"
                     style={{
-                      aspectRatio: '4/3',
-                      border: isSelected ? '3px solid #1a1a1a' : '1px solid rgba(0,0,0,0.06)',
+                      aspectRatio: '1 / 1',
+                      border: isSelected ? '3px solid #1a1a1a' : '1px solid rgba(0,0,0,0.08)',
                       boxShadow: isSelected
                         ? '0 8px 30px rgba(0,0,0,0.2)'
                         : isHovered
@@ -368,6 +389,8 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                       <img
                         src={opt.image}
                         alt={opt.text}
+                        sizes="(max-width: 480px) 46vw, (max-width: 768px) 38vw, 360px"
+                        decoding="async"
                         loading={qIndex === 0 ? 'eager' : 'lazy'}
                         onLoad={() => setImagesLoaded(prev => ({ ...prev, [imgKey]: true }))}
                         className="absolute inset-0 w-full h-full object-cover"
@@ -400,16 +423,16 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                       </div>
                     )}
 
-                    {/* Label */}
-                    <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
+                    {/* Label — scales with tile; stays inside rounded frame */}
+                    <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-3 md:p-4 pb-2.5 sm:pb-3">
                       <span
-                        className="block text-white font-medium tracking-wide"
+                        className="block text-center text-white font-medium tracking-wide uppercase"
                         style={{
-                          fontSize: isSelected ? '13px' : '11px',
-                          letterSpacing: '0.1em',
-                          textShadow: '0 1px 6px rgba(0,0,0,0.5)',
+                          fontSize: isSelected ? 'clamp(11px, 3.1vw, 13px)' : 'clamp(9px, 2.8vw, 11px)',
+                          letterSpacing: '0.08em',
+                          textShadow: '0 1px 6px rgba(0,0,0,0.55)',
                           transition: 'font-size 0.3s ease',
-                          textTransform: 'uppercase',
+                          lineHeight: 1.25,
                         }}
                       >
                         {opt.text}
@@ -433,10 +456,13 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
           </div>
 
           {/* Bottom actions */}
-          <div className="mt-4 sm:mt-6 flex flex-col items-center gap-2 sm:gap-3 pb-2 sm:pb-0">
+          <div
+            className="mt-3 sm:mt-6 flex flex-col items-center gap-2 sm:gap-3 shrink-0 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-1"
+          >
             <button
+              type="button"
               onClick={() => { chime(); navigate('/core'); setTimeout(() => window.dispatchEvent(new Event('toggle-deep-dive')), 500); }}
-              className="flex items-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-2 sm:py-2.5 rounded-full transition-all duration-300 hover:bg-gray-100 active:scale-[0.97] group touch-target-auto"
+              className="flex min-h-[44px] items-center justify-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-2 sm:py-2.5 rounded-full transition-all duration-300 hover:bg-gray-100 active:scale-[0.97] group touch-manipulation"
               style={{ border: '1.5px solid rgba(0,0,0,0.12)' }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="1.5" strokeLinecap="round" className="opacity-70 group-hover:opacity-100 transition-opacity sm:w-4 sm:h-4">
@@ -447,8 +473,9 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
               </span>
             </button>
             <button
+              type="button"
               onClick={() => navigate('/core')}
-              className="text-[11px] uppercase tracking-[0.2em] sm:tracking-[0.35em] text-gray-300 hover:text-gray-500 font-light transition-colors touch-target-auto"
+              className="min-h-[44px] px-3 py-2 text-[11px] uppercase tracking-[0.2em] sm:tracking-[0.35em] text-gray-300 hover:text-gray-500 font-light transition-colors touch-manipulation"
             >
               Skip to workspace
             </button>
@@ -464,7 +491,7 @@ const MATERIAL_TEXTURES: Record<string, { url: string; alt: string }> = {
   'Travertine (honed)':           { url: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400&h=400&fit=crop&q=80', alt: 'Honed travertine stone surface' },
   'Dark quartzite':               { url: 'https://images.unsplash.com/photo-1474044159687-1ee9f3a51722?w=400&h=400&fit=crop&q=80', alt: 'Dark quartzite stone surface' },
   'Clay plaster':                 { url: 'https://images.unsplash.com/photo-1615529328331-f8917597711f?w=400&h=400&fit=crop&q=80', alt: 'Clay plaster warm tones' },
-  'Lime plaster (warm mineral)':  { url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400&h=400&fit=crop&q=80', alt: 'Lime plaster warm mineral' },
+  'Lime plaster (warm mineral)':  { url: 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&w=400&h=400&fit=crop&q=85', alt: 'Warm lime-wash interior plaster' },
   'Dark marble (high contrast)':   { url: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=400&h=400&fit=crop&q=80', alt: 'Dark marble surface' },
   'Basalt':                       { url: 'https://images.unsplash.com/photo-1545558014-8692077e9b5c?w=400&h=400&fit=crop&q=80', alt: 'Dark basalt stone' },
   'Blackened steel':               { url: 'https://images.unsplash.com/photo-1533035353720-f1c6a75cd8ab?w=400&h=400&fit=crop&q=80', alt: 'Blackened steel surface' },
@@ -478,7 +505,7 @@ const MATERIAL_TEXTURES: Record<string, { url: string; alt: string }> = {
   'Limewash (bright)':            { url: 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=400&h=400&fit=crop&q=80', alt: 'Bright limewash wall' },
   'White mineral plaster':        { url: 'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=400&h=400&fit=crop&q=80', alt: 'White mineral plaster' },
   'Light oak / ash':              { url: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop&q=80', alt: 'Light oak ash wood' },
-  'White marble (Calacatta)':     { url: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400&h=400&fit=crop&q=80', alt: 'White Calacatta marble surface' },
+  'White marble (Calacatta)':     { url: 'https://images.unsplash.com/photo-1600210491892-03d3c28da189?auto=format&w=400&h=400&fit=crop&q=85', alt: 'White Calacatta marble veining' },
   'Clear glass (low-iron)':       { url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=400&fit=crop&q=80', alt: 'Clear low-iron glass' },
   'Bleached birch':               { url: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop&q=80', alt: 'Bleached birch wood' },
   'White terrazzo':                { url: 'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=400&h=400&fit=crop&q=80', alt: 'White terrazzo surface' },
@@ -492,7 +519,7 @@ const MATERIAL_TEXTURES: Record<string, { url: string; alt: string }> = {
   'Industrial brick':             { url: 'https://images.unsplash.com/photo-1587582345426-bf07f52b4543?w=400&h=400&fit=crop&q=80', alt: 'Industrial red brick wall' },
   'Natural Oak':                  { url: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop&q=80', alt: 'Natural oak surface' },
   'Walnut':                       { url: 'https://images.unsplash.com/photo-1541123603104-512919d6a96c?w=400&h=400&fit=crop&q=80', alt: 'Walnut wood' },
-  'Limestone':                    { url: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400&h=400&fit=crop&q=80', alt: 'Limestone surface' },
+  'Limestone':                    { url: 'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&w=400&h=400&fit=crop&q=85', alt: 'Limestone stone surface' },
   'Travertine':                   { url: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400&h=400&fit=crop&q=80', alt: 'Travertine stone' },
   'Clay Plaster':                 { url: 'https://images.unsplash.com/photo-1615529328331-f8917597711f?w=400&h=400&fit=crop&q=80', alt: 'Clay plaster texture' },
   'Microcement':                  { url: 'https://images.unsplash.com/photo-1553356084-58ef4a67b2a7?w=400&h=400&fit=crop&q=80', alt: 'Microcement finish' },
