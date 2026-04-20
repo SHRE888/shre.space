@@ -717,7 +717,19 @@ const buildVisualWeightContractBlock = (activeDist: Vector4): string => {
   const f = Math.round(activeDist.fire);
   const w = Math.round(activeDist.water);
   const a = Math.round(activeDist.air);
-  return `VISUAL WEIGHT CONTRACT (mandatory): Earth ${e}%, Fire ${f}%, Water ${w}%, Air ${a}%. The image must reflect these shares in atmosphere and material/lighting presence — larger percentages earn larger readable zones and stronger character; smaller ones remain honest calibrated layers (accents, hardware, secondary surfaces, contrast pockets), never erased and never inflated into a false boss mood.`;
+  const sorted = sortElementsByDistribution(activeDist);
+  const top = sorted[0];
+  const second = sorted[1];
+  const p0 = Math.round(activeDist[top]);
+  const p1 = Math.round(activeDist[second]);
+  const nearTie =
+    Math.abs(p0 - p1) <= 5 &&
+    p1 >= 12 &&
+    ((top === 'air' && second === 'earth') || (top === 'earth' && second === 'air'));
+  const tieNote = nearTie
+    ? ` TOP-TWO NEAR TIE (${top} ${p0}% vs ${second} ${p1}%): treat both as co-primary in the frame — the numeric first place must NOT justify an ultra-ethereal, all-glass, or weightless-futurist read that erases grounded mass. Air = daylight discipline, proportion, selective transparency; Earth = clearly visible stone/timber/plaster/tactile furniture mass occupying comparable readable area.`
+    : '';
+  return `VISUAL WEIGHT CONTRACT (mandatory): Earth ${e}%, Fire ${f}%, Water ${w}%, Air ${a}%. The image must reflect these shares in atmosphere and material/lighting presence — larger percentages earn larger readable zones and stronger character; smaller ones remain honest calibrated layers (accents, hardware, secondary surfaces, contrast pockets), never erased and never inflated into a false boss mood.${tieNote}`;
 };
 
 /** Build energy-weighted spatial rules from percentages (includes material expression) */
@@ -1172,7 +1184,11 @@ const buildClientEnergyHarmonyBlock = (
       primPct === secPct
         ? `${primary.toUpperCase()} / ${secondary.toUpperCase()} order is a UI tie-break only — perceived visual shares must stay close to the stated percentages.`
         : `${primary.toUpperCase()} (${primPct}%) and ${secondary.toUpperCase()} (${secPct}%) lead numerically but stay within a tight band — do not collapse the room into a single-element story.`;
-    return `CLIENT ENERGY PROFILE (balanced / near-equal blend — adapt; never illustrate literal elements): Earth ${e}%, Fire ${f}%, Water ${w}%, Air ${a}%. This is a HARMONIOUS MULTI-WAY MIX: each energy owns roughly its share of readable atmosphere — distribute across zones and layers (floor plane, wall treatments, furniture mass, joinery, lighting temperature, metal accents, reflective vs matte passages). ${orderHint} Earth ≈ tactile warmth & mass; Fire ≈ contrast & drama; Water ≈ fluid reflectivity & calm; Air ≈ light, openness & futurist clarity — all co-present in proportion. One photographable interior, intentionally fusion — not four unrelated styles fighting.`;
+    const airEarthPair =
+      ((primary === 'air' && secondary === 'earth') || (primary === 'earth' && secondary === 'air')) && Math.abs(primPct - secPct) <= 6
+        ? ' When Air and Earth are the two strongest and within a few points, forbid “Air wins” as a sci-fi glass void: keep warm mineral/wood/stone mass and tactile earth layers as legible as openness and light.'
+        : '';
+    return `CLIENT ENERGY PROFILE (balanced / near-equal blend — adapt; never illustrate literal elements): Earth ${e}%, Fire ${f}%, Water ${w}%, Air ${a}%. This is a HARMONIOUS MULTI-WAY MIX: each energy owns roughly its share of readable atmosphere — distribute across zones and layers (floor plane, wall treatments, furniture mass, joinery, lighting temperature, metal accents, reflective vs matte passages). ${orderHint}${airEarthPair} Earth ≈ tactile warmth & mass; Fire ≈ contrast & drama; Water ≈ fluid reflectivity & calm; Air ≈ light, openness & futurist clarity — all co-present in proportion. One photographable interior, intentionally fusion — not four unrelated styles fighting.`;
   }
 
   const tertiary = sorted.filter((el) => el !== primary && el !== secondary && Math.round(activeDist[el]) >= 8);
@@ -1180,7 +1196,24 @@ const buildClientEnergyHarmonyBlock = (
     tertiary.length > 0
       ? ` Weaker shares (${tertiary.map((x) => `${x} ${Math.round(activeDist[x])}%`).join(', ')}) stay honest to their percentage — present as calibrated layers (texture, object choice, lighting nuance, selective zones), never erased and never pretending to be a second dominant.`
       : '';
-  return `CLIENT ENERGY PROFILE (adapt — never illustrate literal elements): Earth ${e}%, Fire ${f}%, Water ${w}%, Air ${a}%. ${primary.toUpperCase()} at ${primPct}% leads — largest surfaces, spatial proportions, and overall light mood follow this logic first. ${secondary.toUpperCase()} at ${secPct}% harmonizes as the designed counter-accent (furniture, metal temperature, focal contrast) at a strength matching its share.${trace} One coherent narrative a photographer could caption in one sentence.`;
+  const primSecGap = Math.abs(primPct - secPct);
+  const marginalLead =
+    primSecGap <= 5 && secPct >= 15
+      ? ` Numeric order is marginal (${primPct}% vs ${secPct}%): compose as dual-lead — ${primary.toUpperCase()} must not visually outrank ${secondary.toUpperCase()} as if the gap were 15+ points. `
+      : '';
+  const airEarthMarginal =
+    primSecGap <= 5 &&
+    secPct >= 15 &&
+    ((primary === 'air' && secondary === 'earth') || (primary === 'earth' && secondary === 'air'))
+      ? primary === 'air'
+        ? `AIR↔EARTH: Air leads by only a few points — treat Air as proportion, daylight quality, and restrained glass/transparency, not an all-white accelerated-future envelope; Earth stays co-equal visible mass (stone, plaster, timber, woven textiles). `
+        : `AIR↔EARTH: Earth leads by only a few points — keep grounded stone/plaster/timber mass photographable at full strength; Air reads as disciplined daylight and proportion, not a sci-fi all-glass wipeout. `
+      : '';
+  const leadClause =
+    marginalLead || airEarthMarginal
+      ? `${marginalLead}${airEarthMarginal}${primary.toUpperCase()} at ${primPct}% and ${secondary.toUpperCase()} at ${secPct}% share leadership of the spatial read — interleave surfaces so both remain photographable at comparable strength.`
+      : `${primary.toUpperCase()} at ${primPct}% leads — largest surfaces, spatial proportions, and overall light mood follow this logic first. ${secondary.toUpperCase()} at ${secPct}% harmonizes as the designed counter-accent (furniture, metal temperature, focal contrast) at a strength matching its share.`;
+  return `CLIENT ENERGY PROFILE (adapt — never illustrate literal elements): Earth ${e}%, Fire ${f}%, Water ${w}%, Air ${a}%. ${leadClause}${trace} One coherent narrative a photographer could caption in one sentence.`;
 };
 
 const buildSessionPassBlock = (ordinal: number): string => {

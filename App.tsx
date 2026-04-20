@@ -619,12 +619,12 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   const [loadProgress, setLoadProgress] = useState(0);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (typeof globalThis !== 'undefined' && 'matchMedia' in globalThis) {
-      return globalThis.matchMedia('(min-width: 768px)').matches;
-    }
-    return true;
-  });
+  /** DNA panel open by default on phones too — collapsed 30vh cap hid sliders, orbit, and palette. */
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    if (materialPickerOpen) setSidebarOpen(true);
+  }, [materialPickerOpen]);
 
   /** Material DNA orbital — static diagram (no drag-to-rotate) */
   const [dnaOrbitHover, setDnaOrbitHover] = useState(false);
@@ -1198,19 +1198,19 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
     <div className="flex-1 min-h-0 flex flex-col overflow-x-hidden overflow-y-auto md:overflow-hidden bg-[#fafafa] relative w-full min-h-[50dvh]">
 
       {/* ═══ MAIN AREA — image + sidebar ═══ */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-visible md:overflow-hidden relative min-h-0 min-h-[45dvh] md:min-h-0">
+      <div className="flex-1 flex flex-col md:flex-row overflow-visible md:overflow-hidden relative min-h-0">
 
-        {/* ── HERO IMAGE + HOTSPOTS (flex-1 + basis-0 so mobile always reserves space for the render) ── */}
+        {/* ── HERO IMAGE + HOTSPOTS — on mobile cap height so Material DNA (below) stays usable ── */}
         <div
-          className={`relative flex flex-col overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] min-w-0 min-h-0 flex-1 max-md:sticky max-md:top-11 max-md:z-30 max-md:bg-[#fafafa] max-md:shadow-[0_6px_20px_-8px_rgba(0,0,0,0.08)] ${
+          className={`relative flex flex-col overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] min-w-0 min-h-0 max-md:flex-shrink-0 max-md:flex-none md:flex-1 max-md:sticky max-md:top-11 max-md:z-30 max-md:bg-[#fafafa] max-md:shadow-[0_6px_20px_-8px_rgba(0,0,0,0.08)] ${
             isEditingMaterials && sidebarOpen ? 'md:flex-[1_1_55%]' : ''
           } ${isRevealed ? 'opacity-100' : 'opacity-0 scale-[1.02]'}`}
         >
 
-          {/* Image container — aspect box on mobile so height is never 0; show image in revealing phase too */}
-          <div className={`flex-1 flex items-center justify-center relative z-10 w-full min-h-0 md:min-h-0 transition-all duration-500 ${isEditingMaterials ? 'p-2 sm:p-4' : 'p-1.5 sm:p-2.5'}`}>
+          {/* Image container — bounded on narrow viewports so DNA + sliders + grid are not squeezed off-screen */}
+          <div className={`flex-1 md:flex-1 flex items-center justify-center relative z-10 w-full min-h-0 max-md:max-h-[min(44dvh,420px)] md:max-h-none transition-all duration-500 ${isEditingMaterials ? 'p-2 sm:p-4' : 'p-1.5 sm:p-2.5'}`}>
             {displayedImageUrl && (
-              <div className={`relative w-full max-w-full overflow-hidden transition-all duration-700 ease-out max-md:aspect-[16/9] max-md:min-h-[48dvh] max-md:max-h-[72dvh] md:flex md:items-center md:justify-center md:h-full md:min-h-0 md:aspect-auto md:max-h-none ${isRevealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'} ${isEditingMaterials ? 'scale-[0.94]' : 'scale-100'}`}>
+              <div className={`relative w-full max-w-full overflow-hidden transition-all duration-700 ease-out max-md:aspect-[16/9] max-md:min-h-[min(180px,28dvh)] max-md:max-h-[min(44dvh,420px)] md:flex md:items-center md:justify-center md:h-full md:min-h-0 md:max-h-none md:aspect-auto ${isRevealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'} ${isEditingMaterials ? 'scale-[0.94]' : 'scale-100'}`}>
                 <div className={`relative w-full h-full min-h-[200px] md:min-h-0 rounded-lg overflow-hidden transition-all duration-500 ${isEditingMaterials ? 'shadow-lg shadow-black/5' : 'shadow-2xl shadow-black/8'}`}>
                   <div className="absolute inset-0 rounded-lg overflow-hidden border border-white/50 bg-gray-100/80">
                     <img src={displayedImageUrl} alt="Architectural visualization"
@@ -1409,7 +1409,9 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
         {/* ── MATERIAL DNA SIDEBAR ── */}
         <div className={`relative z-10 bg-white border-l md:border-l border-t md:border-t-0 border-gray-100/60 flex flex-col overflow-hidden shrink-0 transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
-          sidebarOpen ? 'w-full md:w-[400px] max-h-[30vh] sm:max-h-[36vh] md:max-h-none' : 'w-full md:w-[44px] max-h-[44px] md:max-h-none'
+          sidebarOpen
+            ? 'w-full md:w-[400px] flex-1 min-h-0 max-md:min-h-[min(42dvh,400px)] md:flex-none md:max-h-none'
+            : 'w-full md:w-[44px] max-h-[44px] md:max-h-none flex-none'
         } ${isRevealed ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}
           style={{ transitionDelay: isRevealed ? '300ms' : '0ms' }}>
 
@@ -1607,7 +1609,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                               }}
                             />
                             <span
-                              className="absolute pointer-events-none z-[12] font-mono tabular-nums text-[6px] sm:text-[6.5px] font-extralight leading-none tracking-tight transition-opacity duration-300"
+                              className="absolute pointer-events-none z-[12] font-mono tabular-nums max-md:text-[9px] text-[6px] sm:text-[6.5px] font-extralight leading-none tracking-tight transition-opacity duration-300"
                               style={{
                                 left: `${(lx / VB) * 100}%`,
                                 top: `${(ly / VB) * 100}%`,
@@ -1663,15 +1665,16 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         const isDom = el === dominant;
                         const ec = ELEMENT_COLORS[el];
                         return (
-                          <div key={el} className="flex items-center gap-1.5" style={{ opacity: isDom ? 1 : 0.65 }}>
-                            <span className="text-[10px] uppercase tracking-[0.1em] w-8 shrink-0 text-right font-light" style={{ fontWeight: isDom ? 500 : 400, color: ec }}>{el.slice(0, 2)}</span>
-                            <div className="flex-1 relative h-[14px] flex items-center cursor-ew-resize group">
-                              <div className="absolute left-0 right-0 h-[4px] rounded-full" style={{ background: 'rgba(0,0,0,0.04)' }} />
-                              <div className="absolute left-0 h-[4px] rounded-full transition-all duration-300"
+                          <div key={el} className="flex items-center gap-1.5 max-md:gap-2" style={{ opacity: isDom ? 1 : 0.65 }}>
+                            <span className="text-[10px] max-md:text-[11px] uppercase tracking-[0.1em] w-8 max-md:w-9 shrink-0 text-right font-light" style={{ fontWeight: isDom ? 500 : 400, color: ec }}>{el.slice(0, 2)}</span>
+                            <div className="flex-1 relative h-[14px] max-md:h-11 flex items-center cursor-ew-resize group touch-manipulation">
+                              <div className="absolute left-0 right-0 h-[4px] max-md:h-[6px] top-1/2 -translate-y-1/2 rounded-full" style={{ background: 'rgba(0,0,0,0.04)' }} />
+                              <div className="absolute left-0 top-1/2 -translate-y-1/2 h-[4px] max-md:h-[6px] rounded-full transition-all duration-300"
                                 style={{ width: `${val}%`, backgroundColor: ec, opacity: isDom ? 0.8 : 0.45 }} />
                               <input
                                 type="range" min="0" max="100" value={val}
                                 className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-ew-resize"
+                                aria-label={`${el} share percent`}
                                 onChange={(e) => applyNewVal(el, parseInt(e.target.value, 10))}
                               />
                             </div>
@@ -1759,8 +1762,8 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                           </div>
                           <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-[1.5px] border-white shadow-sm" style={{ backgroundColor: elColor }} />
                           {isUserSelected && (
-                            <button onClick={() => removeMaterial(mat.name)}
-                              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-white border border-gray-200 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:border-red-200 transition-all duration-200 shadow-sm"
+                            <button type="button" onClick={() => removeMaterial(mat.name)}
+                              className="absolute -top-1 -right-1 w-5 h-5 max-md:w-6 max-md:h-6 rounded-full bg-white border border-gray-200 flex items-center justify-center opacity-0 group-hover:opacity-100 max-md:opacity-100 hover:bg-red-50 hover:border-red-200 transition-all duration-200 shadow-sm touch-manipulation"
                               title="Remove">
                               <svg width="6" height="6" viewBox="0 0 12 12" fill="none" stroke="#e57373" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="3" x2="9" y2="9" /><line x1="9" y1="3" x2="3" y2="9" /></svg>
                             </button>
