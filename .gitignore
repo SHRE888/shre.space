@@ -44,3 +44,7 @@ coverage
 .cache
 .parcel-cache
 .eslintcache
+
+# Temporary working artifacts (PDF extracts, scratch files)
+.tmp_*
+.tmp_pdf_extract

@@ -995,12 +995,21 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 <div style={{
                   width: sz, height: sz, borderRadius: '50%', position: 'relative', overflow: 'hidden',
                   boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.4)',
+                  background: `radial-gradient(circle at 32% 28%, ${mc}DD, ${mc}88)`,
                 }}>
-                  <div style={{
-                    position: 'absolute', inset: '-8%', width: '116%', height: '116%', borderRadius: '50%',
-                    background: tex ? `url(${tex}) center/cover` : `radial-gradient(circle at 32% 28%, ${mc}BB, ${mc}60)`,
-                    filter: isTravertine ? 'saturate(0.88) contrast(0.86) brightness(1.07)' : undefined,
-                  }} />
+                  {tex && (
+                    <img
+                      src={tex}
+                      alt=""
+                      draggable={false}
+                      style={{
+                        position: 'absolute', inset: '-8%', width: '116%', height: '116%',
+                        objectFit: 'cover', borderRadius: '50%', display: 'block',
+                        filter: isTravertine ? 'saturate(0.88) contrast(0.86) brightness(1.07)' : undefined,
+                      }}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  )}
                   <div className="absolute pointer-events-none" style={{ width: '36%', height: '30%', top: '10%', left: '14%', background: 'radial-gradient(ellipse at 42% 36%, rgba(255,255,255,0.35) 0%, transparent 75%)', borderRadius: '50%' }} />
                 </div>
               </div>
@@ -1401,8 +1410,13 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                               border: `2px solid ${mc}${isExp ? '50' : '20'}`,
                               boxShadow: isExp ? `0 8px 32px rgba(0,0,0,0.18), 0 0 0 2px ${mc}20` : `0 3px 12px rgba(0,0,0,0.10)`,
                               transition: 'all 0.35s ease',
+                              background: `radial-gradient(circle, ${mc}DD, ${mc}88)`,
                             }}>
-                              <div style={{ position: 'absolute', inset: '-15%', width: '130%', height: '130%', borderRadius: '50%', background: tex ? `url(${tex}) center/cover` : `radial-gradient(circle, ${mc}CC, ${mc}60)` }} />
+                              {tex && (
+                                <img src={tex} alt="" draggable={false}
+                                  style={{ position: 'absolute', inset: '-15%', width: '130%', height: '130%', objectFit: 'cover', borderRadius: '50%', display: 'block' }}
+                                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                              )}
                               <div className="absolute pointer-events-none" style={{ width: '38%', height: '32%', top: '8%', left: '12%', background: 'radial-gradient(ellipse, rgba(255,255,255,0.3) 0%, transparent 75%)', borderRadius: '50%' }} />
                             </div>
                             <span className="px-2 py-0.5 rounded-md text-center" style={{ fontSize: 11, fontWeight: 500, color: '#555', background: 'rgba(255,255,255,0.9)', maxWidth: 100, lineHeight: '1.35', whiteSpace: 'normal', wordBreak: 'break-word' as const }}>
@@ -1455,8 +1469,12 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                     <button key={name} onClick={() => { onToggleMaterial?.(name, matPicker); snap(isMuted); }}
                       className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all text-left"
                       style={{ background: sel ? `${mc}0A` : 'transparent', border: `1px solid ${sel ? `${mc}18` : 'transparent'}`, cursor: 'pointer' }}>
-                      <div className="w-10 h-10 rounded-full shrink-0 relative overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.14)' }}>
-                        <div style={{ position: 'absolute', inset: '-15%', width: '130%', height: '130%', borderRadius: '50%', background: tex ? `url(${tex}) center/cover` : `linear-gradient(135deg, ${mc}28, ${mc}0C)` }} />
+                      <div className="w-10 h-10 rounded-full shrink-0 relative overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.14)', background: `linear-gradient(135deg, ${mc}55, ${mc}22)` }}>
+                        {tex && (
+                          <img src={tex} alt="" draggable={false}
+                            style={{ position: 'absolute', inset: '-15%', width: '130%', height: '130%', objectFit: 'cover', borderRadius: '50%', display: 'block' }}
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                        )}
                         <div className="absolute pointer-events-none" style={{ width: '38%', height: '32%', top: '8%', left: '12%', background: 'radial-gradient(ellipse, rgba(255,255,255,0.3) 0%, transparent 75%)', borderRadius: '50%' }} />
                       </div>
                       <div className="flex-1 min-w-0"><div className="text-[13px] font-medium truncate" style={{ color: '#777' }}>{name}</div></div>

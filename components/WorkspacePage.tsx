@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { whoosh, chime, softThud, calibrate, stopAmbient, isAmbientPlaying } from '../services/soundService';
 import { useBrilliantMode } from '../context/BrilliantModeContext';
 import { UserState, Element, AdjectiveDef, MaterialDef, Domain, SpaceCategory, ImageResolution, RoomType, ColorPalette, BudgetLevel, ArchContext } from '../types';
+import { BUDGET_TIERS } from '../lib/brandCatalog';
 import { saveState } from '../services/storageService';
 import { calculateRefinedDistribution, getSelectionFromPercentages, reweightWithLocks } from '../services/refinementLogic';
 import { buildUniversalPrompt } from '../services/promptEngine';
@@ -1795,19 +1796,30 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
               </div>
             </div>
             <div className="flex flex-col gap-1">
-              <span className="text-[11px] uppercase tracking-[0.15em] text-gray-500 font-medium">Level <span className="text-gray-300 font-light normal-case tracking-normal">(optional)</span></span>
+              <div className="flex items-baseline justify-between">
+                <span className="text-[11px] uppercase tracking-[0.15em] text-gray-500 font-medium">Budget <span className="text-gray-300 font-light normal-case tracking-normal">(optional)</span></span>
+                {(() => {
+                  const tier = BUDGET_TIERS[state.params.budgetLevel || 'premium'];
+                  return (
+                    <span className="text-[9px] tabular-nums tracking-tight text-gray-400">
+                      {tier.symbol} · ${tier.perSqmFFE.lowUSD >= 1000 ? `${(tier.perSqmFFE.lowUSD / 1000).toFixed(1).replace(/\.0$/, '')}k` : tier.perSqmFFE.lowUSD}–${tier.perSqmFFE.highUSD >= 1000 ? `${(tier.perSqmFFE.highUSD / 1000).toFixed(1).replace(/\.0$/, '')}k` : tier.perSqmFFE.highUSD}/m²
+                    </span>
+                  );
+                })()}
+              </div>
               <div className="flex items-center gap-px bg-gray-100/60 rounded-md p-[2px]">
-                {([
-                  { id: 'essential' as BudgetLevel, label: 'Essential' },
-                  { id: 'premium' as BudgetLevel, label: 'Premium' },
-                  { id: 'luxury' as BudgetLevel, label: 'Luxury' },
-                ]).map(b => (
-                  <button key={b.id}
-                    onClick={() => handleUpdate({ params: { ...state.params, budgetLevel: b.id } })}
-                    className={`flex-1 text-[11px] uppercase tracking-[0.02em] py-[4px] rounded text-center transition-all duration-200 ${
-                      (state.params.budgetLevel || 'premium') === b.id ? 'text-gray-900 font-semibold bg-white shadow-sm' : 'text-gray-400 hover:text-gray-700'
-                    }`}>{b.label}</button>
-                ))}
+                {(['essential', 'premium', 'luxury'] as BudgetLevel[]).map(id => {
+                  const tier = BUDGET_TIERS[id];
+                  const active = (state.params.budgetLevel || 'premium') === id;
+                  return (
+                    <button key={id}
+                      onClick={() => handleUpdate({ params: { ...state.params, budgetLevel: id } })}
+                      title={`${tier.label} — ${tier.blurb}\n$${tier.perSqmFFE.lowUSD.toLocaleString()}–$${tier.perSqmFFE.highUSD.toLocaleString()} per m² FF&E`}
+                      className={`flex-1 text-[11px] uppercase tracking-[0.02em] py-[4px] rounded text-center transition-all duration-200 ${
+                        active ? 'text-gray-900 font-semibold bg-white shadow-sm' : 'text-gray-400 hover:text-gray-700'
+                      }`}>{tier.label}</button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -2071,6 +2083,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                     : state.refinement.selectedAdjectives.some(a => a.label.toLowerCase() === item.toLowerCase());
                   const pastelColor = groupColor;
                   const isAtmoFull = activeSidePanel === 'atmosphere' && state.refinement.selectedAdjectives.length >= 7;
+                  const matThumb = activeSidePanel === 'materials' ? MATERIAL_SPHERE_IMAGES[item] : undefined;
                   return (
                     <button
                       key={item}
@@ -2080,7 +2093,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                           : toggleAtmosphere(item, groupKey as Element)
                       }
                       disabled={!isSelected && isAtmoFull}
-                      className={`text-[13px] uppercase tracking-[0.12em] px-3 py-1.5 rounded-md border transition-all duration-300 ${
+                      className={`flex items-center gap-1.5 text-[13px] uppercase tracking-[0.12em] pl-1 pr-3 py-1 rounded-md border transition-all duration-300 ${
                         isSelected
                           ? 'border-black/30 text-black font-medium shadow-sm'
                           : isAtmoFull
@@ -2089,7 +2102,14 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                       }`}
                       style={{ backgroundColor: isSelected ? `${pastelColor}18` : 'transparent' }}
                     >
-                      {item}
+                      {matThumb ? (
+                        <span className="relative inline-block w-5 h-5 rounded-full overflow-hidden shrink-0" style={{ background: `radial-gradient(circle at 30% 30%, ${pastelColor}66, ${pastelColor}22)`, boxShadow: `inset 0 0 0 1px ${pastelColor}33` }}>
+                          <img src={matThumb} alt="" draggable={false}
+                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                        </span>
+                      ) : null}
+                      <span className="leading-none py-0.5">{item}</span>
                     </button>
                   );
                 })}
@@ -2276,6 +2296,37 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                   </div>
                 </div>
 
+                {/* Budget tier — guides which real brands AI uses */}
+                <div className="mt-2 sm:mt-2.5">
+                  <div className="flex items-baseline justify-between mb-1.5">
+                    <span className="text-[10px] uppercase tracking-[0.15em] font-medium" style={{ color: '#a0aec0' }}>Budget</span>
+                    <span className="text-[9px] text-gray-300 tracking-tight">approximate FF&E per m²</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(['essential', 'premium', 'luxury'] as BudgetLevel[]).map(id => {
+                      const tier = BUDGET_TIERS[id];
+                      const active = (state.params.budgetLevel || 'premium') === id;
+                      return (
+                        <button key={id}
+                          onClick={() => handleUpdate({ params: { ...state.params, budgetLevel: id } })}
+                          title={`${tier.label} — ${tier.blurb}\n$${tier.perSqmFFE.lowUSD.toLocaleString()}–$${tier.perSqmFFE.highUSD.toLocaleString()} per m² FF&E`}
+                          className={`flex items-baseline gap-1.5 px-2.5 py-[5px] rounded-md text-[10px] tracking-[0.04em] transition-all duration-200 border ${
+                            active ? 'border-gray-500 text-gray-700 bg-white shadow-sm font-semibold' : 'border-gray-100/80 text-gray-400 hover:border-gray-300 hover:text-gray-600'
+                          }`}>
+                          <span className={`font-mono tabular-nums tracking-[0.1em] ${active ? 'text-gray-500' : 'text-gray-300'}`}>{tier.symbol}</span>
+                          <span className="uppercase">{tier.label}</span>
+                          <span className={`text-[8.5px] tabular-nums tracking-tight ${active ? 'text-gray-400' : 'text-gray-300'}`}>
+                            ${tier.perSqmFFE.lowUSD >= 1000 ? `${(tier.perSqmFFE.lowUSD / 1000).toFixed(1).replace(/\.0$/, '')}k` : tier.perSqmFFE.lowUSD}
+                            –
+                            ${tier.perSqmFFE.highUSD >= 1000 ? `${(tier.perSqmFFE.highUSD / 1000).toFixed(1).replace(/\.0$/, '')}k` : tier.perSqmFFE.highUSD}
+                            /m²
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* Floor plan + Comment row */}
                 <div className="flex items-start gap-3 mt-2 sm:mt-2.5">
                   {/* Floor Plan Upload */}
@@ -2419,10 +2470,12 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                       const ec = ELEMENT_COLORS[m.element];
                       return (
                         <div key={i} className="flex flex-col items-center gap-0.5 sm:gap-1" title={m.name}>
-                          <div className="w-[52px] h-[52px] sm:w-[56px] sm:h-[56px] rounded-lg sm:rounded-xl overflow-hidden" style={{ boxShadow: `0 1px 8px ${ec}12`, border: `1.5px solid ${ec}18`, background: `linear-gradient(135deg, ${ec}10, ${ec}05)` }}>
-                            {tex
-                              ? <div style={{ width: '140%', height: '140%', marginLeft: '-20%', marginTop: '-20%', background: `url(${tex}) center/cover` }} />
-                              : <div className="w-full h-full" style={{ background: `linear-gradient(135deg, ${ec}25, ${ec}10)` }} />}
+                          <div className="w-[52px] h-[52px] sm:w-[56px] sm:h-[56px] rounded-lg sm:rounded-xl overflow-hidden relative" style={{ boxShadow: `0 1px 8px ${ec}12`, border: `1.5px solid ${ec}18`, background: `linear-gradient(135deg, ${ec}45, ${ec}1F)` }}>
+                            {tex && (
+                              <img src={tex} alt="" draggable={false}
+                                style={{ position: 'absolute', inset: '-20%', width: '140%', height: '140%', objectFit: 'cover', display: 'block' }}
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                            )}
                           </div>
                           <span className="text-[8px] text-center leading-tight truncate w-full" style={{ color: '#8899b3' }}>{m.name.split('(')[0].trim()}</span>
                         </div>

@@ -3,6 +3,8 @@ import { SHORT_QUESTIONS, ELEMENTS, COMBINATION_ARTICLES, PROMPT_BANS, ELEMENT_A
 import { scrubBannedTokens } from './bannedTokens';
 import { elementLanguageProfile } from './elementLanguage';
 import { buildDesignSummary } from './designSummary';
+import { buildBudgetBrandDirective } from '../lib/brandCatalog';
+import { getMaterialCategory, type MaterialCategory } from '../materialsCatalog';
 
 /** One-line summary of workspace space config; shown/edited in results footer and fed to the image prompt */
 export const formatSpaceConfigOneLiner = (p: UserState['params']): string => {
@@ -90,63 +92,113 @@ export const calculateAnalysis = (state: UserState): AnalysisResult => {
 // --- REAL-WORLD PRODUCT REFERENCES ---
 // Maps each material in our catalog to specific real-world brands and product lines
 const MATERIAL_PRODUCT_MAP: Record<string, { brand: string; product: string; finish: string }[]> = {
-  'Travertine (honed)':           [{ brand: 'Stone Italiana', product: 'Navona travertine', finish: 'honed unfilled cross-cut' }],
-  'Dark quartzite':                [{ brand: 'Levantina', product: 'Grey quartzite slab', finish: 'honed with dramatic veining' }],
-  'Clay plaster':                  [{ brand: 'Clayworks', product: 'Clay plaster wall finish', finish: 'hand-troweled with tonal irregularity' }],
-  'Lime plaster (warm mineral)':   [{ brand: 'Bauwerk', product: 'Lime plaster', finish: 'warm mineral trowel finish' }],
-  'Dark marble (high contrast)':   [{ brand: 'Salvatori', product: 'Nero Marquina marble', finish: 'polished with white calcite veining' }],
-  'Basalt':                        [{ brand: 'Stone Federation', product: 'basalt slab', finish: 'honed matte volcanic' }],
-  'Blackened steel':                [{ brand: 'Corten Direct', product: 'blackened steel panel', finish: 'oxidized matte' }],
-  'Venetian plaster (polished)':   [{ brand: 'Marmorino', product: 'Venetian plaster', finish: 'polished lime-based' }],
-  'Bronze accents':                [{ brand: 'Nanz', product: 'cast bronze lever handle', finish: 'dark patinated wax seal' }],
-  'Microcement (continuous)':      [{ brand: 'Kerakoll', product: 'Cementoresina microcement', finish: 'seamless mineral coat' }],
-  'Smooth mineral plaster':         [{ brand: 'Kerakoll', product: 'Cementoresina smooth wall plaster', finish: 'venetian trowel micro-polished' }],
-  'Matte ceramic':                 [{ brand: 'Mutina', product: 'Mews collection porcelain tile', finish: 'chalky matte surface' }],
-  'Linen / wool textile surfaces': [{ brand: 'Kvadrat', product: 'Hallingdal 65 wool upholstery', finish: 'mélange weave' }, { brand: 'Dedar', product: 'Nuvola linen', finish: 'natural ivory slub' }],
-  'Diffused glass':                [{ brand: 'Saint-Gobain', product: 'Planilux acid-etched glass', finish: 'satin frost translucent' }],
-  'Mirror-polished stainless steel': [{ brand: 'Rimex Metals', product: 'Super Mirror 304 stainless steel panel', finish: '8K mirror polish reflective' }],
-  'Hammered metal (rippled)':      [{ brand: 'De Castelli', product: 'Martellata hammered steel sheet', finish: 'rippled hand-hammered texture' }],
-  'Satin chrome':                  [{ brand: 'Rimex Metals', product: '304 stainless steel panel', finish: 'satin directional brush No.4' }],
-  'Glass blocks (translucent)':    [{ brand: 'Seves Glassblock', product: 'Pegasus Metallizzato glass block', finish: 'translucent with soft internal diffusion' }],
-  'Curved bent glass':             [{ brand: 'Cricursa', product: 'hot-bent curved glass panel', finish: 'extra-clear laminated curved' }],
-  'Corten steel (weathering)':     [{ brand: 'SSAB', product: 'Weathering COR-TEN A steel panel', finish: 'natural oxidized rust patina' }],
-  'Oxidized copper':               [{ brand: 'Aurubis', product: 'Nordic Green copper sheet', finish: 'pre-oxidized verdigris patina' }],
-  'Aged brass (polished)':         [{ brand: 'Rocky Mountain Hardware', product: 'polished aged brass panel', finish: 'warm gold patina with living surface' }],
-  'Dark herringbone parquet':      [{ brand: 'Kährs', product: 'Chevron Dark Smoke oak parquet', finish: 'deep fumed herringbone with matte lacquer' }],
-  'Board-formed concrete':         [{ brand: 'Site cast', product: 'board-formed exposed concrete', finish: 'raw formwork texture with bug holes' }],
-  'Volcanic stone (basalt rough)': [{ brand: 'Stone Italiana', product: 'basalt volcanic stone slab', finish: 'rough split-face or bush-hammered' }],
-  'Green onyx / marble (veined)': [{ brand: 'Antolini', product: 'Rainforest Green marble slab', finish: 'polished full-height with dramatic green-gold veining' }],
-  'Rammed earth / terracotta plaster': [{ brand: 'Clayworks', product: 'rammed earth effect clay plaster', finish: 'layered terracotta warm-ochre hand-applied' }],
-  'Reclaimed weathered timber': [{ brand: 'Reclaimed', product: 'aged oak beam and plank', finish: 'natural weathered grey-brown patina with nail holes' }],
-  'Herringbone parquet (warm oak)': [{ brand: 'Kährs', product: 'Herringbone engineered oak', finish: 'warm natural oiled with aged patina' }],
-  'Limewash (bright)':             [{ brand: 'Bauwerk', product: 'Limewash', finish: 'bright mineral wash' }],
-  'White mineral plaster':         [{ brand: 'Marmorino', product: 'white mineral plaster', finish: 'matte lime-based' }],
-  'Light oak / ash':               [{ brand: 'Kährs', product: 'Grande Collection engineered oak', finish: 'matte natural grain' }],
-  'White marble (Calacatta)':      [{ brand: 'Salvatori', product: 'Calacatta Oro marble slab', finish: 'polished with warm gold veining' }],
-  'Clear glass (low-iron)':        [{ brand: 'Saint-Gobain', product: 'Diamant low-iron glass', finish: 'ultra-clear transparent' }],
-  'Bleached birch':                [{ brand: 'Kährs', product: 'Nordic Naturals birch plank', finish: 'bleached whitewash matte' }],
-  'White terrazzo':                [{ brand: 'Huguet', product: 'Terrazzo Blanco precast slab', finish: 'polished white aggregate with subtle chips' }],
-  'Pale concrete (smooth)':       [{ brand: 'LCDA', product: 'BFUP smooth concrete panel', finish: 'pale grey silk-smooth' }],
-  'Natural oak (horizontal)':      [{ brand: 'Kährs', product: 'Grande Collection engineered oak', finish: 'horizontal grain natural' }],
-  'Walnut veneer':                 [{ brand: 'Alpi', product: 'Walnut fine veneer panel', finish: 'satin vertical grain' }],
-  'Industrial brick':              [{ brand: 'Brickworks', product: 'Red industrial face brick', finish: 'pastoral rustic' }],
-  'Textured concrete (matte)':     [{ brand: 'LCDA', product: 'BFUP concrete panel', finish: 'raw shuttered matte' }],
-  'Brushed metal':                 [{ brand: 'Rimadesio', product: 'brushed metal profile', finish: 'satin anodization' }],
-  'Solid oak':                     [{ brand: 'Boen', product: 'Chaletino wide plank', finish: 'solid oak natural' }],
-  'Walnut (natural finish)':       [{ brand: 'Kährs', product: 'Lumen Collection American walnut', finish: 'satin oiled natural' }],
-  'White Corian (curved seamless)': [{ brand: 'DuPont', product: 'Corian Glacier White solid surface', finish: 'thermoformed curved seamless, no visible joints' }],
-  'Fluted white panel':            [{ brand: 'Cosentino', product: 'Dekton ultra-compact surface fluted profile', finish: 'white vertical ridges, floor-to-ceiling' }],
-  'Dichroic / iridescent glass':   [{ brand: '3M', product: 'Dichroic Glass Film on laminated glass panel', finish: 'color-shifting iridescent (amber-violet-green-blue spectrum), translucent' }],
-  'Tinted translucent glass':      [{ brand: 'Cricursa', product: 'Laminated colored glass panel', finish: 'tinted translucent in violet, amber, or rose-gold gradient' }],
-  'Metallic silver surface':       [{ brand: 'Rimex Metals', product: 'Brushed aluminium panel', finish: 'satin silver metallic with soft directional brush' }],
-  '3D textured white panel':       [{ brand: 'WallArt', product: '3D wall panel in mineral composite', finish: 'geometric relief pattern, matte white, paintable' }],
-  // Legacy aliases for backward compatibility with saved states
-  'Natural Oak':                   [{ brand: 'Kährs', product: 'Grande Collection engineered oak', finish: 'matte natural grain' }],
-  'Walnut':                       [{ brand: 'Kährs', product: 'Lumen Collection American walnut', finish: 'satin oiled natural' }],
-  'Travertine':                   [{ brand: 'Stone Italiana', product: 'Navona travertine', finish: 'honed' }],
-  'Clay Plaster':                 [{ brand: 'Clayworks', product: 'Clay plaster', finish: 'hand-troweled' }],
-  'Microcement':                  [{ brand: 'Kerakoll', product: 'Cementoresina microcement', finish: 'seamless mineral coat' }],
-  'Clear Glass':                  [{ brand: 'Vitrocsa', product: 'minimal frame glass', finish: 'low-iron ultra-clear' }],
+  // ── EARTH ──────────────────────────────────────────────────────────────
+  'Travertine (honed)':                       [{ brand: 'Stone Italiana', product: 'Navona travertine slab', finish: 'honed unfilled cross-cut, warm cream-beige' }],
+  'Jura limestone (golden)':                  [{ brand: 'Solnhofen / Jura Marmor', product: 'Jura beige limestone slab', finish: 'honed with fossil inclusions, warm golden-beige' }],
+  'Pietra Serena (Tuscan)':                   [{ brand: 'Il Casone', product: 'Pietra Serena Toscana slab', finish: 'sand-blasted matte grey-green Tuscan stone' }],
+  'Cipollino marble (warm green-veined)':     [{ brand: 'Antolini', product: 'Cipollino Apuano marble slab', finish: 'polished with warm wavy green-and-gold veining on cream base' }],
+  'Green onyx / marble (veined)':             [{ brand: 'Antolini', product: 'Rainforest Green marble slab', finish: 'polished full-height with dramatic emerald-green and white-gold veining' }],
+  'Marrón Emperador (warm brown marble)':     [{ brand: 'Levantina', product: 'Emperador Dark marble slab', finish: 'polished warm chocolate-brown with light beige veining' }],
+  'Volcanic stone (basalt rough)':            [{ brand: 'Stone Italiana', product: 'basalt volcanic stone slab', finish: 'rough split-face or bush-hammered, deep charcoal' }],
+  'Sand-blasted granite (warm)':              [{ brand: 'Levantina', product: 'Giallo Veneziano granite slab', finish: 'sand-blasted warm beige-and-gold' }],
+  'Natural oak (horizontal)':                 [{ brand: 'Kährs', product: 'Grande Collection engineered oak', finish: 'horizontal grain natural-oiled honey tone' }],
+  'Herringbone parquet (warm oak)':           [{ brand: 'Kährs', product: 'Chevron Natural Oak parquet', finish: 'warm natural-oiled herringbone with aged patina' }],
+  'Walnut veneer':                            [{ brand: 'Alpi', product: 'Walnut fine veneer panel', finish: 'satin vertical grain, deep cognac-chocolate' }],
+  'Reclaimed weathered timber':               [{ brand: 'TerraMai', product: 'reclaimed barn-wood plank', finish: 'naturally weathered silver-brown patina with nail holes and split grain' }],
+  'Clay plaster':                             [{ brand: 'Clayworks', product: 'natural clay plaster wall finish', finish: 'hand-troweled with tonal irregularity, warm clay-cream' }],
+  'Lime plaster (warm mineral)':              [{ brand: 'Bauwerk', product: 'lime plaster', finish: 'warm mineral trowel finish, soft pink-cream undertone' }],
+  'Rammed earth / terracotta plaster':        [{ brand: 'Clayworks', product: 'rammed earth effect clay plaster', finish: 'layered terracotta warm-ochre hand-applied with horizontal sediment lines' }],
+  'Tadelakt (warm pigmented Moroccan)':       [{ brand: 'Tadelakt Maroc', product: 'pigmented lime tadelakt', finish: 'hand-burnished warm pigmented (clay-pink, ochre, cream) waterproof Moroccan plaster' }],
+  'Board-formed concrete':                    [{ brand: 'Site cast', product: 'board-formed exposed concrete', finish: 'raw formwork texture with horizontal timber-grain imprint and tie-rod holes' }],
+  'Industrial brick':                         [{ brand: 'Petersen Tegl', product: 'Kolumba long-format reclaimed brick', finish: 'red-rust pastoral rustic with mortar joints visible' }],
+  'Zellige tile (warm ochre / olive)':        [{ brand: 'Mosaic del Sur', product: 'Zellige handmade Moroccan tile', finish: 'irregular handmade ochre / olive / clay glaze with subtle color variation' }],
+  'Jute / sisal rug':                         [{ brand: 'Armadillo', product: 'Sahara jute rug', finish: 'natural hand-woven coarse fibre, warm honey tone' }],
+  'Bouclé (oat / cream)':                     [{ brand: 'Dedar', product: 'Karakorum bouclé upholstery', finish: 'natural oatmeal looped weave, warm tactile' }],
+  'Mohair velvet (warm rust / olive)':        [{ brand: 'Pierre Frey', product: 'Cygne mohair velvet', finish: 'rich pile in warm rust / olive tones with slight luster' }],
+
+  // ── FIRE ───────────────────────────────────────────────────────────────
+  'Dark marble (high contrast)':              [{ brand: 'Salvatori', product: 'Nero Marquina marble', finish: 'polished with crisp white calcite veining on black base' }],
+  'Port Laurent / Saint Laurent marble':      [{ brand: 'Antolini', product: 'Port Laurent marble slab', finish: 'polished black with bold honey-gold veining' }],
+  'Calacatta Viola (white + oxblood veining)':[{ brand: 'Antolini', product: 'Calacatta Viola marble slab', finish: 'polished white with dramatic oxblood-purple and rose veining' }],
+  'Patagonia quartzite (smoky burgundy)':     [{ brand: 'Antolini', product: 'Patagonia quartzite slab', finish: 'polished smoky-burgundy with grey-cream cloud movement' }],
+  'Sodalite Blue (deep midnight stone)':      [{ brand: 'Antolini', product: 'Sodalite Blue Royal slab', finish: 'polished deep midnight-blue with white calcite flecks' }],
+  'Red travertine (Persian)':                 [{ brand: 'Stone Italiana', product: 'Persian Red travertine slab', finish: 'honed warm rust-orange with horizontal vug texture' }],
+  'Bardiglio Imperiale (deep grey-black)':    [{ brand: 'Antolini', product: 'Bardiglio Imperiale marble slab', finish: 'polished deep grey-black with subtle silver veining' }],
+  'Dark quartzite':                           [{ brand: 'Levantina', product: 'Black Pearl quartzite slab', finish: 'honed deep charcoal with dramatic white-silver veining' }],
+  'Basalt':                                   [{ brand: 'Stone Federation', product: 'basalt slab', finish: 'honed matte volcanic charcoal' }],
+  'Shou-sugi-ban (charred timber)':           [{ brand: 'Delta Millworks', product: 'Yakisugi cedar plank', finish: 'traditional Japanese charred-black timber with brushed black-silver finish' }],
+  'Smoked / fumed oak':                       [{ brand: 'Kährs', product: 'Smoked Oak engineered plank', finish: 'ammonia-fumed dark chocolate oak with grey undertone' }],
+  'Dark herringbone parquet':                 [{ brand: 'Kährs', product: 'Chevron Dark Smoke oak parquet', finish: 'deep fumed herringbone with matte lacquer' }],
+  'Venetian plaster (polished)':              [{ brand: 'Marmorino', product: 'Marmorino Veneziano polished plaster', finish: 'polished lime-based deep saturated (oxblood / sienna / charcoal) with marbled depth' }],
+  'Corten steel (weathering)':                [{ brand: 'SSAB', product: 'Weathering COR-TEN A steel panel', finish: 'natural oxidized rust-orange to oxblood patina, mottled' }],
+  'Oxidized copper':                          [{ brand: 'Aurubis', product: 'Nordic Green copper sheet', finish: 'pre-oxidized verdigris green-blue patina with copper highlights' }],
+  'Burnished antique brass':                  [{ brand: 'Rocky Mountain Hardware', product: 'antique brass sheet', finish: 'hand-burnished warm honey-gold with dark-rim aging' }],
+  'Aged brass (polished)':                    [{ brand: 'Rocky Mountain Hardware', product: 'polished aged brass panel', finish: 'warm gold patina with living surface, subtle hand-rubbed marks' }],
+  'Blackened steel':                          [{ brand: 'A. Zahner', product: 'blackened steel panel', finish: 'oxidized matte gun-metal with subtle warm bronze undertone' }],
+  'Bronze accents':                           [{ brand: 'Nanz', product: 'cast bronze lever handle', finish: 'dark patinated wax seal, deep warm bronze' }],
+  'Oxblood / rust velvet upholstery':         [{ brand: 'Dedar', product: 'Mantua mohair velvet — oxblood', finish: 'deep saturated oxblood pile with rich light absorption' }],
+  'Cognac saddle leather':                    [{ brand: 'Edelman Leather', product: 'Cavallo natural cognac leather', finish: 'full-grain warm cognac saddle leather with visible pull-up patina' }],
+  'Charcoal / smoke velvet':                  [{ brand: 'Pierre Frey', product: 'Velours Plombières charcoal velvet', finish: 'deep charcoal pile with subtle warm bronze undertone' }],
+
+  // ── WATER ──────────────────────────────────────────────────────────────
+  'Bianco Lasa marble (cool grey-white)':     [{ brand: 'Marmo Lasa', product: 'Bianco Lasa Vena Oro slab', finish: 'polished cool grey-white with subtle gold veining' }],
+  'Smoke quartzite (silver-grey)':            [{ brand: 'Levantina', product: 'Silver Cloud quartzite slab', finish: 'honed silver-grey with cloudy soft movement' }],
+  'Onice Acqua (translucent water-blue onyx)':[{ brand: 'Antolini', product: 'Onice Azul slab — backlit', finish: 'translucent backlit pale water-blue onyx with crystalline veining' }],
+  'Silver travertine (polished)':             [{ brand: 'Stone Italiana', product: 'Silver travertine slab', finish: 'polished silver-grey cross-cut with cool reflective sheen' }],
+  'Microcement (continuous)':                 [{ brand: 'Kerakoll', product: 'Cementoresina microcement', finish: 'seamless mineral coat in cool greige with cloudy soft variation' }],
+  'Smooth mineral plaster':                   [{ brand: 'Kerakoll', product: 'Cementoresina smooth wall plaster', finish: 'venetian trowel micro-polished cool cream-grey' }],
+  'Tadelakt (cool pigmented Moroccan)':       [{ brand: 'Tadelakt Maroc', product: 'pigmented lime tadelakt — cool tones', finish: 'hand-burnished cool pigmented (slate, dove, smoke) waterproof Moroccan plaster' }],
+  'Mirror-polished stainless steel':          [{ brand: 'Rimex Metals', product: 'Super Mirror 304 stainless steel panel', finish: '8K mirror polish reflective silver, picks up colored room reflections' }],
+  'Hammered metal (rippled)':                 [{ brand: 'De Castelli', product: 'Martellata hammered steel sheet', finish: 'rippled hand-hammered silver dimpled texture catching light' }],
+  'Satin chrome':                             [{ brand: 'Rimex Metals', product: '304 stainless steel panel', finish: 'satin directional brush No.4 soft silver' }],
+  'Polished nickel':                          [{ brand: 'P.E. Guerin', product: 'polished nickel panel / hardware', finish: 'cool silver-white polished nickel with crisp reflection' }],
+  'Diffused glass':                           [{ brand: 'Saint-Gobain', product: 'Planilux acid-etched glass', finish: 'satin frost translucent diffusing soft cool light' }],
+  'Glass blocks (translucent)':               [{ brand: 'Seves Glassblock', product: 'Pegasus Metallizzato glass block', finish: 'translucent pale-aqua with soft internal diffusion' }],
+  'Curved bent glass':                        [{ brand: 'Cricursa', product: 'hot-bent curved glass panel', finish: 'extra-clear laminated curved with smooth fluid form' }],
+  'Reeded / ribbed fluted glass':             [{ brand: 'Lambert & Fils / Reglit Glass', product: 'reeded fluted glass panel', finish: 'vertical fluted ribs with soft diffusion, cool neutral tone' }],
+  'Matte ceramic':                            [{ brand: 'Mutina', product: 'Mews collection porcelain tile', finish: 'chalky matte cream / sand / grey surface' }],
+  'Glass mosaic tile (10–25 mm cool)':        [{ brand: 'Bisazza', product: 'Bisazza Studio glass mosaic — cool palette', finish: '10–25 mm Italian glass mosaic in pale aqua / smoke / silver, hand-laid' }],
+  'Silk satin (champagne / smoke)':           [{ brand: 'Jim Thompson', product: 'Bangkok Silk satin', finish: 'high-sheen woven silk in champagne / smoke with soft reflective drape' }],
+  'Cream bouclé':                             [{ brand: 'Pierre Frey', product: 'Karakorum cream bouclé', finish: 'soft creamy looped weave, organic tactile' }],
+  'Linen / wool textile surfaces':            [{ brand: 'Kvadrat', product: 'Hallingdal 65 wool upholstery', finish: 'mélange weave, oat / flax neutral' }, { brand: 'Dedar', product: 'Nuvola linen', finish: 'natural ivory slub' }],
+  'Pale grey wool felt':                      [{ brand: 'Kvadrat', product: 'Divina Melange 3 wool felt', finish: 'dense pale-grey wool felt with subtle mottling' }],
+
+  // ── AIR ────────────────────────────────────────────────────────────────
+  'White marble (Calacatta)':                 [{ brand: 'Salvatori', product: 'Calacatta Oro marble slab', finish: 'polished white with crisp grey-to-warm-gold veining' }],
+  'Thassos marble (pure white)':              [{ brand: 'Marble Trend', product: 'Thassos Crystal White marble slab', finish: 'polished pure crystalline white, near vein-free' }],
+  'Dolomite snow-white marble':               [{ brand: 'Antolini', product: 'Dolomite slab', finish: 'polished snow-white with very fine subtle grey veining' }],
+  'Bianco Statuario (luminous white)':        [{ brand: 'Henraux', product: 'Statuario Carrara marble slab', finish: 'polished luminous white with delicate grey veining' }],
+  'White terrazzo':                           [{ brand: 'Huguet', product: 'Terrazzo Blanco precast slab', finish: 'polished white aggregate with subtle warm-brown / grey chips' }],
+  'Light oak / ash':                          [{ brand: 'Kährs', product: 'Grande Collection engineered ash', finish: 'matte pale honey-blonde grain' }],
+  'Bleached birch':                           [{ brand: 'Kährs', product: 'Nordic Naturals birch plank', finish: 'bleached whitewash matte' }],
+  'Limewash (bright)':                        [{ brand: 'Bauwerk', product: 'limewash paint', finish: 'soft chalky bright mineral wash with very subtle warm undertone' }],
+  'White mineral plaster':                    [{ brand: 'Marmorino', product: 'white mineral plaster', finish: 'matte lime-based pure cream-white with micro-texture' }],
+  'Pale concrete (smooth)':                   [{ brand: 'LCDA', product: 'BFUP smooth concrete panel', finish: 'pale grey silk-smooth seamless cast' }],
+  'Metallic silver surface':                  [{ brand: 'Rimex Metals', product: 'Brushed aluminium panel', finish: 'satin silver metallic with soft directional brush' }],
+  'Anodized champagne aluminium':             [{ brand: 'Reynaers Aluminium', product: 'champagne anodized aluminium profile / panel', finish: 'soft warm champagne metallic finish, contemporary architectural skin' }],
+  'Clear glass (low-iron)':                   [{ brand: 'Saint-Gobain', product: 'Diamant low-iron glass', finish: 'ultra-clear transparent structural with crisp room reflections' }],
+  'Dichroic / iridescent glass':              [{ brand: '3M', product: 'Dichroic Glass Film on laminated glass panel', finish: 'color-shifting iridescent (amber-violet-green-blue spectrum), changes hue across panel and viewing angle' }],
+  'Tinted translucent glass':                 [{ brand: 'Cricursa', product: 'laminated colored PVB glass panel', finish: 'tinted translucent in soft violet, amber, or rose-gold gradient' }],
+  'Frosted satin glass':                      [{ brand: 'Saint-Gobain', product: 'SatinDeco satin glass', finish: 'soft uniform satin frost diffusing daylight' }],
+  'White Corian (curved seamless)':           [{ brand: 'DuPont', product: 'Corian Glacier White solid surface', finish: 'thermoformed curved seamless, no visible joints, pure white' }],
+  'Fluted white panel':                       [{ brand: 'Cosentino', product: 'Dekton Fiandra fluted profile', finish: 'pure white vertical fluted ridges, floor-to-ceiling architectural feature' }],
+  '3D textured white panel':                  [{ brand: 'WallArt / Lithos Design', product: '3D wall panel in mineral composite', finish: 'geometric relief pattern, matte pure white, casts shadow play' }],
+  'Sheer linen voile drapery':                [{ brand: 'Dedar', product: 'Aurea sheer linen voile', finish: 'lightweight sheer woven linen, ivory / soft cream, diffuses daylight' }],
+  'Iridescent satin / lurex':                 [{ brand: 'Rubelli', product: 'Lurex iridescent satin', finish: 'shimmering iridescent satin with subtle violet / silver shift' }],
+
+  // ── SHARED ─────────────────────────────────────────────────────────────
+  'Textured concrete (matte)':                [{ brand: 'LCDA', product: 'BFUP concrete panel', finish: 'raw shuttered matte with soft tonal variation' }],
+  'Brushed metal':                            [{ brand: 'Rimadesio', product: 'brushed metal profile', finish: 'satin anodization, neutral silver-grey' }],
+  'Solid oak':                                [{ brand: 'Boen', product: 'Chaletino wide plank', finish: 'solid oak natural-oiled honey tone' }],
+  'Walnut (natural finish)':                  [{ brand: 'Kährs', product: 'Lumen Collection American walnut', finish: 'satin oiled natural deep cognac' }],
+
+  // ── Legacy aliases for backward compatibility with old saved states ────
+  'Natural Oak':                              [{ brand: 'Kährs', product: 'Grande Collection engineered oak', finish: 'matte natural grain' }],
+  'Walnut':                                   [{ brand: 'Kährs', product: 'Lumen Collection American walnut', finish: 'satin oiled natural' }],
+  'Travertine':                               [{ brand: 'Stone Italiana', product: 'Navona travertine', finish: 'honed' }],
+  'Clay Plaster':                             [{ brand: 'Clayworks', product: 'Clay plaster', finish: 'hand-troweled' }],
+  'Microcement':                              [{ brand: 'Kerakoll', product: 'Cementoresina microcement', finish: 'seamless mineral coat' }],
+  'Clear Glass':                              [{ brand: 'Vitrocsa', product: 'minimal frame glass', finish: 'low-iron ultra-clear' }],
 };
 
 // Expanded furniture pool — each generation cycles different items via generationIndex
@@ -492,67 +544,329 @@ const COLOR_PALETTE_MAP: Record<ColorPalette, string> = {
 };
 
 // ── BUDGET LEVEL DIRECTIVES ──
+// Backed by lib/brandCatalog.ts — keeps brand lists, $/m² ranges, and prompt
+// directives in a single source of truth shared with the UI tier picker.
 const BUDGET_LEVEL_MAP: Record<BudgetLevel, string> = {
-  'essential': 'Budget context: practical and focused. Use quality mainstream materials and well-designed functional furniture. Clean execution without excessive ornamentation. Smart material choices that look good and last.',
-  'premium': 'Budget context: premium designer level. Use recognized design brands (B&B Italia, Poliform, Minotti-tier). Engineered stone and hardwood throughout. Custom joinery details visible. Professional lighting design.',
-  'luxury': 'Budget context: ultra-luxury bespoke. Use the finest materials — bookmatched marble, hand-finished plaster, custom bronze hardware, couture textile finishing. Every detail is bespoke: shadow gaps, flush details, concealed hardware. The space feels like it was designed by a world-class interior architect.',
+  essential: buildBudgetBrandDirective('essential'),
+  premium: buildBudgetBrandDirective('premium'),
+  luxury: buildBudgetBrandDirective('luxury'),
 };
+
+// ── MATERIAL COLOR SIGNATURES ──
+// When a user-selected material has a strong, identifying color (green onyx,
+// rust velvet, dichroic glass, Nero Marquina marble, corten…) we must NOT let
+// the chosen color palette ('warm-earth', 'light-air' etc.) flatten that color
+// to a neutral or subtitute it for a "harmonious" hue. The reconciliation
+// block below tells the model to keep these material colors honest on the
+// surfaces where the material is used; the palette governs everything else.
+//
+// Keys are lowercase substrings matched against material.name. The value
+// describes the dominant color signature in plain language for the prompt.
+const MATERIAL_COLOR_SIGNATURES: Array<{ match: RegExp; signature: string }> = [
+  // ── EARTH / warm stones & clays ─────────────────────────────────────────
+  { match: /green.*(onyx|marble|onice|stone)|verde|connemara|rainforest/i, signature: 'deep emerald-to-pistachio green stone with white/gold veining — green is the dominant readable color of this surface' },
+  { match: /cipollino/i, signature: 'cream marble base with warm wavy green-and-gold veining — the green veining flows in onion-skin layers' },
+  { match: /marr.n.*emperador|emperador/i, signature: 'warm chocolate-brown marble with light beige veining — saturated rich brown' },
+  { match: /jura.*limestone|jura/i, signature: 'warm golden-beige limestone with fine fossil inclusions and subtle horizontal grain' },
+  { match: /pietra.*serena/i, signature: 'soft Tuscan grey-green sandstone with matte sand-blasted texture — neither cold grey nor warm beige' },
+  { match: /sand.?blasted.*granite|warm.*granite/i, signature: 'warm beige-and-gold granite with sand-blasted matte surface and small visible mineral flecks' },
+  { match: /onyx/i, signature: 'translucent onyx with backlit honey/amber/green glow — the surface itself emits warm color' },
+  { match: /travertine.*honed|^travertine|honed.*travertine/i, signature: 'warm cream-to-beige travertine with horizontal vug texture and natural color variation' },
+  { match: /rammed.?earth|terracotta/i, signature: 'warm terracotta-ochre to rust-clay color, layered horizontal sediment lines, sunlit warm tone' },
+  { match: /walnut(?!.*natural finish)/i, signature: 'rich chocolate-to-cognac brown walnut grain with warm undertone — never bleached or pale' },
+  { match: /reclaimed.*timber|weathered.*wood/i, signature: 'silvered grey-brown weathered timber with split grain, warm undertone, real patina, occasional nail holes' },
+  { match: /natural.*oak|warm.*oak|herringbone.*oak/i, signature: 'honey-amber warm oak grain — golden mid-tone, never grey-stained' },
+  { match: /clay.*plaster/i, signature: 'warm clay-pink to terracotta-cream plaster with visible trowel marks and tonal irregularity' },
+  { match: /lime.*plaster.*warm|warm.*lime.*plaster/i, signature: 'warm mineral cream lime plaster with subtle pink/ochre cast' },
+  { match: /tadelakt.*warm|warm.*tadelakt/i, signature: 'hand-burnished tadelakt in warm pigmented tones (clay-pink, ochre, cream) with soft satin sheen and waterproof Moroccan finish' },
+  { match: /brick/i, signature: 'red-orange-to-rust industrial brick with mortar joints visible, slightly weathered face' },
+  { match: /zellige.*warm|zellige.*ochre|zellige.*olive/i, signature: 'irregular handmade Zellige tile in warm ochre / olive / clay glaze — each tile slightly different, hand-glazed character' },
+  { match: /board.?formed.*concrete/i, signature: 'cool grey board-formed concrete with horizontal timber-grain imprint and tie-rod holes, slight warm cast in sunlight' },
+  { match: /volcanic|^basalt$/i, signature: 'deep charcoal-to-black volcanic basalt with rough porous texture' },
+  { match: /jute|sisal/i, signature: 'natural honey-tone jute / sisal weave with coarse organic fibre — warm tactile floor texture' },
+  { match: /boucl.*oat|boucl.*cream|oat.*boucl/i, signature: 'warm oatmeal / cream bouclé with looped tactile weave — soft natural color' },
+  { match: /mohair.*velvet|warm.*velvet|rust.*velvet|olive.*velvet/i, signature: 'mohair velvet pile in warm rust / olive tones with soft sheen and rich light absorption' },
+
+  // ── FIRE / dark, dramatic, metallic ─────────────────────────────────────
+  { match: /corten|weathering.*steel/i, signature: 'rust-orange to deep oxblood corten patina with mottled red-brown texture — the rust IS the finish' },
+  { match: /oxidized.*copper|copper.*patina/i, signature: 'verdigris green-blue oxidized copper transitioning to warm copper highlights' },
+  { match: /burnished.*brass|antique.*brass/i, signature: 'hand-burnished antique brass with warm honey-gold tone and dark-rim hand-rubbed aging' },
+  { match: /aged.*brass|polished.*brass|brass(?!.*accent)/i, signature: 'warm honey-gold brass with hand-rubbed patina, subtle dark-rim aging, living surface' },
+  { match: /bronze/i, signature: 'deep warm bronze with chocolate-brown undertone, subtle gold highlights' },
+  { match: /blackened.*steel/i, signature: 'gun-metal blackened steel with subtle warm bronze undertone in highlights' },
+  { match: /calacatta.*viola/i, signature: 'white marble base with dramatic oxblood-purple-to-rose veining — the violet veining is bold and unmistakable, never neutral grey' },
+  { match: /port.*laurent|saint.*laurent.*marble/i, signature: 'black marble with bold honey-gold veining — high contrast warm gold on dark base' },
+  { match: /patagonia.*quartzite|patagonia/i, signature: 'smoky burgundy quartzite with grey-cream cloud movement — saturated wine-purple base' },
+  { match: /sodalite.*blue|sodalite/i, signature: 'deep midnight royal-blue stone with white calcite flecks — saturated dark blue is dominant' },
+  { match: /red.*travertine|persian.*travertine/i, signature: 'warm rust-orange travertine with horizontal vug texture — saturated terracotta tone' },
+  { match: /bardiglio/i, signature: 'deep grey-black marble with subtle silver veining — moody charcoal' },
+  { match: /dark.*marble|nero.*marquina|sahara.*noir|dark.*quartzite|black.*pearl/i, signature: 'deep black-to-charcoal stone with high-contrast bright white veining — the white veins must be crisp and dramatic' },
+  { match: /venetian.*plaster.*polished/i, signature: 'polished Venetian plaster with deep saturated color (warm sienna, oxblood, or charcoal) and subtle marbled depth' },
+  { match: /dark.*herringbone|smoked.*oak|fumed.*oak/i, signature: 'fume-stained dark chocolate oak with cool-grey undertone' },
+  { match: /shou.?sugi.?ban|charred.*timber|yakisugi/i, signature: 'charred-black Japanese-style timber with brushed black-silver finish and visible grain — true black, not painted black' },
+  { match: /oxblood.*velvet|rust.*velvet/i, signature: 'deep saturated oxblood / rust velvet pile with rich light absorption — bold red-brown' },
+  { match: /cognac.*leather|saddle.*leather/i, signature: 'full-grain warm cognac saddle leather with visible pull-up patina and natural sheen' },
+  { match: /charcoal.*velvet|smoke.*velvet/i, signature: 'deep charcoal velvet pile with subtle warm bronze undertone in highlights' },
+
+  // ── WATER / cool, smooth, reflective ────────────────────────────────────
+  { match: /bianco.*lasa|lasa/i, signature: 'cool grey-white marble with subtle warm-gold veining — base reads cool, not warm' },
+  { match: /smoke.*quartzite|silver.*cloud/i, signature: 'cool silver-grey quartzite with cloudy soft movement and faint veining' },
+  { match: /onice.*acqua|water.*onyx|onice.*azul/i, signature: 'translucent backlit pale water-blue onyx with crystalline veining — surface emits cool blue glow' },
+  { match: /silver.*travertine|travertine.*silver/i, signature: 'polished silver-grey travertine with cool reflective sheen and horizontal vug pattern' },
+  { match: /microcement/i, signature: 'cool greige-to-cream microcement with subtle cloudy texture, slight color variation, soft sheen' },
+  { match: /smooth.*mineral.*plaster/i, signature: 'cool cream-grey mineral plaster with venetian micro-polished surface' },
+  { match: /tadelakt.*cool|cool.*tadelakt/i, signature: 'hand-burnished tadelakt in cool pigmented tones (slate, dove-grey, smoke) with soft satin sheen and waterproof Moroccan finish' },
+  { match: /mirror.?polished.*steel|stainless.*steel|chrome(?!.*satin)/i, signature: 'mirror-polished chrome/stainless — silver, picking up colored reflections of everything around it' },
+  { match: /hammered.*metal|martellata/i, signature: 'hand-hammered silver metal with rippled dimples catching light at every angle' },
+  { match: /satin.*chrome/i, signature: 'soft satin chrome with diffuse silver finish, less mirror-like than polished' },
+  { match: /polished.*nickel/i, signature: 'cool silver-white polished nickel with crisp reflection — slightly cooler than chrome' },
+  { match: /glass.*block/i, signature: 'translucent pale-aqua-to-frosted glass blocks diffusing soft cool light' },
+  { match: /reeded.*glass|ribbed.*glass|fluted.*glass/i, signature: 'reeded fluted glass with vertical ribs and soft cool diffusion — light passes through striped' },
+  { match: /curved.*bent.*glass|diffused.*glass/i, signature: 'translucent frosted glass with soft cool-neutral diffuse light passing through' },
+  { match: /matte.*ceramic/i, signature: 'soft matte ceramic in pale cream / sand / grey, no shine' },
+  { match: /glass.*mosaic/i, signature: '10–25 mm Italian glass mosaic in pale aqua / smoke / silver — small modular tile pattern with hand-laid grout joints' },
+  { match: /silk.*satin|champagne.*silk|smoke.*silk/i, signature: 'high-sheen silk satin in champagne / smoke with soft reflective drape' },
+  { match: /cream.*boucl/i, signature: 'soft creamy bouclé with looped weave — pale neutral organic tactile' },
+  { match: /linen.*wool|wool.*textile|linen.*textile/i, signature: 'natural linen / wool weave in oat / flax / cream — warm-neutral organic color, visible weave' },
+  { match: /pale.*grey.*wool|wool.*felt/i, signature: 'dense pale-grey wool felt with subtle mottling — soft acoustic surface' },
+
+  // ── AIR / luminous, futurist ────────────────────────────────────────────
+  { match: /thassos/i, signature: 'pure crystalline white Thassos marble — near-vein-free, almost-luminous white' },
+  { match: /dolomite/i, signature: 'snow-white dolomite marble with very fine subtle grey veining' },
+  { match: /bianco.*statuario|statuario|statuary/i, signature: 'luminous bright-white Statuario marble with delicate elegant grey veining' },
+  { match: /dichroic|iridescent.*glass/i, signature: 'dichroic glass that shifts hue across the panel between violet, magenta, amber, teal — must show the color shift, never paint flat' },
+  { match: /tinted.*translucent.*glass|tinted.*glass/i, signature: 'soft tinted laminated glass in gentle violet / amber / blue cast — light passes through tinted' },
+  { match: /frosted.*satin.*glass|satin.*glass/i, signature: 'soft uniform satin frost diffusing daylight evenly — cool neutral white' },
+  { match: /white.*marble|calacatta/i, signature: 'white Calacatta marble with crisp grey-to-gold veining — white must stay white, not warm-toned' },
+  { match: /white.*terrazzo/i, signature: 'white terrazzo base with multi-color aggregate (warm browns, soft greys, occasional rust) — base reads as white' },
+  { match: /metallic.*silver/i, signature: 'cool metallic silver with chrome-like luminance' },
+  { match: /champagne.*aluminium|champagne.*anodized|anodized.*champagne/i, signature: 'soft warm champagne anodized aluminium with contemporary architectural metallic skin' },
+  { match: /white.*corian/i, signature: 'pure seamless white Corian / solid surface with no visible joins — pure clean white' },
+  { match: /fluted.*white|3d.*textured.*white/i, signature: 'pure white fluted / 3D-relief panel — the texture creates shadow play but the base color is pristine white' },
+  { match: /limewash|white.*mineral.*plaster|white.*plaster/i, signature: 'soft chalky white limewash / mineral plaster with very subtle warm undertone, micro-texture' },
+  { match: /light.*oak|ash|bleached.*birch/i, signature: 'pale honey-blonde light oak / ash / bleached birch with cool-warm balanced undertone — never orange, never grey' },
+  { match: /clear.*glass/i, signature: 'clear low-iron glass — virtually colorless, transparent, picks up reflections of surroundings' },
+  { match: /sheer.*linen|linen.*voile/i, signature: 'lightweight sheer linen voile drapery in ivory / soft cream — diffuses daylight, almost translucent' },
+  { match: /iridescent.*satin|lurex/i, signature: 'shimmering iridescent satin / lurex with subtle violet / silver shift in light' },
+];
+
+const PALETTE_NEUTRAL_HUES: Record<ColorPalette, string> = {
+  auto: '',
+  'warm-earth': 'sand / camel / walnut / terracotta / warm cream',
+  'cool-mineral': 'silver grey / slate / pearl / sage / cool white',
+  'dark-bronze': 'deep charcoal / espresso / burnished bronze / warm black / copper',
+  'light-air': 'pure white / warm white / pale birch / ice blue / cloud',
+  'ocean-calm': 'misty blue / soft grey / pearl / pale blue-grey / polished silver',
+};
+
+// ── AUTHENTIC SURFACE COVERAGE BANDS ──
+// For each material category we define where it CAN appear and a sane area
+// share. This stops the AI from doing things like covering an entire room in
+// brass, or a 100% velvet wall.
+const CATEGORY_PLACEMENT_RULE: Record<MaterialCategory, string> = {
+  stone:
+    'Stone — apply on countertops, floors, vanity tops, feature walls, fireplace surrounds, kitchen islands. Wall coverage: up to ~40 % of one wall as a slab feature; never veneer every wall. Floors only when stone is the user-named flooring choice. Never on furniture upholstery, ceilings, or as a paint color.',
+  wood:
+    'Wood — apply on floors, joinery, cabinetry, dining/coffee table tops, doors, ceiling beams, wall slats. Never as a polished countertop substitute, never as upholstery, never as plumbing fixture.',
+  plaster:
+    'Plaster — apply on walls and ceilings only. Coverage typically 50–100 % of wall planes. Never on floors, furniture, or hardware.',
+  concrete:
+    'Concrete — apply on ceilings (slab), structural walls, floors, stair volumes, outdoor surfaces. Never on furniture upholstery, hardware, or small objects.',
+  metal:
+    'Metal — apply on hardware, lighting fixtures, frames, profiles, cabinet pulls, accent panels. Hard cap on coverage: brass / bronze / copper as accents only (~5–15 % of visible surface). Mirror chrome / stainless can wrap a feature wall or counter when the material is dominant in the brief, but never the entire envelope. Never on plaster walls or ceilings unless the brief explicitly says metal cladding.',
+  glass:
+    'Glass — apply on partitions, windows, balustrades, shower screens, vitrines, room dividers, feature art panels (dichroic, tinted). Never on floors, walls as paint, or upholstery.',
+  ceramic:
+    'Ceramic / tile — apply on bathroom walls, kitchen backsplashes, floors (when picked as flooring), spa pool surrounds, exterior cladding. Never on furniture upholstery, drapery, or ceilings.',
+  textile:
+    'Textile — apply on upholstery, drapery, cushions, rugs, banquette seating, headboards, acoustic wall panels (felt only). NEVER on floors as a primary surface, NEVER on cabinetry, NEVER on countertops, NEVER as wall paint. Coverage is shared across furniture pieces — one velvet sofa is enough; do not upholster every chair the same way.',
+  composite:
+    'Composite (Corian, GRC, fluted MDF, 3D relief) — apply on counters, reception desks, columns, feature walls, ceiling features. Never on flooring or furniture upholstery.',
+};
+
+/**
+ * Build the "use materials only where relevant and authentic" directive.
+ * Uses the material categories from the catalog to issue per-pick placement
+ * limits (so velvet stays on furniture, brass stays an accent, marble stays
+ * on countertops/feature walls, etc.). This is what prevents the AI from
+ * wallpapering a room in oxblood velvet or making the floor out of brass.
+ */
+function buildAuthenticMaterialUsageBlock(
+  materialsSelected: PromptInput['materialsSelected'],
+): string | null {
+  if (!materialsSelected || materialsSelected.length === 0) return null;
+
+  const categoriesUsed = new Set<MaterialCategory>();
+  const perPickRules: string[] = [];
+
+  for (const m of materialsSelected) {
+    const cat = getMaterialCategory(m.name);
+    if (!cat) continue;
+    categoriesUsed.add(cat);
+    const placement = MATERIAL_SURFACE_AFFINITY[m.name];
+    if (placement) {
+      perPickRules.push(`${m.name} → ${placement}`);
+    }
+  }
+
+  if (categoriesUsed.size === 0) return null;
+
+  const categoryRules = Array.from(categoriesUsed)
+    .map((cat) => CATEGORY_PLACEMENT_RULE[cat])
+    .filter(Boolean);
+
+  return [
+    'AUTHENTIC MATERIAL PLACEMENT — every selected material MUST appear ONLY on surfaces where it is structurally and aesthetically appropriate.',
+    'Per-pick placement (take this literally — do not reassign materials to other surfaces, do not drop a material because it is "less famous"):',
+    perPickRules.join('. ') + '.',
+    'Surface-family rules in force:',
+    categoryRules.join(' '),
+    'GLOBAL CHECKS: (a) no single material covers more than its sane share of the visible scene; (b) hard accents (brass, bronze, dichroic, mosaic) read as deliberate features, not decoration sprinkled everywhere; (c) textiles never become floors or cabinetry; (d) stones never become upholstery or paint; (e) when a material is small in the brief, it appears once with a clear identity, not nowhere and not everywhere.',
+  ].join(' ');
+}
+
+/**
+ * If the user picked materials with strong intrinsic colors (e.g. green onyx,
+ * rust velvet, dichroic glass), the chosen color palette must NOT erase those
+ * colors. This block reconciles the two so the AI keeps both honest.
+ */
+function buildMaterialPaletteReconciliationBlock(
+  materialsSelected: PromptInput['materialsSelected'],
+  palette: ColorPalette,
+): string | null {
+  if (!materialsSelected || materialsSelected.length === 0) return null;
+
+  const colorLocks: string[] = [];
+  const seenSignatures = new Set<string>();
+  for (const m of materialsSelected) {
+    for (const { match, signature } of MATERIAL_COLOR_SIGNATURES) {
+      if (match.test(m.name) && !seenSignatures.has(signature)) {
+        colorLocks.push(`${m.name} → ${signature}`);
+        seenSignatures.add(signature);
+        break;
+      }
+    }
+  }
+
+  if (colorLocks.length === 0) return null;
+
+  const paletteHues = palette !== 'auto' ? PALETTE_NEUTRAL_HUES[palette] : '';
+  const paletteRole = palette !== 'auto'
+    ? `The chosen color palette (${paletteHues}) governs ONLY the neutral surfaces, ambient lighting, and accents that have no prescribed material color — it does NOT override the colors above.`
+    : 'No global palette is locked, so the material colors above LEAD the overall scheme — derive complementary neutrals around them.';
+
+  return [
+    'MATERIAL → COLOR LOCK (reconcile with palette below; this overrides the palette for these specific surfaces):',
+    colorLocks.map((l, i) => `${i + 1}. ${l}`).join('. ') + '.',
+    paletteRole,
+    'NEVER bleach a green stone to grey, NEVER tint a Calacatta marble warm to "match" a warm palette, NEVER make rust velvet pink, NEVER paint dichroic glass a single flat purple. The named material keeps its identifying color; the palette flows around it.',
+  ].join(' ');
+}
 
 // Surface roles for material placement — architecture thinks in surfaces, not abstract lists
 const SURFACE_ROLES = ['floor', 'main wall', 'accent wall / feature', 'ceiling / overhead', 'cabinetry / joinery', 'countertop / table surface', 'upholstery / textile', 'hardware / accents'] as const;
 
 // Map material names to their natural architectural surface
 const MATERIAL_SURFACE_AFFINITY: Record<string, string> = {
+  // EARTH
   'Travertine (honed)': 'floor and wall cladding',
-  'Dark quartzite': 'countertop and feature wall',
-  'Clay plaster': 'main wall finish',
-  'Lime plaster (warm mineral)': 'wall and ceiling plaster',
-  'Dark marble (high contrast)': 'countertop, fireplace surround, or feature panel',
-  'Basalt': 'floor tiles or countertop',
-  'Blackened steel': 'shelf brackets, door frames, window profiles',
-  'Venetian plaster (polished)': 'feature wall or ceiling finish',
-  'Bronze accents': 'door handles, cabinet pulls, light fixture accents',
-  'Microcement (continuous)': 'continuous floor and wet-area walls',
-  'Smooth mineral plaster': 'wall finish throughout',
-  'Matte ceramic': 'backsplash, bathroom wall, or floor tiles',
-  'Linen / wool textile surfaces': 'sofa upholstery, curtains, cushions',
-  'Diffused glass': 'partition panels, cabinet fronts, bathroom screen',
-  'Mirror-polished stainless steel': 'feature wall cladding, counter/bar front, reception desk skin, column cladding',
-  'Hammered metal (rippled)': 'counter front panel, feature wall accent, bar face cladding, ceiling accent panel',
-  'Satin chrome': 'cabinet fronts, door frames, fixture housings, counter edge band',
-  'Glass blocks (translucent)': 'partition wall, room divider, backsplash feature, light-filtering screen',
-  'Curved bent glass': 'storefront facade, partition screen, display vitrine, curved balustrade',
+  'Jura limestone (golden)': 'floor slab, stair tread, vanity top — warm beige limestone with fossil interest',
+  'Pietra Serena (Tuscan)': 'floor slab, exterior cladding, fireplace surround — Tuscan grey-green stone',
+  'Cipollino marble (warm green-veined)': 'feature wall slab, countertop, vanity top — warm green-veined marble',
+  'Green onyx / marble (veined)': 'kitchen island, countertop, backsplash, feature wall slab — emerald-green stone with white-gold veining',
+  'Marrón Emperador (warm brown marble)': 'feature wall slab, countertop, fireplace surround — warm chocolate-brown marble',
+  'Volcanic stone (basalt rough)': 'exterior base wall, landscape steps, interior feature wall, fireplace hearth',
+  'Sand-blasted granite (warm)': 'floor slab, exterior cladding, kitchen countertop — warm beige-gold granite',
+  'Natural oak (horizontal)': 'flooring planks and cabinetry fronts',
+  'Herringbone parquet (warm oak)': 'main floor surface throughout living and dining areas',
+  'Walnut veneer': 'cabinetry doors, headboard panel, desk surface, joinery panels',
+  'Reclaimed weathered timber': 'column cladding, feature wall, dining table, shelving, ceiling beams',
+  'Clay plaster': 'main wall finish — warm clay-cream hand-troweled',
+  'Lime plaster (warm mineral)': 'wall and ceiling plaster — warm mineral trowel finish',
+  'Rammed earth / terracotta plaster': 'exterior facade wall, interior accent wall, courtyard wall, fireplace surround',
+  'Tadelakt (warm pigmented Moroccan)': 'bathroom walls and bath surround, hammam, sink basins — waterproof warm pigmented hand-burnished plaster',
+  'Board-formed concrete': 'ceiling slab, structural wall, stair volume, cantilevered overhang',
+  'Industrial brick': 'accent wall, fireplace surround, exposed structural wall',
+  'Zellige tile (warm ochre / olive)': 'kitchen backsplash, bathroom wall, hammam wall — irregular handmade Moroccan tile',
+  'Jute / sisal rug': 'living-area floor rug, bedroom rug — natural fibre',
+  'Bouclé (oat / cream)': 'sofa upholstery, accent armchair, cushions — looped warm tactile weave',
+  'Mohair velvet (warm rust / olive)': 'sofa upholstery, accent armchair, cushions, drapery — warm-toned plush velvet',
+
+  // FIRE
+  'Dark marble (high contrast)': 'countertop, fireplace surround, feature panel — Nero Marquina black with crisp white veining',
+  'Port Laurent / Saint Laurent marble': 'kitchen island, bar counter, feature wall — black with bold honey-gold veining',
+  'Calacatta Viola (white + oxblood veining)': 'feature wall slab, kitchen island, bar back-bar — white with dramatic oxblood-purple veining',
+  'Patagonia quartzite (smoky burgundy)': 'feature wall slab, countertop, bar front — smoky burgundy with cloud movement',
+  'Sodalite Blue (deep midnight stone)': 'feature wall slab, vanity top, art-style accent panel — deep midnight blue stone',
+  'Red travertine (Persian)': 'feature wall, fireplace surround, vanity — warm rust-orange travertine',
+  'Bardiglio Imperiale (deep grey-black)': 'flooring slabs, countertop, fireplace surround — deep grey-black marble',
+  'Dark quartzite': 'countertop and feature wall — Black Pearl with white-silver veining',
+  'Basalt': 'floor tiles or countertop — honed charcoal',
+  'Shou-sugi-ban (charred timber)': 'exterior facade cladding, accent feature wall, ceiling beams — Japanese charred-black timber',
+  'Smoked / fumed oak': 'flooring, dining table, joinery — fumed dark chocolate oak',
+  'Dark herringbone parquet': 'main floor surface, bedroom floor, corridor floor — dark fumed oak in chevron pattern',
+  'Venetian plaster (polished)': 'feature wall or ceiling finish — polished saturated lime-based',
   'Corten steel (weathering)': 'exterior facade cladding, entry portal frame, feature wall panel, garden wall',
   'Oxidized copper': 'facade accent panel, fireplace surround, door/cabinet fronts, sculptural feature',
+  'Burnished antique brass': 'cabinet fronts, hardware, light fixture trim, kitchen hood — warm hand-burnished brass',
   'Aged brass (polished)': 'coffee table surface, hardware pulls, light fixture trim, sculptural accent, kitchen island front',
-  'Dark herringbone parquet': 'main floor surface, bedroom floor, corridor floor — dark fumed oak in chevron pattern',
-  'Board-formed concrete': 'ceiling slab, structural wall, stair volume, cantilevered overhang',
-  'Volcanic stone (basalt rough)': 'exterior base wall, landscape steps, interior feature wall, fireplace hearth',
-  'Green onyx / marble (veined)': 'kitchen island, countertop, backsplash, feature wall slab',
-  'Rammed earth / terracotta plaster': 'exterior facade wall, interior accent wall, courtyard wall, fireplace surround',
-  'Reclaimed weathered timber': 'column cladding, feature wall, dining table, shelving, ceiling beams',
-  'Herringbone parquet (warm oak)': 'main floor surface throughout living and dining areas',
+  'Blackened steel': 'shelf brackets, door frames, window profiles, structural columns',
+  'Bronze accents': 'door handles, cabinet pulls, light fixture accents — small surface area, never main wall',
+  'Oxblood / rust velvet upholstery': 'sofa upholstery, accent armchair, cushions, banquette seating — never wall finish',
+  'Cognac saddle leather': 'sofa upholstery, dining chairs, lounge armchair, banquette — full-grain leather',
+  'Charcoal / smoke velvet': 'sofa upholstery, accent armchair, banquette, drapery — never wall',
+
+  // WATER
+  'Bianco Lasa marble (cool grey-white)': 'countertop, vanity top, feature wall — cool grey-white marble with subtle veining',
+  'Smoke quartzite (silver-grey)': 'feature wall, countertop, bar front — silver-grey quartzite with cloudy soft movement',
+  'Onice Acqua (translucent water-blue onyx)': 'backlit feature wall, bar back-bar, vanity panel — translucent water-blue onyx with internal glow',
+  'Silver travertine (polished)': 'floor slab, feature wall, vanity top — polished silver travertine',
+  'Microcement (continuous)': 'continuous floor and wet-area walls — seamless cool greige',
+  'Smooth mineral plaster': 'wall finish throughout — venetian micro-polished cool cream-grey',
+  'Tadelakt (cool pigmented Moroccan)': 'bathroom walls and bath surround, hammam, sink basins — waterproof cool-pigmented hand-burnished plaster',
+  'Mirror-polished stainless steel': 'feature wall cladding, counter/bar front, reception desk skin, column cladding — immersive chrome wraps',
+  'Hammered metal (rippled)': 'counter front panel, feature wall accent, bar face cladding, ceiling accent panel',
+  'Satin chrome': 'cabinet fronts, door frames, fixture housings, counter edge band',
+  'Polished nickel': 'plumbing fixtures, hardware, sconce housings, mirror frames — cool silver-white finish',
+  'Diffused glass': 'partition panels, cabinet fronts, bathroom screen',
+  'Glass blocks (translucent)': 'partition wall, room divider, backsplash feature, light-filtering screen',
+  'Curved bent glass': 'storefront facade, partition screen, display vitrine, curved balustrade',
+  'Reeded / ribbed fluted glass': 'partition panel, shower enclosure, cabinet fronts, room divider — vertical fluted ribs',
+  'Matte ceramic': 'backsplash, bathroom wall, floor tiles',
+  'Glass mosaic tile (10–25 mm cool)': 'spa pool surround, bathroom wall feature, kitchen backsplash — small-format Italian glass mosaic',
+  'Silk satin (champagne / smoke)': 'drapery, cushions, headboard upholstery — high-sheen silk',
+  'Cream bouclé': 'sofa upholstery, accent armchair, cushions — soft creamy looped weave',
+  'Linen / wool textile surfaces': 'sofa upholstery, drapery, cushions',
+  'Pale grey wool felt': 'pinboard wall, banquette upholstery, cushions, acoustic wall panels — never main floor',
+
+  // AIR
+  'White marble (Calacatta)': 'countertop, vanity top, feature wall cladding',
+  'Thassos marble (pure white)': 'flooring slab, countertop, vanity, bath surround — pure crystalline white',
+  'Dolomite snow-white marble': 'countertop, vanity top, feature wall — snow-white with very fine veining',
+  'Bianco Statuario (luminous white)': 'countertop, fireplace surround, sculptural feature — luminous white with delicate veining',
+  'White terrazzo': 'floor surface, countertop, bathroom vanity',
+  'Light oak / ash': 'flooring planks and shelf surfaces — pale honey-blonde grain',
+  'Bleached birch': 'cabinetry fronts, shelving, light furniture surfaces',
   'Limewash (bright)': 'wall and ceiling wash finish',
   'White mineral plaster': 'ceiling and upper wall finish',
-  'Light oak / ash': 'flooring planks and shelf surfaces',
-  'White marble (Calacatta)': 'countertop, vanity top, feature wall cladding',
-  'Clear glass (low-iron)': 'full-height partitions, balustrades, shelving',
-  'Bleached birch': 'cabinetry fronts, shelving, light furniture surfaces',
-  'White terrazzo': 'floor surface, countertop, bathroom vanity',
   'Pale concrete (smooth)': 'ceiling finish, wall panels, floor surface',
-  'Natural oak (horizontal)': 'flooring and cabinetry fronts',
-  'Walnut veneer': 'cabinetry doors, headboard panel, desk surface',
-  'Industrial brick': 'accent wall',
+  'Metallic silver surface': 'furniture upholstery (silver vinyl armchairs), pedestal table column, counter front panel, decorative accessories',
+  'Anodized champagne aluminium': 'window/door profiles, cabinet edges, ceiling trim, lighting housings — soft warm metallic skin',
+  'Clear glass (low-iron)': 'full-height partitions, balustrades, shelving, structural glazing',
+  'Dichroic / iridescent glass': 'large sculptural art installation, room divider, ceiling-hung art piece — shifts color with viewing angle',
+  'Tinted translucent glass': 'space-dividing partition panel (large oval or arched form), desk surface, shelving, counter accent — colored translucent',
+  'Frosted satin glass': 'partition panels, cabinet fronts, shower enclosure — uniform satin diffusion',
+  'White Corian (curved seamless)': 'reception counter, kitchen island, bar counter — seamless thermoformed organic flowing form',
+  'Fluted white panel': 'column cladding, feature wall panel — vertical fluted ridges floor-to-ceiling',
+  '3D textured white panel': 'feature wall cladding, reception backdrop, column cladding — geometric relief tiles creating shadow pattern',
+  'Sheer linen voile drapery': 'floor-to-ceiling sheer drapery diffusing window light — never upholstery',
+  'Iridescent satin / lurex': 'cushions, single sculptural drape, statement accent textile — never wall or floor',
+
+  // SHARED
   'Textured concrete (matte)': 'ceiling slab or feature wall panel',
   'Brushed metal': 'shelf system, railing, kitchen island frame',
   'Solid oak': 'dining table top, bench, flooring',
   'Walnut (natural finish)': 'dining table, desk, or joinery',
-  'White Corian (curved seamless)': 'reception counter, kitchen island, bar counter — seamless thermoformed organic flowing form',
-  'Fluted white panel': 'column cladding, feature wall panel — vertical fluted ridges floor-to-ceiling',
-  'Dichroic / iridescent glass': 'large sculptural art installation, room divider, ceiling-hung art piece — shifts color with viewing angle',
-  'Tinted translucent glass': 'space-dividing partition panel (large oval or arched form), desk surface, shelving, counter accent — colored translucent',
-  'Metallic silver surface': 'furniture upholstery (silver vinyl armchairs), pedestal table column, counter front panel, decorative accessories',
-  '3D textured white panel': 'feature wall cladding, reception backdrop, column cladding — geometric relief tiles creating shadow pattern',
 };
 
 // Build explicit material placement instructions from user's selected materials
@@ -1634,6 +1948,20 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
     P.push(buildUserSelectedMaterialsMandatory(input.materialsSelected, materialPlacement));
   } else {
     P.push(`Material palette: ${roomProgram.materialPriority}. Elevated selections: ${profile.materialBehaviorPhrases.slice(0, balancedBlend ? 5 : 4).join(', ')}. Every surface shows realistic texture depth — no flat, uniform, or digitally perfect surfaces.`);
+  }
+
+  // [3b] MATERIAL ↔ PALETTE RECONCILIATION — keeps green stone green, etc.
+  const reconBlock = buildMaterialPaletteReconciliationBlock(input.materialsSelected, colorPalette);
+  if (reconBlock) {
+    P.push(reconBlock);
+  }
+
+  // [3c] AUTHENTIC PLACEMENT — velvet only on furniture, brass only on accents,
+  //      stone only on countertops/feature walls, etc. Stops the AI from
+  //      smearing one material across every surface.
+  const authBlock = buildAuthenticMaterialUsageBlock(input.materialsSelected);
+  if (authBlock) {
+    P.push(authBlock);
   }
 
   // [4] DOMINANT ELEMENT BRIEF — the architectural DNA of this space (softened when mix is balanced)

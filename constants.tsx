@@ -1,6 +1,7 @@
 import { Question, MaterialDef, AdjectiveDef, Element } from './types';
 import { CANONICAL_MATERIAL_CATALOG, CANONICAL_MATERIAL_GROUPS, getPrimaryElementForMaterial } from './materialsCatalog';
 import { CANONICAL_ADJECTIVES_CATALOG, CANONICAL_ADJECTIVE_GROUPS, getPrimaryElementForAdjective } from './adjectivesCatalog';
+import { buildMaterialThumbnailMap, buildMaterialThumbnail } from './lib/materialThumbnails';
 
 // Strict Order for Tie-Breaking: Earth > Fire > Water > Air
 export const ELEMENTS: Element[] = ['earth', 'fire', 'water', 'air'];
@@ -33,8 +34,12 @@ export const WHEEL_PALETTE: Record<Element, { inner: string; middle: string; out
   air:   { inner: '#5A7FA3', middle: '#809CB8', outer: '#A8BCD0', text: '#1a1a1a' },
 };
 
-// Material Sphere images keyed by material name (matching MATERIALS_DB names)
-const MAT_IMG: Record<string, string> = {
+// Local PNG overrides — when a high-quality bitmap exists in /public/materials/
+// it wins over the procedural SVG fallback. Keys must match material labels
+// EXACTLY as they appear in materialsCatalog.ts. Materials not listed here
+// are rendered with a procedural SVG built by `buildMaterialThumbnail(label)`
+// — element-correct color + category pattern.
+const LOCAL_MAT_OVERRIDES: Record<string, string> = {
   'Travertine (honed)': '/materials/travertine.png',
   'Clay plaster': '/materials/clay-plaster.png',
   'Lime plaster (warm mineral)': '/materials/lime-plaster.png',
@@ -46,49 +51,32 @@ const MAT_IMG: Record<string, string> = {
   'Blackened steel': '/materials/blackened-steel.png',
   'Venetian plaster (polished)': '/materials/venetian-plaster.png',
   'Bronze accents': '/materials/bronze.png',
+  'Aged brass (polished)': '/materials/bronze.png',
   'Microcement (continuous)': '/materials/microcement.png',
   'Smooth mineral plaster': '/materials/smooth-mineral.png',
   'Matte ceramic': '/materials/matte-ceramic.png',
   'Linen / wool textile surfaces': '/materials/wool-textile.png',
   'Diffused glass': '/materials/diffused-glass.png',
-  'Mirror-polished stainless steel': '/materials/mirror-steel.png',
-  'Hammered metal (rippled)': '/materials/hammered-metal.png',
-  'Satin chrome': '/materials/satin-chrome.png',
-  'Glass blocks (translucent)': '/materials/glass-blocks.png',
-  'Curved bent glass': '/materials/curved-glass.png',
-  'Corten steel (weathering)': '/materials/corten-steel.png',
-  'Oxidized copper': '/materials/oxidized-copper.png',
-  'Aged brass (polished)': '/materials/bronze.png',
-  'Dark herringbone parquet': '/materials/dark-herringbone.png',
-  'Dark marble (high contrast)': '/materials/dark-marble.png',
   'Limewash (bright)': '/materials/limewash.png',
   'White mineral plaster': '/materials/white-plaster.png',
   'Light oak / ash': '/materials/light-oak.png',
   'White marble (Calacatta)': '/materials/white-marble.png',
+  'Dark marble (high contrast)': '/materials/dark-marble.png',
   'Clear glass (low-iron)': '/materials/clear-glass.png',
   'Bleached birch': '/materials/bleached-birch.png',
   'White terrazzo': '/materials/white-terrazzo.png',
   'Pale concrete (smooth)': '/materials/pale-concrete.png',
-  'Board-formed concrete': '/materials/board-formed-concrete.png',
-  'Volcanic stone (basalt rough)': '/materials/volcanic-stone.png',
-  'Green onyx / marble (veined)': '/materials/green-onyx.png',
-  'Rammed earth / terracotta plaster': '/materials/rammed-earth.png',
-  'Reclaimed weathered timber': '/materials/reclaimed-timber.png',
-  'Herringbone parquet (warm oak)': '/materials/herringbone-parquet.png',
   'Textured concrete (matte)': '/materials/textured-concrete.png',
   'Brushed metal': '/materials/brushed-metal.png',
   'Solid oak': '/materials/solid-oak.png',
   'Walnut (natural finish)': '/materials/walnut.png',
-  'White Corian (curved seamless)': '/materials/white-corian.png',
-  'Fluted white panel': '/materials/fluted-white.png',
-  'Dichroic / iridescent glass': '/materials/dichroic-glass.png',
-  'Tinted translucent glass': '/materials/tinted-glass.png',
-  'Metallic silver surface': '/materials/metallic-silver.png',
-  '3D textured white panel': '/materials/3d-textured-white.png',
 };
-export const MATERIAL_SPHERE_IMAGES: Record<string, string> = Object.fromEntries(
-  CANONICAL_MATERIAL_CATALOG.map((m) => [m.label, MAT_IMG[m.label] || p(m.label)])
-);
+
+export const MATERIAL_SPHERE_IMAGES: Record<string, string> = buildMaterialThumbnailMap(LOCAL_MAT_OVERRIDES);
+
+/** Single-shot helper for ad-hoc thumbnail lookups (e.g. saved-state re-hydration). */
+export const getMaterialThumbnail = (label: string): string =>
+  MATERIAL_SPHERE_IMAGES[label] || buildMaterialThumbnail(label);
 
 // Canonical Materials by group (for layer selection panel)
 export const CANONICAL_MATERIALS: Record<Element | 'shared', string[]> = CANONICAL_MATERIAL_GROUPS;
@@ -303,7 +291,7 @@ export const MATERIALS_DB: MaterialDef[] = CANONICAL_MATERIAL_CATALOG.map((m) =>
   id: m.id,
   name: m.label,
   element: getPrimaryElementForMaterial(m),
-  image: p(m.label),
+  image: getMaterialThumbnail(m.label),
   isShared: m.isShared,
   elementWeights: m.elementWeights,
 }));
