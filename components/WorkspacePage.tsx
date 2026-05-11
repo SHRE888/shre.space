@@ -2103,10 +2103,12 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                       style={{ backgroundColor: isSelected ? `${pastelColor}18` : 'transparent' }}
                     >
                       {matThumb ? (
-                        <span className="relative inline-block w-5 h-5 rounded-full overflow-hidden shrink-0" style={{ background: `radial-gradient(circle at 30% 30%, ${pastelColor}66, ${pastelColor}22)`, boxShadow: `inset 0 0 0 1px ${pastelColor}33` }}>
-                          <img src={matThumb} alt="" draggable={false}
-                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                        <span className="relative inline-block w-5 h-5 rounded-full overflow-hidden shrink-0" style={{ background: `conic-gradient(from 220deg, ${pastelColor}, ${pastelColor}CC, ${pastelColor}, ${pastelColor}E0, ${pastelColor})`, padding: 1.5, boxSizing: 'border-box' }}>
+                          <span className="block w-full h-full rounded-full overflow-hidden relative" style={{ background: '#f0eee8' }}>
+                            <img src={matThumb} alt="" draggable={false}
+                              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: 'saturate(1.08) contrast(1.05)' }}
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                          </span>
                         </span>
                       ) : null}
                       <span className="leading-none py-0.5">{item}</span>

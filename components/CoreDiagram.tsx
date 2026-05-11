@@ -984,18 +984,22 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
               onClick={handleMatClick}
               onMouseEnter={e => { if (!isExp) { (e.currentTarget as HTMLElement).style.transform = 'translate(-50%, -50%) scale(1.08)'; (e.currentTarget as HTMLElement).style.zIndex = '25'; } }}
               onMouseLeave={e => { if (!isExp) { (e.currentTarget as HTMLElement).style.transform = 'translate(-50%, -50%)'; (e.currentTarget as HTMLElement).style.zIndex = ringExp ? '18' : '15'; } }}>
-              {/* Element-colored gradient ring */}
+              {/* Element-colored outer ring — pure accent, no fill inside */}
               <div style={{
-                width: sz + 6, height: sz + 6, borderRadius: '50%', flexShrink: 0,
-                background: `linear-gradient(135deg, ${mc}, ${mc}90)`,
-                padding: 3, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: isExp ? `0 0 18px ${mc}40, 0 3px 12px rgba(0,0,0,0.12)` : `0 0 10px ${mc}20, 0 2px 8px rgba(0,0,0,0.08)`,
+                width: sz + 8, height: sz + 8, borderRadius: '50%', flexShrink: 0,
+                background: `conic-gradient(from 220deg, ${mc}, ${mc}CC, ${mc}, ${mc}E0, ${mc})`,
+                padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: isExp
+                  ? `0 0 22px ${mc}55, 0 4px 14px rgba(0,0,0,0.14)`
+                  : `0 0 12px ${mc}26, 0 2px 8px rgba(0,0,0,0.10)`,
                 transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)',
               }}>
                 <div style={{
                   width: sz, height: sz, borderRadius: '50%', position: 'relative', overflow: 'hidden',
-                  boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.4)',
-                  background: `radial-gradient(circle at 32% 28%, ${mc}DD, ${mc}88)`,
+                  background: tex
+                    ? '#efece5'
+                    : `radial-gradient(circle at 34% 30%, ${mc}E0, ${mc}90)`,
+                  boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.45)`,
                 }}>
                   {tex && (
                     <img
@@ -1003,14 +1007,20 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                       alt=""
                       draggable={false}
                       style={{
-                        position: 'absolute', inset: '-8%', width: '116%', height: '116%',
+                        position: 'absolute', inset: 0, width: '100%', height: '100%',
                         objectFit: 'cover', borderRadius: '50%', display: 'block',
-                        filter: isTravertine ? 'saturate(0.88) contrast(0.86) brightness(1.07)' : undefined,
+                        filter: isTravertine
+                          ? 'saturate(0.92) contrast(1.02) brightness(1.04)'
+                          : 'saturate(1.10) contrast(1.06)',
                       }}
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      onError={(e) => {
+                        const img = e.currentTarget as HTMLImageElement;
+                        img.style.display = 'none';
+                        const parent = img.parentElement;
+                        if (parent) parent.style.background = `radial-gradient(circle at 34% 30%, ${mc}E0, ${mc}90)`;
+                      }}
                     />
                   )}
-                  <div className="absolute pointer-events-none" style={{ width: '36%', height: '30%', top: '10%', left: '14%', background: 'radial-gradient(ellipse at 42% 36%, rgba(255,255,255,0.35) 0%, transparent 75%)', borderRadius: '50%' }} />
                 </div>
               </div>
               <span className={`absolute px-2 py-0.5 rounded-full whitespace-nowrap transition-all ${showLabel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
@@ -1405,19 +1415,26 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                           <div key={mat.name} className="flex flex-col items-center gap-2 cursor-pointer group"
                             onClick={e => { e.stopPropagation(); snap(isMuted); setExpMat(isExp ? null : mat.name); }}>
                             <div style={{
-                              width: isExp ? 108 : 88, height: isExp ? 108 : 88,
+                              width: isExp ? 112 : 92, height: isExp ? 112 : 92,
                               borderRadius: '50%', position: 'relative', overflow: 'hidden',
-                              border: `2px solid ${mc}${isExp ? '50' : '20'}`,
-                              boxShadow: isExp ? `0 8px 32px rgba(0,0,0,0.18), 0 0 0 2px ${mc}20` : `0 3px 12px rgba(0,0,0,0.10)`,
+                              padding: isExp ? 5 : 4,
+                              boxSizing: 'border-box',
+                              background: `conic-gradient(from 220deg, ${mc}, ${mc}CC, ${mc}, ${mc}E0, ${mc})`,
+                              boxShadow: isExp ? `0 10px 36px rgba(0,0,0,0.20), 0 0 22px ${mc}3A` : `0 4px 14px rgba(0,0,0,0.12), 0 0 10px ${mc}26`,
                               transition: 'all 0.35s ease',
-                              background: `radial-gradient(circle, ${mc}DD, ${mc}88)`,
                             }}>
-                              {tex && (
-                                <img src={tex} alt="" draggable={false}
-                                  style={{ position: 'absolute', inset: '-15%', width: '130%', height: '130%', objectFit: 'cover', borderRadius: '50%', display: 'block' }}
-                                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                              )}
-                              <div className="absolute pointer-events-none" style={{ width: '38%', height: '32%', top: '8%', left: '12%', background: 'radial-gradient(ellipse, rgba(255,255,255,0.3) 0%, transparent 75%)', borderRadius: '50%' }} />
+                              <div style={{ width: '100%', height: '100%', borderRadius: '50%', position: 'relative', overflow: 'hidden', background: tex ? '#efece5' : `radial-gradient(circle at 34% 30%, ${mc}E0, ${mc}90)`, boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.45)` }}>
+                                {tex && (
+                                  <img src={tex} alt="" draggable={false}
+                                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block', filter: 'saturate(1.10) contrast(1.06)' }}
+                                    onError={(e) => {
+                                      const img = e.currentTarget as HTMLImageElement;
+                                      img.style.display = 'none';
+                                      const parent = img.parentElement;
+                                      if (parent) parent.style.background = `radial-gradient(circle at 34% 30%, ${mc}E0, ${mc}90)`;
+                                    }} />
+                                )}
+                              </div>
                             </div>
                             <span className="px-2 py-0.5 rounded-md text-center" style={{ fontSize: 11, fontWeight: 500, color: '#555', background: 'rgba(255,255,255,0.9)', maxWidth: 100, lineHeight: '1.35', whiteSpace: 'normal', wordBreak: 'break-word' as const }}>
                               {mat.name.split('(')[0].trim()}
@@ -1469,13 +1486,19 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                     <button key={name} onClick={() => { onToggleMaterial?.(name, matPicker); snap(isMuted); }}
                       className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all text-left"
                       style={{ background: sel ? `${mc}0A` : 'transparent', border: `1px solid ${sel ? `${mc}18` : 'transparent'}`, cursor: 'pointer' }}>
-                      <div className="w-10 h-10 rounded-full shrink-0 relative overflow-hidden" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.14)', background: `linear-gradient(135deg, ${mc}55, ${mc}22)` }}>
-                        {tex && (
-                          <img src={tex} alt="" draggable={false}
-                            style={{ position: 'absolute', inset: '-15%', width: '130%', height: '130%', objectFit: 'cover', borderRadius: '50%', display: 'block' }}
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                        )}
-                        <div className="absolute pointer-events-none" style={{ width: '38%', height: '32%', top: '8%', left: '12%', background: 'radial-gradient(ellipse, rgba(255,255,255,0.3) 0%, transparent 75%)', borderRadius: '50%' }} />
+                      <div className="w-10 h-10 rounded-full shrink-0 relative overflow-hidden" style={{ boxShadow: `0 2px 8px rgba(0,0,0,0.14)` , padding: 2, boxSizing: 'border-box', background: `conic-gradient(from 220deg, ${mc}, ${mc}CC, ${mc}, ${mc}E0, ${mc})` }}>
+                        <div style={{ width: '100%', height: '100%', borderRadius: '50%', position: 'relative', overflow: 'hidden', background: tex ? '#efece5' : `radial-gradient(circle at 34% 30%, ${mc}E0, ${mc}90)` }}>
+                          {tex && (
+                            <img src={tex} alt="" draggable={false}
+                              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block', filter: 'saturate(1.10) contrast(1.06)' }}
+                              onError={(e) => {
+                                const img = e.currentTarget as HTMLImageElement;
+                                img.style.display = 'none';
+                                const parent = img.parentElement;
+                                if (parent) parent.style.background = `radial-gradient(circle at 34% 30%, ${mc}E0, ${mc}90)`;
+                              }} />
+                          )}
+                        </div>
                       </div>
                       <div className="flex-1 min-w-0"><div className="text-[13px] font-medium truncate" style={{ color: '#777' }}>{name}</div></div>
                       {sel && <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: mc }}><svg width="6" height="6" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2.5"><path d="M2 6l3 3 5-5" /></svg></div>}

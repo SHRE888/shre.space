@@ -1,19 +1,26 @@
 /**
  * Procedural SVG thumbnail generator for material chips.
  *
- * Goal: every material in the catalog gets a believable, color-correct sample
- * even when no local PNG exists in /public/materials/.
+ * Goal: every material in the catalog gets a believable, color-correct,
+ * **photo-realistic** sample — even when no local PNG exists in
+ * /public/materials/. The procedural samples should read as the actual
+ * material (Calacatta Viola → white slab with oxblood veining, Corten →
+ * rust patina, Cognac leather → warm grain, etc.) at small thumbnail sizes
+ * AND at 88–108 px orbit-bead sizes.
  *
- * The generator uses the material's category (stone, wood, metal, plaster…)
- * to pick the right base pattern (veining, grain, brush, weave, ripple, etc.)
- * and the material id/label to pick a color palette tuned to the real material
- * (green for green onyx, rust for corten, etc.).
- *
- * Output is a `data:image/svg+xml;base64,…` URL that works in any
- * `background: url(...)` without escaping concerns. (The earlier `utf8,…`
- * variant silently broke when the SVG body contained `url(#id)` references —
- * the outer CSS `url(...)` parser closed at the first inner `)`. Base64 has
- * none of that risk.)
+ * Design choices:
+ *  - viewBox is 200×200 (was 100). At display sizes 24–108 px the doubled
+ *    coordinate space gives crisper veins, finer grain, and tighter dimples.
+ *  - Each pattern adds a subtle radial highlight + bottom vignette so the
+ *    chip reads as a *sphere*, not a flat sticker, even before any parent
+ *    drop-shadow.
+ *  - Output is `data:image/svg+xml;base64,…` to sidestep the CSS `url()`
+ *    parser interaction with inner `url(#id)` filter references that was
+ *    causing blank orbit beads previously.
+ *  - btoa is fed UTF-8 bytes via TextEncoder — naive `btoa(svg)` throws
+ *    `InvalidCharacterError` on labels with non-ASCII characters (e.g. the
+ *    en dash in "Glass mosaic tile (10–25 mm cool)") and would crash the
+ *    entire module init.
  */
 
 import { CANONICAL_MATERIAL_BY_LABEL, type MaterialCategory } from '../materialsCatalog';
@@ -88,10 +95,10 @@ const PALETTE_BY_ID: Record<string, ColorStops> = {
   'microcement-continuous':     { base: '#B8B5AE', accent: '#928F88', deep: '#5E5C57' },
   'smooth-mineral-plaster':     { base: '#C8C5BE', accent: '#9F9C95', deep: '#6A6863' },
   'tadelakt-cool':              { base: '#A8B0B2', accent: '#7E8688', deep: '#535A5C' },
-  'mirror-polished-steel':      { base: '#D4D8DC', accent: '#A0A4A8', deep: '#646870' },
-  'hammered-metal':             { base: '#B0B5BA', accent: '#838890', deep: '#4D5258' },
-  'satin-chrome':               { base: '#C0C5CA', accent: '#959AA0', deep: '#62666C' },
-  'polished-nickel':            { base: '#C9CDD2', accent: '#8E9298', deep: '#525660' },
+  'mirror-polished-steel':      { base: '#E4E7EA', accent: '#A8ACB2', deep: '#5C616A' },
+  'hammered-metal':             { base: '#C0C5CA', accent: '#83888F', deep: '#4D5258' },
+  'satin-chrome':               { base: '#CCD0D5', accent: '#959AA0', deep: '#62666C' },
+  'polished-nickel':            { base: '#D2D6DA', accent: '#8E9298', deep: '#525660' },
   'diffused-glass':             { base: '#DDE7E9', accent: '#B0BCC0', deep: '#7E8A8E' },
   'glass-blocks':               { base: '#C5DCE0', accent: '#8FB0B5', deep: '#587078' },
   'curved-bent-glass':          { base: '#D5E2E5', accent: '#A6BDC2', deep: '#6F8489' },
@@ -104,7 +111,7 @@ const PALETTE_BY_ID: Record<string, ColorStops> = {
   'pale-grey-wool-felt':        { base: '#BCC0BE', accent: '#8E928F', deep: '#5C5F5C' },
 
   // ── AIR ──────────────────────────────────────────────────────
-  'white-marble-calacatta':     { base: '#F2EEE8', accent: '#C2BAB0', deep: '#7E776E' },
+  'white-marble-calacatta':     { base: '#F2EEE8', accent: '#B5ACA0', deep: '#7E776E' },
   'thassos-marble':             { base: '#F4F2EE', accent: '#C8C5BE', deep: '#86837C' },
   'dolomite-snow':              { base: '#F6F6F2', accent: '#CDCDC5', deep: '#8B8B82' },
   'bianco-statuario':           { base: '#F0EEE8', accent: '#BFBCB4', deep: '#7B786F' },
@@ -114,12 +121,12 @@ const PALETTE_BY_ID: Record<string, ColorStops> = {
   'limewash-bright':            { base: '#F4EFE5', accent: '#CDC6B6', deep: '#8E8772' },
   'white-mineral-plaster':      { base: '#F0EBE0', accent: '#C5BFB0', deep: '#88836F' },
   'pale-concrete':              { base: '#D0CFC8', accent: '#A5A49C', deep: '#6F6F66' },
-  'metallic-silver-surface':    { base: '#D6D8DC', accent: '#A8AAB0', deep: '#6E7078' },
+  'metallic-silver-surface':    { base: '#DCDEE2', accent: '#A8AAB0', deep: '#6E7078' },
   'anodized-champagne-aluminium':{ base: '#D8C9A8', accent: '#AC9C7C', deep: '#74664E' },
-  'clear-glass':                { base: '#E2EAEC', accent: '#B6C0C4', deep: '#7E8A8E' },
+  'clear-glass':                { base: '#E8EEEF', accent: '#B6C0C4', deep: '#7E8A8E' },
   'dichroic-iridescent-glass':  { base: '#C8A4D6', accent: '#7C5AAC', deep: '#3F2A6E' },
   'tinted-translucent-glass':   { base: '#C5A5C2', accent: '#8E6694', deep: '#54395A' },
-  'frosted-satin-glass':        { base: '#E5EBEC', accent: '#BFC6C8', deep: '#88908E' },
+  'frosted-satin-glass':        { base: '#EAEFEF', accent: '#BFC6C8', deep: '#88908E' },
   'white-corian-curved':        { base: '#F4F4F0', accent: '#CECDC6', deep: '#8E8D86' },
   'fluted-white-panel':         { base: '#EEEAE2', accent: '#C5C0B5', deep: '#85806F' },
   '3d-textured-white-panel':    { base: '#EFECE5', accent: '#C8C3B7', deep: '#86826F' },
@@ -128,7 +135,7 @@ const PALETTE_BY_ID: Record<string, ColorStops> = {
 
   // ── SHARED ───────────────────────────────────────────────────
   'textured-concrete-matte':    { base: '#B5B2AC', accent: '#8B8884', deep: '#5A5854' },
-  'brushed-metal':              { base: '#B8BAC0', accent: '#8E9094', deep: '#5C5E64' },
+  'brushed-metal':              { base: '#BFC2C8', accent: '#8E9094', deep: '#5C5E64' },
   'solid-oak':                  { base: '#C9A672', accent: '#9C7E48', deep: '#664F26' },
   'walnut-natural':             { base: '#8C5E36', accent: '#6E4524', deep: '#3D2410' },
 };
@@ -159,234 +166,335 @@ function getPalette(label: string, category: MaterialCategory): ColorStops {
  * `url(#id)` reference inside the SVG would close the outer CSS `url(...)` at
  * the first inner `)` and silently produce no background — exactly how the
  * orbit material beads went blank.)
+ *
+ * `btoa` accepts latin-1 only — feeding it a non-ASCII codepoint
+ * (e.g. an en dash inside "10–25 mm") throws `InvalidCharacterError` and
+ * crashes the entire module-init. We encode to UTF-8 bytes first, then map
+ * bytes to a binary string for `btoa`. Same idiom works in browsers and
+ * Node ≥18.
  */
 function svgToDataUri(svg: string): string {
-  // Collapse whitespace for compactness; SVG tolerates it.
   const compact = svg.replace(/\s+/g, ' ').trim();
-  // btoa requires latin-1 input; our SVGs are pure ASCII, so this is safe.
-  // In Node-style SSR (no `btoa`) fall back to Buffer.
-  const b64 =
-    typeof btoa === 'function'
-      ? btoa(compact)
-      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (globalThis as any).Buffer?.from(compact, 'utf-8').toString('base64') || '';
+  let b64 = '';
+
+  if (typeof TextEncoder !== 'undefined' && typeof btoa === 'function') {
+    const bytes = new TextEncoder().encode(compact);
+    let bin = '';
+    // Avoid String.fromCharCode(...bytes) — stack overflow on long inputs.
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    b64 = btoa(bin);
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const NodeBuffer = (globalThis as any).Buffer;
+    if (NodeBuffer && typeof NodeBuffer.from === 'function') {
+      b64 = NodeBuffer.from(compact, 'utf-8').toString('base64');
+    } else {
+      return `data:image/svg+xml;utf8,${encodeURIComponent(compact)}`;
+    }
+  }
+
   return `data:image/svg+xml;base64,${b64}`;
 }
 
+/**
+ * Standard sphere overlay: a soft top-left highlight + bottom-right vignette
+ * that makes any flat texture read as a 3D ball. Added at the end of every
+ * pattern so the chip looks like a physical material sample.
+ */
+const SPHERE_OVERLAY = `
+  <defs>
+    <radialGradient id="sphHi" cx="34%" cy="30%" r="55%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.30"/>
+      <stop offset="55%" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="sphVig" cx="62%" cy="74%" r="78%">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="70%" stop-color="#000000" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.22"/>
+    </radialGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#sphVig)"/>
+  <rect width="200" height="200" fill="url(#sphHi)"/>`;
+
 function wrap(inner: string, label: string): string {
   const safe = label.replace(/[<>&]/g, '');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice"><title>${safe}</title>${inner}</svg>`;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" preserveAspectRatio="xMidYMid slice">` +
+    `<title>${safe}</title>` +
+    inner +
+    SPHERE_OVERLAY +
+    `</svg>`;
   return svgToDataUri(svg);
 }
 
-// ── Pattern primitives — small, self-contained SVG snippets. ────────────────
-// IMPORTANT: keep all attribute values double-quoted; do NOT URL-encode `#`,
-// `(`, or `)` here — the encoder owns escaping.
+// ════════════════════════════════════════════════════════════════════════════
+// PATTERN PRIMITIVES — high-quality procedural textures (viewBox 0–200)
+// ════════════════════════════════════════════════════════════════════════════
+// IMPORTANT: keep attribute values double-quoted; do NOT URL-encode anything
+// here — `svgToDataUri` owns escaping.
+//
+// Style rules:
+//  - Always paint a base rect first so the chip is never transparent.
+//  - Add a subtle `feTurbulence` overlay rect at low opacity for organic noise.
+//  - Vary stroke widths and opacities — uniform lines read as CG.
+//  - End with a tiny inner shadow ring (handled by SPHERE_OVERLAY).
+// ════════════════════════════════════════════════════════════════════════════
 
 function stoneVeining({ base, accent, deep }: ColorStops): string {
   return `
     <defs>
-      <filter id="n" x="-20%" y="-20%" width="140%" height="140%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3"/>
-        <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0"/>
+      <filter id="sg" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="3"/>
+        <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.14 0"/>
       </filter>
+      <radialGradient id="sgLite" cx="35%" cy="32%" r="70%">
+        <stop offset="0%" stop-color="${base}"/>
+        <stop offset="100%" stop-color="${deep}" stop-opacity="0.55"/>
+      </radialGradient>
     </defs>
-    <rect width="100" height="100" fill="${base}"/>
-    <rect width="100" height="100" filter="url(#n)"/>
-    <path d="M-5 30 Q25 20 50 40 T110 35" stroke="${accent}" stroke-width="1.2" fill="none" opacity="0.55"/>
-    <path d="M-10 60 Q15 68 38 55 T80 70 T120 55" stroke="${deep}" stroke-width="1.6" fill="none" opacity="0.5"/>
-    <path d="M-5 82 Q22 76 45 88 T100 80" stroke="${accent}" stroke-width="0.8" fill="none" opacity="0.4"/>
-    <path d="M20 -5 Q35 30 22 55 T35 108" stroke="${deep}" stroke-width="0.7" fill="none" opacity="0.35"/>`;
+    <rect width="200" height="200" fill="url(#sgLite)"/>
+    <rect width="200" height="200" filter="url(#sg)"/>
+    <path d="M-10 60 Q40 40 90 70 T210 65" stroke="${accent}" stroke-width="2.4" fill="none" opacity="0.7" stroke-linecap="round"/>
+    <path d="M-20 100 Q30 120 70 100 T160 130 T230 110" stroke="${deep}" stroke-width="2.8" fill="none" opacity="0.55" stroke-linecap="round"/>
+    <path d="M-10 150 Q40 138 80 158 T180 148" stroke="${accent}" stroke-width="1.6" fill="none" opacity="0.5" stroke-linecap="round"/>
+    <path d="M40 -10 Q70 60 50 110 T70 220" stroke="${deep}" stroke-width="1.3" fill="none" opacity="0.4" stroke-linecap="round"/>
+    <path d="M150 -10 Q140 50 165 100 T140 215" stroke="${accent}" stroke-width="1.1" fill="none" opacity="0.42" stroke-linecap="round"/>
+    <path d="M-10 30 Q22 28 55 38" stroke="${deep}" stroke-width="0.7" fill="none" opacity="0.55"/>
+    <path d="M118 18 Q150 26 188 22" stroke="${accent}" stroke-width="0.8" fill="none" opacity="0.5"/>`;
 }
 
 function woodGrain({ base, accent, deep }: ColorStops): string {
+  // Tight horizontal anisotropic noise + soft growth-ring arcs + a few knots.
   return `
     <defs>
-      <filter id="n" x="-20%" y="-20%" width="140%" height="140%">
-        <feTurbulence type="turbulence" baseFrequency="0.025 1.4" numOctaves="2" seed="5"/>
-        <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.30 0"/>
+      <filter id="wg" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="turbulence" baseFrequency="0.018 2.0" numOctaves="3" seed="6"/>
+        <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.36 0"/>
       </filter>
+      <linearGradient id="wgBase" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="${base}"/>
+        <stop offset="100%" stop-color="${deep}" stop-opacity="0.7"/>
+      </linearGradient>
     </defs>
-    <rect width="100" height="100" fill="${base}"/>
-    <rect width="100" height="100" filter="url(#n)"/>
-    <path d="M0 30 Q50 38 100 30" stroke="${accent}" stroke-width="1.2" fill="none" opacity="0.45"/>
-    <path d="M0 52 Q50 46 100 55" stroke="${deep}" stroke-width="1" fill="none" opacity="0.4"/>
-    <path d="M0 72 Q50 80 100 70" stroke="${accent}" stroke-width="1.4" fill="none" opacity="0.45"/>
-    <ellipse cx="28" cy="50" rx="3.5" ry="1.4" fill="${deep}" opacity="0.55"/>
-    <ellipse cx="75" cy="38" rx="2.6" ry="1.1" fill="${deep}" opacity="0.45"/>`;
+    <rect width="200" height="200" fill="url(#wgBase)"/>
+    <rect width="200" height="200" filter="url(#wg)"/>
+    <path d="M0 50 Q100 62 200 50" stroke="${accent}" stroke-width="2.2" fill="none" opacity="0.45"/>
+    <path d="M0 84 Q100 75 200 88" stroke="${deep}"   stroke-width="1.5" fill="none" opacity="0.5"/>
+    <path d="M0 118 Q100 130 200 116" stroke="${accent}" stroke-width="2.6" fill="none" opacity="0.5"/>
+    <path d="M0 150 Q100 142 200 154" stroke="${deep}"   stroke-width="1.4" fill="none" opacity="0.46"/>
+    <path d="M0 180 Q100 188 200 176" stroke="${accent}" stroke-width="2"   fill="none" opacity="0.4"/>
+    <ellipse cx="58"  cy="98"  rx="6"   ry="2.4" fill="${deep}"   opacity="0.62"/>
+    <ellipse cx="58"  cy="98"  rx="3.2" ry="1.4" fill="${accent}" opacity="0.55"/>
+    <ellipse cx="150" cy="74"  rx="4.6" ry="1.9" fill="${deep}"   opacity="0.55"/>
+    <ellipse cx="150" cy="74"  rx="2.4" ry="1.0" fill="${accent}" opacity="0.5"/>
+    <ellipse cx="120" cy="156" rx="3.4" ry="1.5" fill="${deep}"   opacity="0.4"/>`;
 }
 
 function plasterTrowel({ base, accent, deep }: ColorStops): string {
   return `
     <defs>
-      <filter id="n" x="-20%" y="-20%" width="140%" height="140%">
-        <feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="2" seed="9"/>
+      <filter id="pl" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="9"/>
         <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.10 0"/>
       </filter>
+      <radialGradient id="plLite" cx="38%" cy="36%" r="80%">
+        <stop offset="0%"  stop-color="${base}"/>
+        <stop offset="100%" stop-color="${deep}" stop-opacity="0.65"/>
+      </radialGradient>
     </defs>
-    <rect width="100" height="100" fill="${base}"/>
-    <rect width="100" height="100" filter="url(#n)"/>
-    <path d="M-5 18 L105 30" stroke="${accent}" stroke-width="1.3" fill="none" opacity="0.18"/>
-    <path d="M-5 46 L105 38" stroke="${deep}" stroke-width="0.9" fill="none" opacity="0.16"/>
-    <path d="M-5 68 L105 75" stroke="${accent}" stroke-width="1.6" fill="none" opacity="0.16"/>
-    <path d="M-5 90 L105 84" stroke="${deep}" stroke-width="1" fill="none" opacity="0.14"/>`;
+    <rect width="200" height="200" fill="url(#plLite)"/>
+    <rect width="200" height="200" filter="url(#pl)"/>
+    <path d="M-10 30 Q60 40 130 24 T210 32" stroke="${accent}" stroke-width="1.6" fill="none" opacity="0.18"/>
+    <path d="M-10 78 Q70 70 140 84 T210 76" stroke="${deep}"   stroke-width="1"   fill="none" opacity="0.18"/>
+    <path d="M-10 124 Q60 134 130 122 T210 132" stroke="${accent}" stroke-width="2" fill="none" opacity="0.16"/>
+    <path d="M-10 168 Q70 162 140 174 T210 170" stroke="${deep}"   stroke-width="1.2" fill="none" opacity="0.16"/>`;
 }
 
 function concreteForm({ base, accent, deep }: ColorStops): string {
   return `
     <defs>
-      <filter id="n" x="-20%" y="-20%" width="140%" height="140%">
-        <feTurbulence type="fractalNoise" baseFrequency="2.5" numOctaves="2" seed="2"/>
+      <filter id="cc" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="2.2" numOctaves="2" seed="2"/>
         <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.13 0"/>
       </filter>
+      <linearGradient id="ccBase" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="${base}"/>
+        <stop offset="100%" stop-color="${deep}" stop-opacity="0.55"/>
+      </linearGradient>
     </defs>
-    <rect width="100" height="100" fill="${base}"/>
-    <rect width="100" height="100" filter="url(#n)"/>
-    <line x1="0" y1="25" x2="100" y2="25" stroke="${deep}" stroke-width="0.4" opacity="0.35"/>
-    <line x1="0" y1="50" x2="100" y2="50" stroke="${deep}" stroke-width="0.4" opacity="0.35"/>
-    <line x1="0" y1="75" x2="100" y2="75" stroke="${deep}" stroke-width="0.4" opacity="0.35"/>
-    <circle cx="28" cy="38" r="1.3" fill="${accent}" opacity="0.55"/>
-    <circle cx="72" cy="65" r="1.4" fill="${accent}" opacity="0.55"/>`;
+    <rect width="200" height="200" fill="url(#ccBase)"/>
+    <rect width="200" height="200" filter="url(#cc)"/>
+    <line x1="0" y1="50"  x2="200" y2="50"  stroke="${deep}" stroke-width="0.7" opacity="0.35"/>
+    <line x1="0" y1="100" x2="200" y2="100" stroke="${deep}" stroke-width="0.7" opacity="0.35"/>
+    <line x1="0" y1="150" x2="200" y2="150" stroke="${deep}" stroke-width="0.7" opacity="0.35"/>
+    <circle cx="42"  cy="58"  r="2"   fill="${accent}" opacity="0.55"/>
+    <circle cx="138" cy="108" r="2.4" fill="${accent}" opacity="0.55"/>
+    <circle cx="78"  cy="158" r="1.6" fill="${accent}" opacity="0.5"/>`;
 }
 
 function metalBrushed({ base, accent, deep }: ColorStops, brushed = true): string {
+  // Anisotropic horizontal turbulence + soft directional gradient.
   return `
     <defs>
-      <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="40%">
-        <stop offset="0%" stop-color="${deep}"/>
-        <stop offset="50%" stop-color="${base}"/>
+      <linearGradient id="mb" x1="0%" y1="0%" x2="100%" y2="30%">
+        <stop offset="0%"   stop-color="${deep}"/>
+        <stop offset="42%"  stop-color="${base}"/>
+        <stop offset="58%"  stop-color="${base}"/>
         <stop offset="100%" stop-color="${accent}"/>
       </linearGradient>
-      <filter id="b">
-        <feTurbulence type="turbulence" baseFrequency="${brushed ? '5 0.15' : '0.6 0.6'}" numOctaves="1" seed="4"/>
-        <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.18 0"/>
+      <filter id="mbb">
+        <feTurbulence type="turbulence" baseFrequency="${brushed ? '6 0.1' : '0.5 0.5'}" numOctaves="2" seed="4"/>
+        <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.22 0"/>
       </filter>
     </defs>
-    <rect width="100" height="100" fill="url(#g)"/>
-    <rect width="100" height="100" filter="url(#b)"/>`;
+    <rect width="200" height="200" fill="url(#mb)"/>
+    <rect width="200" height="200" filter="url(#mbb)"/>
+    ${brushed ? `<rect width="200" height="200" fill="url(#mb)" opacity="0.18"/>` : ''}`;
 }
 
 function metalHammered({ base, accent, deep }: ColorStops): string {
+  // Honeycomb-ish dimple grid for hand-hammered ripples.
   let dimples = '';
-  for (let y = 8; y < 100; y += 14) {
-    for (let x = 8; x < 100; x += 14) {
-      const ox = (Math.floor(y / 14) % 2) * 7;
-      dimples += `<circle cx="${x + ox}" cy="${y}" r="5" fill="${accent}" opacity="0.45"/>`;
-      dimples += `<circle cx="${x + ox}" cy="${y}" r="2.5" fill="${deep}" opacity="0.5"/>`;
+  const step = 22;
+  for (let y = 0; y < 200; y += step) {
+    for (let x = 0; x < 200; x += step) {
+      const ox = (Math.floor(y / step) % 2) * (step / 2);
+      const cx = x + ox + step / 2;
+      const cy = y + step / 2;
+      dimples += `<circle cx="${cx}" cy="${cy}" r="9" fill="${accent}" opacity="0.55"/>`;
+      dimples += `<circle cx="${cx - 1}" cy="${cy - 1}" r="5" fill="${deep}" opacity="0.55"/>`;
+      dimples += `<circle cx="${cx + 2}" cy="${cy + 2}" r="2.5" fill="#ffffff" opacity="0.22"/>`;
     }
   }
   return `
     <defs>
-      <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <linearGradient id="hm" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="${base}"/>
         <stop offset="100%" stop-color="${accent}"/>
       </linearGradient>
     </defs>
-    <rect width="100" height="100" fill="url(#g)"/>
+    <rect width="200" height="200" fill="url(#hm)"/>
     ${dimples}`;
 }
 
 function metalCorroded({ base, accent, deep }: ColorStops): string {
   return `
     <defs>
-      <filter id="r" x="-20%" y="-20%" width="140%" height="140%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.5" numOctaves="4" seed="7"/>
-        <feColorMatrix values="0 0 0 0 0.6  0 0 0 0 0.3  0 0 0 0 0.15  0 0 0 0.5 0"/>
+      <filter id="rs" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.45" numOctaves="4" seed="7"/>
+        <feColorMatrix values="0 0 0 0 0.55  0 0 0 0 0.28  0 0 0 0 0.14  0 0 0 0.55 0"/>
       </filter>
+      <filter id="rs2" x="-10%" y="-10%" width="120%" height="120%">
+        <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="11"/>
+        <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.18 0"/>
+      </filter>
+      <radialGradient id="rsBase" cx="40%" cy="38%" r="80%">
+        <stop offset="0%" stop-color="${base}"/>
+        <stop offset="100%" stop-color="${deep}"/>
+      </radialGradient>
     </defs>
-    <rect width="100" height="100" fill="${deep}"/>
-    <rect width="100" height="100" fill="${base}" opacity="0.6"/>
-    <rect width="100" height="100" filter="url(#r)"/>
-    <circle cx="30" cy="36" r="15" fill="${accent}" opacity="0.35"/>
-    <circle cx="72" cy="66" r="20" fill="${accent}" opacity="0.30"/>`;
+    <rect width="200" height="200" fill="url(#rsBase)"/>
+    <rect width="200" height="200" filter="url(#rs)"/>
+    <circle cx="56"  cy="62"  r="34" fill="${accent}" opacity="0.32"/>
+    <circle cx="148" cy="132" r="40" fill="${accent}" opacity="0.28"/>
+    <rect width="200" height="200" filter="url(#rs2)"/>`;
 }
 
 function glassFlat({ base, accent, deep }: ColorStops, frosted = false): string {
   return `
     <defs>
-      <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="${base}" stop-opacity="${frosted ? '0.95' : '0.7'}"/>
-        <stop offset="100%" stop-color="${accent}" stop-opacity="${frosted ? '0.95' : '0.6'}"/>
+      <linearGradient id="gf" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%"   stop-color="${base}"   stop-opacity="${frosted ? '0.95' : '0.78'}"/>
+        <stop offset="100%" stop-color="${accent}" stop-opacity="${frosted ? '0.95' : '0.62'}"/>
       </linearGradient>
-      ${frosted ? `<filter id="f"><feGaussianBlur stdDeviation="1.5"/></filter>` : ''}
+      ${frosted ? `<filter id="gff"><feGaussianBlur stdDeviation="2.5"/></filter>` : ''}
     </defs>
-    <rect width="100" height="100" fill="url(#g)"/>
+    <rect width="200" height="200" fill="url(#gf)"/>
     ${frosted
-      ? `<rect width="100" height="100" fill="${base}" opacity="0.18" filter="url(#f)"/>`
-      : `<path d="M-5 -5 L60 30 L-5 60 Z" fill="#ffffff" opacity="0.22"/>
-         <path d="M105 40 L40 80 L105 105 Z" fill="${deep}" opacity="0.10"/>`}`;
+      ? `<rect width="200" height="200" fill="${base}" opacity="0.16" filter="url(#gff)"/>`
+      : `<path d="M-20 -20 L110 60 L-20 130 Z" fill="#ffffff" opacity="0.18"/>
+         <path d="M220 70 L80 160 L220 220 Z" fill="${deep}" opacity="0.12"/>`}`;
 }
 
 function glassReeded({ base, accent, deep }: ColorStops): string {
   let ribs = '';
-  for (let x = 0; x < 100; x += 7) {
-    ribs += `<rect x="${x}" y="0" width="3.5" height="100" fill="${accent}" opacity="0.35"/>`;
-    ribs += `<rect x="${x + 3.5}" y="0" width="3.5" height="100" fill="${deep}" opacity="0.20"/>`;
+  for (let x = 0; x < 200; x += 14) {
+    ribs += `<rect x="${x}" y="0" width="7" height="200" fill="${accent}" opacity="0.4"/>`;
+    ribs += `<rect x="${x + 7}" y="0" width="7" height="200" fill="${deep}" opacity="0.22"/>`;
+    ribs += `<rect x="${x + 1}" y="0" width="2" height="200" fill="#ffffff" opacity="0.22"/>`;
   }
-  return `<rect width="100" height="100" fill="${base}"/>${ribs}`;
+  return `<rect width="200" height="200" fill="${base}"/>${ribs}`;
 }
 
 function glassBlocks({ base, accent, deep }: ColorStops): string {
   let cells = '';
-  for (let y = 0; y < 100; y += 25) {
-    for (let x = 0; x < 100; x += 25) {
-      cells += `<rect x="${x + 1}" y="${y + 1}" width="23" height="23" fill="${base}" opacity="0.85" stroke="${deep}" stroke-width="0.6"/>`;
-      cells += `<path d="M${x + 1} ${y + 1} L${x + 12} ${y + 12} L${x + 1} ${y + 24}" fill="${accent}" opacity="0.4"/>`;
+  for (let y = 0; y < 200; y += 50) {
+    for (let x = 0; x < 200; x += 50) {
+      cells += `<rect x="${x + 2}" y="${y + 2}" width="46" height="46" fill="${base}" opacity="0.9" stroke="${deep}" stroke-width="1.2"/>`;
+      cells += `<path d="M${x + 2} ${y + 2} L${x + 26} ${y + 26} L${x + 2} ${y + 48} Z" fill="${accent}" opacity="0.42"/>`;
+      cells += `<path d="M${x + 8} ${y + 8} L${x + 16} ${y + 16}" stroke="#ffffff" stroke-width="1.4" opacity="0.35"/>`;
     }
   }
-  return `<rect width="100" height="100" fill="${deep}"/>${cells}`;
+  return `<rect width="200" height="200" fill="${deep}"/>${cells}`;
 }
 
 function dichroic(_p: ColorStops): string {
+  // Iridescent shifting gradient — color independent of the palette.
   return `
     <defs>
-      <linearGradient id="d" x1="0%" y1="0%" x2="100%" y2="100%">
+      <linearGradient id="dc" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%"   stop-color="#A464E5"/>
-        <stop offset="25%"  stop-color="#E47A9E"/>
-        <stop offset="50%"  stop-color="#F6C76A"/>
-        <stop offset="75%"  stop-color="#76E3C9"/>
-        <stop offset="100%" stop-color="#4E8AE6"/>
+        <stop offset="20%"  stop-color="#E47A9E"/>
+        <stop offset="40%"  stop-color="#F6C76A"/>
+        <stop offset="60%"  stop-color="#9BE07A"/>
+        <stop offset="80%"  stop-color="#5FB7E0"/>
+        <stop offset="100%" stop-color="#4E5AE6"/>
       </linearGradient>
-      <filter id="b"><feGaussianBlur stdDeviation="3"/></filter>
+      <filter id="dcb"><feGaussianBlur stdDeviation="4"/></filter>
     </defs>
-    <rect width="100" height="100" fill="url(#d)" filter="url(#b)"/>
-    <rect width="100" height="100" fill="#ffffff" opacity="0.06"/>`;
+    <rect width="200" height="200" fill="url(#dc)" filter="url(#dcb)"/>
+    <rect width="200" height="200" fill="#ffffff" opacity="0.06"/>
+    <path d="M-20 80 L220 30" stroke="#ffffff" stroke-width="3" opacity="0.16"/>
+    <path d="M-20 160 L220 110" stroke="#ffffff" stroke-width="2" opacity="0.10"/>`;
 }
 
 function ceramicTile({ base, accent, deep }: ColorStops): string {
   let cells = '';
-  for (let y = 0; y < 100; y += 20) {
-    for (let x = 0; x < 100; x += 20) {
-      const t = ((x + y) / 20) % 3;
+  for (let y = 0; y < 200; y += 40) {
+    for (let x = 0; x < 200; x += 40) {
+      const t = ((x + y) / 40) % 3;
       const fill = t === 0 ? base : t === 1 ? accent : deep;
-      cells += `<rect x="${x + 0.6}" y="${y + 0.6}" width="18.8" height="18.8" fill="${fill}" opacity="0.92"/>`;
+      cells += `<rect x="${x + 1.2}" y="${y + 1.2}" width="37.6" height="37.6" fill="${fill}" opacity="0.95"/>`;
+      cells += `<rect x="${x + 1.2}" y="${y + 1.2}" width="37.6" height="6" fill="#ffffff" opacity="0.06"/>`;
     }
   }
-  return `<rect width="100" height="100" fill="${deep}"/>${cells}`;
+  return `<rect width="200" height="200" fill="${deep}"/>${cells}`;
 }
 
 function ceramicMosaic({ base, accent, deep }: ColorStops): string {
   let cells = '';
-  for (let y = 0; y < 100; y += 8) {
-    for (let x = 0; x < 100; x += 8) {
+  for (let y = 0; y < 200; y += 16) {
+    for (let x = 0; x < 200; x += 16) {
       const r = ((x * 31 + y * 17) % 7) / 10;
       const fill = r < 0.33 ? base : r < 0.66 ? accent : deep;
-      cells += `<rect x="${x + 0.3}" y="${y + 0.3}" width="7.4" height="7.4" fill="${fill}" opacity="0.95"/>`;
+      cells += `<rect x="${x + 0.6}" y="${y + 0.6}" width="14.8" height="14.8" fill="${fill}" opacity="0.95"/>`;
     }
   }
-  return `<rect width="100" height="100" fill="${deep}"/>${cells}`;
+  return `<rect width="200" height="200" fill="${deep}"/>${cells}`;
 }
 
 function brick({ base, accent, deep }: ColorStops): string {
   let bricks = '';
-  for (let y = 0; y < 100; y += 14) {
-    const off = (Math.floor(y / 14) % 2) * 14;
-    for (let x = -14; x < 100; x += 28) {
-      bricks += `<rect x="${x + off + 1}" y="${y + 1}" width="26" height="12" fill="${base}" opacity="0.95"/>`;
-      bricks += `<rect x="${x + off + 1}" y="${y + 1}" width="26" height="12" fill="${accent}" opacity="0.18"/>`;
+  for (let y = 0; y < 200; y += 28) {
+    const off = (Math.floor(y / 28) % 2) * 28;
+    for (let x = -28; x < 200; x += 56) {
+      bricks += `<rect x="${x + off + 2}" y="${y + 2}" width="52" height="24" fill="${base}" opacity="0.95"/>`;
+      bricks += `<rect x="${x + off + 2}" y="${y + 2}" width="52" height="24" fill="${accent}" opacity="0.18"/>`;
+      bricks += `<rect x="${x + off + 2}" y="${y + 2}" width="52" height="6" fill="#ffffff" opacity="0.07"/>`;
     }
   }
-  return `<rect width="100" height="100" fill="${deep}"/>${bricks}`;
+  return `<rect width="200" height="200" fill="${deep}"/>${bricks}`;
 }
 
 function textileWeave(
@@ -395,89 +503,112 @@ function textileWeave(
 ): string {
   if (kind === 'sheer') {
     return `
-      <defs><filter id="f"><feGaussianBlur stdDeviation="1.4"/></filter></defs>
-      <rect width="100" height="100" fill="${base}" opacity="0.8"/>
-      <rect width="100" height="100" fill="${accent}" opacity="0.25" filter="url(#f)"/>`;
+      <defs>
+        <filter id="sh"><feGaussianBlur stdDeviation="2.5"/></filter>
+        <linearGradient id="shg" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="${base}" stop-opacity="0.85"/>
+          <stop offset="100%" stop-color="${accent}" stop-opacity="0.95"/>
+        </linearGradient>
+      </defs>
+      <rect width="200" height="200" fill="url(#shg)"/>
+      <rect width="200" height="200" fill="${accent}" opacity="0.18" filter="url(#sh)"/>`;
   }
   if (kind === 'boucle') {
     let dots = '';
-    for (let i = 0; i < 70; i++) {
-      const x = (i * 17) % 100;
-      const y = (i * 29) % 100;
-      const r = 1.6 + ((i * 13) % 5) * 0.4;
+    for (let i = 0; i < 220; i++) {
+      const x = (i * 17.3) % 200;
+      const y = (i * 29.7) % 200;
+      const r = 2.4 + ((i * 13) % 6) * 0.55;
       dots += `<circle cx="${x}" cy="${y}" r="${r}" fill="${accent}" opacity="0.55"/>`;
+      dots += `<circle cx="${x + 0.8}" cy="${y + 0.8}" r="${r * 0.45}" fill="${deep}" opacity="0.35"/>`;
     }
-    return `<rect width="100" height="100" fill="${base}"/>${dots}`;
+    return `<rect width="200" height="200" fill="${base}"/>${dots}`;
   }
   if (kind === 'velvet') {
     return `
       <defs>
-        <linearGradient id="v" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="${deep}"/>
-          <stop offset="50%" stop-color="${base}"/>
+        <linearGradient id="vv" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stop-color="${deep}"/>
+          <stop offset="45%"  stop-color="${base}"/>
           <stop offset="100%" stop-color="${accent}"/>
         </linearGradient>
-        <filter id="s"><feGaussianBlur stdDeviation="1.0"/></filter>
+        <filter id="vvb"><feGaussianBlur stdDeviation="1.6"/></filter>
+        <filter id="vvn">
+          <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="5"/>
+          <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.10 0"/>
+        </filter>
       </defs>
-      <rect width="100" height="100" fill="url(#v)"/>
-      <rect width="100" height="100" fill="${accent}" opacity="0.08" filter="url(#s)"/>`;
+      <rect width="200" height="200" fill="url(#vv)"/>
+      <rect width="200" height="200" filter="url(#vvn)"/>
+      <rect width="200" height="200" fill="${accent}" opacity="0.06" filter="url(#vvb)"/>`;
   }
-  // plain weave
+  // plain weave (linen, wool felt)
   let weave = '';
-  for (let y = 0; y < 100; y += 4) {
-    weave += `<line x1="0" y1="${y}" x2="100" y2="${y}" stroke="${deep}" stroke-width="0.3" opacity="0.30"/>`;
+  for (let y = 0; y < 200; y += 8) {
+    weave += `<line x1="0" y1="${y}" x2="200" y2="${y}" stroke="${deep}" stroke-width="0.6" opacity="0.32"/>`;
   }
-  for (let x = 0; x < 100; x += 4) {
-    weave += `<line x1="${x}" y1="0" x2="${x}" y2="100" stroke="${accent}" stroke-width="0.3" opacity="0.28"/>`;
+  for (let x = 0; x < 200; x += 8) {
+    weave += `<line x1="${x}" y1="0" x2="${x}" y2="200" stroke="${accent}" stroke-width="0.6" opacity="0.30"/>`;
   }
-  return `<rect width="100" height="100" fill="${base}"/>${weave}`;
+  return `<rect width="200" height="200" fill="${base}"/>${weave}`;
 }
 
 function leather({ base, accent, deep }: ColorStops): string {
   return `
     <defs>
-      <filter id="l">
-        <feTurbulence type="fractalNoise" baseFrequency="0.7" numOctaves="2" seed="4"/>
-        <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.16 0"/>
+      <filter id="lr">
+        <feTurbulence type="fractalNoise" baseFrequency="0.55" numOctaves="3" seed="4"/>
+        <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.20 0"/>
       </filter>
+      <radialGradient id="lrBase" cx="38%" cy="34%" r="80%">
+        <stop offset="0%" stop-color="${base}"/>
+        <stop offset="100%" stop-color="${deep}"/>
+      </radialGradient>
     </defs>
-    <rect width="100" height="100" fill="${base}"/>
-    <rect width="100" height="100" filter="url(#l)"/>
-    <path d="M0 40 Q40 30 70 42 T110 38" stroke="${deep}" stroke-width="0.4" fill="none" opacity="0.40"/>
-    <path d="M0 72 Q35 80 65 68 T110 72" stroke="${accent}" stroke-width="0.4" fill="none" opacity="0.40"/>`;
+    <rect width="200" height="200" fill="url(#lrBase)"/>
+    <rect width="200" height="200" filter="url(#lr)"/>
+    <path d="M0 80 Q70 60 130 85 T220 78" stroke="${deep}" stroke-width="0.9" fill="none" opacity="0.4"/>
+    <path d="M0 140 Q60 158 130 132 T220 142" stroke="${accent}" stroke-width="0.9" fill="none" opacity="0.4"/>
+    <path d="M50 -10 Q70 80 50 200" stroke="${deep}" stroke-width="0.7" fill="none" opacity="0.3"/>
+    <path d="M150 -10 Q140 100 160 200" stroke="${accent}" stroke-width="0.7" fill="none" opacity="0.3"/>`;
 }
 
 function compositeFluted({ base, accent, deep }: ColorStops): string {
   let ribs = '';
-  for (let x = 0; x < 100; x += 6) {
-    ribs += `<rect x="${x}" y="0" width="3" height="100" fill="${accent}" opacity="0.45"/>`;
-    ribs += `<rect x="${x + 3}" y="0" width="3" height="100" fill="${deep}" opacity="0.18"/>`;
+  for (let x = 0; x < 200; x += 12) {
+    ribs += `<rect x="${x}" y="0" width="6" height="200" fill="${accent}" opacity="0.5"/>`;
+    ribs += `<rect x="${x + 6}" y="0" width="6" height="200" fill="${deep}" opacity="0.18"/>`;
+    ribs += `<rect x="${x + 1}" y="0" width="2" height="200" fill="#ffffff" opacity="0.20"/>`;
   }
-  return `<rect width="100" height="100" fill="${base}"/>${ribs}`;
+  return `<rect width="200" height="200" fill="${base}"/>${ribs}`;
 }
 
 function compositeRelief({ base, accent, deep }: ColorStops): string {
   let cells = '';
-  for (let y = 0; y < 100; y += 16) {
-    for (let x = 0; x < 100; x += 16) {
-      const ox = (Math.floor(y / 16) % 2) * 8;
-      cells += `<polygon points="${x + ox + 8},${y + 2} ${x + ox + 14},${y + 8} ${x + ox + 8},${y + 14} ${x + ox + 2},${y + 8}" fill="${accent}" opacity="0.42"/>`;
-      cells += `<polygon points="${x + ox + 8},${y + 4} ${x + ox + 12},${y + 8} ${x + ox + 8},${y + 12} ${x + ox + 4},${y + 8}" fill="${deep}" opacity="0.30"/>`;
+  for (let y = 0; y < 200; y += 32) {
+    for (let x = 0; x < 200; x += 32) {
+      const ox = (Math.floor(y / 32) % 2) * 16;
+      const cx = x + ox + 16;
+      const cy = y + 16;
+      cells += `<polygon points="${cx},${cy - 12} ${cx + 12},${cy} ${cx},${cy + 12} ${cx - 12},${cy}" fill="${accent}" opacity="0.5"/>`;
+      cells += `<polygon points="${cx},${cy - 7}  ${cx + 7},${cy}  ${cx},${cy + 7}  ${cx - 7},${cy}"  fill="${deep}" opacity="0.35"/>`;
+      cells += `<polygon points="${cx - 4},${cy - 4} ${cx + 4},${cy - 4} ${cx},${cy - 7}" fill="#ffffff" opacity="0.18"/>`;
     }
   }
-  return `<rect width="100" height="100" fill="${base}"/>${cells}`;
+  return `<rect width="200" height="200" fill="${base}"/>${cells}`;
 }
 
 function compositeCorian({ base, accent, deep }: ColorStops): string {
   return `
     <defs>
-      <radialGradient id="c" cx="30%" cy="30%" r="80%">
-        <stop offset="0%" stop-color="${base}"/>
-        <stop offset="70%" stop-color="${accent}" stop-opacity="0.6"/>
-        <stop offset="100%" stop-color="${deep}" stop-opacity="0.45"/>
+      <radialGradient id="cor" cx="32%" cy="30%" r="85%">
+        <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.4"/>
+        <stop offset="30%"  stop-color="${base}"/>
+        <stop offset="80%"  stop-color="${accent}" stop-opacity="0.6"/>
+        <stop offset="100%" stop-color="${deep}" stop-opacity="0.55"/>
       </radialGradient>
     </defs>
-    <rect width="100" height="100" fill="url(#c)"/>`;
+    <rect width="200" height="200" fill="url(#cor)"/>`;
 }
 
 // ── Top-level dispatch by id (custom patterns override the default) ─────────
