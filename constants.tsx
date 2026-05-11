@@ -1,7 +1,7 @@
 import { Question, MaterialDef, AdjectiveDef, Element } from './types';
 import { CANONICAL_MATERIAL_CATALOG, CANONICAL_MATERIAL_GROUPS, getPrimaryElementForMaterial } from './materialsCatalog';
 import { CANONICAL_ADJECTIVES_CATALOG, CANONICAL_ADJECTIVE_GROUPS, getPrimaryElementForAdjective } from './adjectivesCatalog';
-import { buildMaterialThumbnailMap, buildMaterialThumbnail } from './lib/materialThumbnails';
+import { buildMaterialThumbnailMap } from './lib/materialThumbnails';
 
 // Strict Order for Tie-Breaking: Earth > Fire > Water > Air
 export const ELEMENTS: Element[] = ['earth', 'fire', 'water', 'air'];
@@ -34,58 +34,39 @@ export const WHEEL_PALETTE: Record<Element, { inner: string; middle: string; out
   air:   { inner: '#5A7FA3', middle: '#809CB8', outer: '#A8BCD0', text: '#1a1a1a' },
 };
 
-// Local PNG overrides — when a high-quality bitmap exists in /public/materials/
-// it wins over the procedural SVG fallback. Keys must match material labels
-// EXACTLY as they appear in materialsCatalog.ts. Materials not listed here
-// are rendered with a procedural SVG built by `buildMaterialThumbnail(label)`
-// — element-correct color + category pattern.
 // Photographic PBR textures shipped under /public/materials/.
-// We map them to as many catalog labels as visually defensible — the user's
-// reference for "right quality" is a Dolomite Super White PBR sphere, so any
-// material whose family already has a photo should reach for it before the
-// procedural SVG fallback.
+//
+// STRICT 1:1 — every PNG goes to exactly ONE catalog label. Reusing the same
+// photo across multiple labels (e.g. white-marble.png for Calacatta + Thassos
+// + Statuario) made the orbit look like duplicate beads with different
+// captions. Labels without a dedicated PNG render as a clean element-coloured
+// sphere — no procedural lines, no rim, no faux veining — keeping the visual
+// distinct from photographic materials.
 const LOCAL_MAT_OVERRIDES: Record<string, string> = {
   // ── EARTH ────────────────────────────────────────────────────
   'Travertine (honed)':                  '/materials/travertine.png',
   'Jura limestone (golden)':             '/materials/limestone.png',
-  'Pietra Serena (Tuscan)':              '/materials/limestone.png',
-  'Volcanic stone (basalt rough)':       '/materials/basalt.png',
-  'Sand-blasted granite (warm)':         '/materials/limestone.png',
   'Natural oak (horizontal)':            '/materials/natural-oak-horizontal.png',
-  'Herringbone parquet (warm oak)':      '/materials/solid-oak.png',
   'Walnut veneer':                       '/materials/walnut-veneer.png',
-  'Reclaimed weathered timber':          '/materials/walnut.png',
   'Clay plaster':                        '/materials/clay-plaster.png',
   'Lime plaster (warm mineral)':         '/materials/lime-plaster.png',
-  'Rammed earth / terracotta plaster':   '/materials/clay-plaster.png',
-  'Tadelakt (warm pigmented Moroccan)':  '/materials/clay-plaster.png',
   'Industrial brick':                    '/materials/industrial-brick.png',
   // ── FIRE ─────────────────────────────────────────────────────
   'Dark marble (high contrast)':         '/materials/dark-marble.png',
-  'Port Laurent / Saint Laurent marble': '/materials/dark-marble.png',
-  'Bardiglio Imperiale (deep grey-black)':'/materials/dark-marble.png',
   'Dark quartzite':                      '/materials/tuff.png',
   'Basalt':                              '/materials/basalt.png',
-  'Smoked / fumed oak':                  '/materials/walnut-veneer.png',
-  'Dark herringbone parquet':            '/materials/walnut.png',
   'Venetian plaster (polished)':         '/materials/venetian-plaster.png',
   'Blackened steel':                     '/materials/blackened-steel.png',
-  'Burnished antique brass':             '/materials/bronze.png',
-  'Aged brass (polished)':               '/materials/bronze.png',
   'Bronze accents':                      '/materials/bronze.png',
   // ── WATER ────────────────────────────────────────────────────
   'Microcement (continuous)':            '/materials/microcement.png',
   'Smooth mineral plaster':              '/materials/smooth-mineral.png',
-  'Tadelakt (cool pigmented Moroccan)':  '/materials/smooth-mineral.png',
-  'Mirror-polished stainless steel':     '/materials/brushed-metal.png',
   'Diffused glass':                      '/materials/diffused-glass.png',
   'Matte ceramic':                       '/materials/matte-ceramic.png',
   'Linen / wool textile surfaces':       '/materials/wool-textile.png',
   // ── AIR ──────────────────────────────────────────────────────
   'White marble (Calacatta)':            '/materials/white-marble.png',
   'Dolomite snow-white marble':          '/materials/dolomite-snow.png',
-  'Thassos marble (pure white)':         '/materials/white-marble.png',
-  'Bianco Statuario (luminous white)':   '/materials/white-marble.png',
   'White terrazzo':                      '/materials/white-terrazzo.png',
   'Light oak / ash':                     '/materials/light-oak.png',
   'Bleached birch':                      '/materials/bleached-birch.png',
@@ -102,9 +83,13 @@ const LOCAL_MAT_OVERRIDES: Record<string, string> = {
 
 export const MATERIAL_SPHERE_IMAGES: Record<string, string> = buildMaterialThumbnailMap(LOCAL_MAT_OVERRIDES);
 
-/** Single-shot helper for ad-hoc thumbnail lookups (e.g. saved-state re-hydration). */
+/**
+ * Single-shot helper for ad-hoc thumbnail lookups. Returns the local PNG URL
+ * if one exists for the label, otherwise an empty string so callers can fall
+ * back to a clean element-coloured sphere instead of a procedural pattern.
+ */
 export const getMaterialThumbnail = (label: string): string =>
-  MATERIAL_SPHERE_IMAGES[label] || buildMaterialThumbnail(label);
+  MATERIAL_SPHERE_IMAGES[label] || '';
 
 // Canonical Materials by group (for layer selection panel)
 export const CANONICAL_MATERIALS: Record<Element | 'shared', string[]> = CANONICAL_MATERIAL_GROUPS;
