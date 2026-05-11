@@ -1001,11 +1001,24 @@ const ENERGY_RULES: Record<Element, { form: string; lighting: string; spatial: s
 ) as Record<Element, { form: string; lighting: string; spatial: string; material: string }>;
 
 const VARIATION_DIRECTIVES = {
-  geometry: "Emphasize geometry shift: change spatial hierarchy (linear / central / radial / asymmetrical). Introduce a different compositional strategy.",
-  lighting: "Emphasize lighting shift: alter light direction, intensity, or shadow character. New illumination mood.",
-  material: "Emphasize material emphasis shift: foreground different surfaces or textures. Shift tactile focus.",
-  focal: "Emphasize focal object change: different main furniture or anchor element. New center of attention.",
+  geometry: "VARIATION AXIS — geometry: pick a different spatial hierarchy than the last pass (linear / central / radial / asymmetrical / nested zones). Move the camera to a meaningfully different vantage and crop. The viewer should read this as a different room from the same project, not the same shot re-coloured.",
+  lighting: "VARIATION AXIS — lighting: change the dominant light direction (window to the left, then to the right, then behind the camera), the contrast ratio (soft wash vs grazing rake), and which fixtures actually fire. The mood shifts; the materials and palette do not.",
+  material: "VARIATION AXIS — material emphasis: bring a different surface into the foreground (stone counter, then wood floor, then plaster wall, then textile mass). The hero finish in this pass was background last pass. Same canonical material list — different reading.",
+  focal: "VARIATION AXIS — focal object: rotate the anchor piece (sofa group → dining table → kitchen island → reading nook → fireplace wall). The framing serves a different functional zone of the same project.",
 } as const;
+
+// Per-generation camera vantage — rotates with generationIndex so back-to-back
+// renders of the same brief don't all share the same one-point centred shot.
+// Each entry stays inside the 24-35mm tilt-shift envelope mandated by the
+// system instruction; only the standpoint and crop change.
+const CAMERA_VANTAGES = [
+  'Camera at eye-level (≈ 1.55 m), one-point perspective looking down the long axis of the room. Symmetrical-leaning composition with the primary furniture group at the golden-section line.',
+  'Camera at eye-level, two-point perspective from a room corner — both side walls visible, furniture arranged in an L along them. 30 mm equivalent, slight off-axis tilt of the verticals corrected.',
+  'Camera lowered to seated eye-level (≈ 1.15 m), framing the room past a foreground object (chair back, console edge, plant leaf) so the main scene reads as the middle plane.',
+  'Camera high (≈ 1.85 m, standing) and pulled toward one wall, looking diagonally across the room toward the brightest window or aperture. Strong light-to-shadow gradient across the floor.',
+  'Camera in the doorway / threshold of an adjacent space, framing the main room through an architectural opening (door, archway, beam, column). Layered foreground-midground-background reading.',
+  'Camera close to the dominant window or skylight, looking back into the room. Daylight comes from behind the camera, walls and ceiling read with even soft illumination, deep furniture-side shadows.',
+] as const;
 
 // --- CORE PROMPT ENGINE ---
 
@@ -1827,19 +1840,32 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   const variationFocus = input.variationFocus ?? focusKeys[(input.generationIndex ?? 0) % 4];
   const variationDirective = VARIATION_DIRECTIVES[variationFocus];
 
-  // Lighting — varies between day/golden-hour/evening for anti-repetition
+  // Camera vantage rotates independently of composition strategy. Combined,
+  // 6 vantages × 6 compositions × 4 variation axes × 4 time variants ≈ 576
+  // unique configurations before the model adds its own micro-variation,
+  // so back-to-back generations of the same brief read as the same project
+  // shot at different moments rather than as identical re-renders.
+  const cameraVantage = CAMERA_VANTAGES[(input.generationIndex ?? 0) % CAMERA_VANTAGES.length];
+
+  // Lighting — rotates between four DAYTIME scenarios for anti-repetition.
+  // We no longer rotate into an "evening / blue hour" variant by default —
+  // it was producing a night render every 4th generation and forcing every
+  // low-natural-light room into a dim moody evening scene, which the user
+  // explicitly flagged ("ღამის რენდერი არ არის აუცილებელი"). Night/evening
+  // is now opt-in via the explicit `params.timeOfDay === 'evening'` brief
+  // (handled elsewhere); the auto-rotation stays in daylight territory.
   const timeVariants = [
     { time: 'midday', desc: 'Bright natural daylight flooding through windows. Strong sun-cast shadow patterns on floor and walls. Color temperature 5000-5500K. Window light creates defined geometric shadow shapes of window frames on interior surfaces.' },
     { time: 'golden hour', desc: 'Late afternoon golden hour light angling deeply through windows. Warm amber light (3500K) creating long dramatic shadows and warm pools on surfaces. The sun is low, casting golden ribbons across the room.' },
     { time: 'overcast', desc: 'Soft diffused overcast daylight from windows. Even, shadowless illumination (5000K) with no harsh shadows. All material textures clearly visible. Supplementary warm accent lighting (2700K) from architectural fixtures.' },
-    { time: 'evening', desc: 'Blue hour exterior visible through windows. Interior lit by warm architectural lighting (2700K) — concealed LED strips, pendant fixtures, and wall sconces creating intimate amber pools. Contrast between cool blue exterior and warm golden interior.' },
+    { time: 'soft afternoon', desc: 'Soft mid-afternoon daylight, sun high but slightly off-axis to the window. Gentle warm-neutral light (4200-4700K) wraps the room without harsh contrast. Long soft shadows on the floor reveal material texture. Architectural accent lighting (3000K) stays low and supportive — no blue-hour exterior, no dimmed evening mood.' },
   ];
   const timeIdx = genIdx % timeVariants.length;
   const baseLight = naturalLight === 'high'
-    ? timeVariants[timeIdx % 3]
+    ? timeVariants[timeIdx % 3] // bright rooms stay in midday / golden / overcast
     : naturalLight === 'low'
-      ? timeVariants[3]
-      : timeVariants[timeIdx];
+      ? timeVariants[2] // dim rooms read as overcast daylight, never blue-hour night
+      : timeVariants[timeIdx]; // medium light rotates through all four daytime moods
   const lightScenario = baseLight.desc;
 
   const ar = '16:9';
@@ -2078,8 +2104,10 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   const focalLength = areaM2 >= 120 ? '24mm' : areaM2 >= 80 ? '28mm' : areaM2 >= 40 ? '30mm' : '35mm';
   P.push(`Photography: ${focalLength} tilt-shift lens on Phase One IQ4 150MP digital back. Camera height 110cm (standing eye level). Use a slightly longer focal for small m² so the frame does not exaggerate width — match lens to stated footprint. PERFECTLY CORRECTED VERTICALS — all vertical lines are absolutely straight. f/8–f/11 aperture, deep focus with slight natural bokeh on distant planes. Color science: neutral with warm bias, no post-processing filters, no HDR, no saturation boost, no Instagram look. Light behaves physically — soft shadow gradients from windows, warm amber pools from recessed downlights, material-accurate reflections (mirror-polish shows room reflections, matte absorbs light). Depth composition: clear foreground detail (edge of table, plant leaf), sharp mid-ground (main furniture group), soft atmospheric background (distant wall or window view). The image quality matches Dezeen's "House of the Year" photography standard.`);
 
-  // [9] FRAMING
-  P.push(`Composition: ${composition.desc} Full-frame with 15% breathing margin. All furniture fully visible — NOTHING cropped at frame edge. Clear foreground-midground-background depth layering. A curated vignette element in the near foreground (plant leaf edge, book corner, ceramic edge) creates editorial depth. The composition follows the rule of thirds with the primary furniture group at the golden ratio intersection.`);
+  // [9] FRAMING + CAMERA VANTAGE (rotates per generation so back-to-back
+  // renders read as different shots of the same project)
+  P.push(`Camera vantage (this pass): ${cameraVantage}`);
+  P.push(`Composition strategy (this pass — ${composition.name}): ${composition.desc} Full-frame with 15% breathing margin. All furniture fully visible — NOTHING cropped at frame edge. Clear foreground-midground-background depth layering. A curated vignette element in the near foreground (plant leaf edge, book corner, ceramic edge) creates editorial depth. The composition follows the rule of thirds with the primary furniture group at the golden ratio intersection.`);
 
   // [9b] Pin-aligned zones (interior only — matches UI hotspot percentages)
   if (input.domain !== 'architecture') {
@@ -2092,8 +2120,11 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   // [10b] LOGICAL SPATIAL DESIGN (realism enforcement)
   P.push(`LOGICAL DESIGN (critical for realism): Every element placement must make FUNCTIONAL SENSE. Sofas face conversation areas or views, not walls. Dining tables are near kitchens with appropriate clearance. Lighting fixtures illuminate areas where light is needed — over dining, reading, workspaces. Materials are applied where they make constructional sense — stone on floors and counters (where it can bear weight and resist wear), wood on floors and cabinetry (where grain direction follows structural logic), plaster on walls (where it has proper substrate), metal on frames and accents (where it has structural support). Heavy materials like marble and stone are used on SUPPORTED surfaces — not cantilevered impossibly or applied to ceilings without visible structure. Furniture is scaled correctly for the room — not oversized in small rooms or undersized in large rooms. Circulation paths are clear (minimum 90cm walkways). CONSTRUCTION LOGIC: every design choice must answer "how would a contractor build this?" — walls have proper framing, cladding has fixing substrate, countertops have cabinets beneath them, shelves have brackets or concealed support, pendant lights hang from ceiling structure. The room must look like it was designed by a professional architect who understands BOTH aesthetics AND construction — someone who produces construction documents, not just concept renders.`);
 
-  // [11] ANTI-REPETITION
-  P.push(`${variationDirective} Do NOT repeat identical compositions across generations. Each result must feel like a DIFFERENT PROJECT but within the same ${primary.toUpperCase()} elemental logic — different furniture arrangement, different focal point, different material balance, different light direction. ${composition.name} strategy.`);
+  // [11] ANTI-REPETITION — generation index ${genIdx} drives the four
+  // independent rotations (vantage / composition strategy / variation axis /
+  // time-of-day). The image must read as *this exact project* but a
+  // genuinely different shot than the previous pass.
+  P.push(`ANTI-REPETITION (this is generation #${genIdx + 1} of the same brief — must NOT repeat the previous frame): ${variationDirective} Treat the rotation tokens above (camera vantage = "${cameraVantage.split('.')[0]}", composition strategy = "${composition.name}", lighting = "${baseLight.time}") as binding for THIS pass. Same project, same material palette, same elemental logic — but a clearly different shot. Acceptable to walk to a different corner, frame through a different opening, or anchor on a different functional zone. Forbidden: identical camera position, identical focal point, identical light angle, identical foreground vignette as the prior render.`);
 
   // [12] MAPPING
   if (mappingBasis === "photo-based") {
