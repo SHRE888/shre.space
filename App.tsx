@@ -11,7 +11,7 @@ import { calculateAnalysis, buildUniversalPrompt, buildTargetedEditPrompt } from
 import { generateImageFromPrompt, dataUrlToFile } from './services/geminiService';
 import { interpretRefinementFeedback } from './services/refinementFeedback';
 import { getInitialSelection, getSelectionFromPercentages } from './services/refinementLogic';
-import { SHORT_QUESTIONS, ELEMENT_COLORS, CANONICAL_MATERIALS, MATERIAL_SPHERE_IMAGES, generateSurveyQuestions } from './constants';
+import { SHORT_QUESTIONS, ELEMENT_COLORS, CANONICAL_MATERIALS, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER, MATERIAL_TEXTURE_TINT, generateSurveyQuestions } from './constants';
 import { getRecommendedProfessionalPartners, type ProfessionalPartner } from './lib/professionalPartners';
 
 // --- LANDING PAGE ---
@@ -1749,15 +1749,24 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         <div className="relative w-full flex justify-center">
                           <div className={`relative shrink-0 w-[76px] h-[76px] sm:w-[70px] sm:h-[70px] md:w-16 md:h-16 ${isLinked ? 'scale-105' : ''}`}>
                           <div
-                            className={`rounded-full overflow-hidden transition-all duration-500 bg-white max-md:shadow-sm w-full h-full ${isLinked ? 'shadow-md' : ''}`}
+                            className={`relative rounded-full overflow-hidden transition-all duration-500 bg-white max-md:shadow-sm w-full h-full ${isLinked ? 'shadow-md' : ''}`}
                             style={{ border: `1.5px solid ${elColor}15` }}
                           >
-                            {sphereImg && !sphereImg.startsWith('https://placehold')
-                              ? <img src={sphereImg} alt={mat.name}
-                                  className="w-[130%] h-[130%] max-w-none object-cover transition-transform duration-500 group-hover:scale-110"
-                                  style={{ mixBlendMode: 'multiply', marginLeft: '-15%', marginTop: '-15%' }}
+                            {sphereImg && !sphereImg.startsWith('https://placehold') ? (
+                              <>
+                                <img src={sphereImg} alt={mat.name}
+                                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                  style={{ transform: 'scale(1.14)', filter: MATERIAL_TEXTURE_FILTER[mat.name] || 'saturate(1.04) contrast(1.04)' }}
                                   loading="lazy" />
-                              : <div className="w-full h-full" style={{ background: `radial-gradient(circle at 40% 38%, ${elColor}30, ${elColor}10)` }} />}
+                                {(() => {
+                                  const tint = MATERIAL_TEXTURE_TINT[mat.name];
+                                  if (!tint) return null;
+                                  return <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none', backgroundColor: tint.color, opacity: tint.alpha, mixBlendMode: tint.mode }} />;
+                                })()}
+                              </>
+                            ) : (
+                              <div className="w-full h-full" style={{ background: `radial-gradient(circle at 40% 38%, ${elColor}30, ${elColor}10)` }} />
+                            )}
                           </div>
                           <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-[1.5px] border-white shadow-sm" style={{ backgroundColor: elColor }} />
                           {isUserSelected && (
@@ -1809,11 +1818,15 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                             <div className="flex flex-wrap gap-1.5">
                               {availableMats.map(name => {
                                 const sphereImg = MATERIAL_SPHERE_IMAGES[name];
+                                const tint = MATERIAL_TEXTURE_TINT[name];
                                 return (
                                   <button key={name} onClick={() => addMaterial(name, elKey as Element)}
                                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] tracking-[0.01em] font-medium border border-gray-150 text-gray-600 hover:border-gray-400 hover:text-gray-900 hover:bg-white hover:shadow-sm transition-all active:scale-95 bg-white/60">
                                     {sphereImg && !sphereImg.startsWith('https://placehold') && (
-                                      <img src={sphereImg} alt="" className="w-4 h-4 rounded-full object-cover flex-shrink-0" style={{ mixBlendMode: 'multiply' }} loading="lazy" />
+                                      <span className="relative w-4 h-4 rounded-full overflow-hidden flex-shrink-0 inline-block">
+                                        <img src={sphereImg} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ transform: 'scale(1.14)', filter: MATERIAL_TEXTURE_FILTER[name] || 'saturate(1.04) contrast(1.04)' }} loading="lazy" />
+                                        {tint && <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none', backgroundColor: tint.color, opacity: tint.alpha, mixBlendMode: tint.mode }} />}
+                                      </span>
                                     )}
                                     {name}
                                   </button>

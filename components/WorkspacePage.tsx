@@ -1957,12 +1957,17 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 return (
                   <div key={i} className="flex items-center gap-1.5 px-3 py-[5px] rounded-full transition-all hover:shadow-sm"
                     style={{ background: `${ec}08`, border: `1px solid ${ec}15` }}>
-                    <div className="w-5 h-5 rounded-full overflow-hidden shrink-0" style={{ border: `1.5px solid ${ec}40` }}>
+                    <div className="relative w-5 h-5 rounded-full overflow-hidden shrink-0" style={{ border: `1.5px solid ${ec}40` }}>
                       {(() => {
                         const imgSrc = (MATERIAL_SPHERE_IMAGES as Record<string, string>)[m.name];
-                        return imgSrc
-                          ? <img src={imgSrc} alt="" className="w-full h-full object-cover" />
-                          : <div className="w-full h-full" style={{ background: `${ec}20` }} />;
+                        if (!imgSrc) return <div className="w-full h-full" style={{ background: `${ec}20` }} />;
+                        const tint = MATERIAL_TEXTURE_TINT[m.name];
+                        return (
+                          <>
+                            <img src={imgSrc} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ transform: 'scale(1.14)', filter: MATERIAL_TEXTURE_FILTER[m.name] || 'saturate(1.04) contrast(1.04)' }} />
+                            {tint && <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none', backgroundColor: tint.color, opacity: tint.alpha, mixBlendMode: tint.mode }} />}
+                          </>
+                        );
                       })()}
                     </div>
                     <span className="text-[10px] uppercase tracking-[0.08em] font-medium" style={{ color: '#555' }}>{m.name.split('(')[0].trim()}</span>
@@ -2481,13 +2486,18 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                     {state.refinement.selectedMaterials.map((m, i) => {
                       const tex = matTexMap[m.name];
                       const ec = ELEMENT_COLORS[m.element];
+                      const tint = MATERIAL_TEXTURE_TINT[m.name];
+                      const flt = MATERIAL_TEXTURE_FILTER[m.name];
                       return (
                         <div key={i} className="flex flex-col items-center gap-0.5 sm:gap-1" title={m.name}>
                           <div className="w-[52px] h-[52px] sm:w-[56px] sm:h-[56px] rounded-lg sm:rounded-xl overflow-hidden relative" style={{ boxShadow: `0 1px 8px ${ec}12`, border: `1.5px solid ${ec}18`, background: `linear-gradient(135deg, ${ec}45, ${ec}1F)` }}>
                             {tex && (
                               <img src={tex} alt="" draggable={false}
-                                style={{ position: 'absolute', inset: '-20%', width: '140%', height: '140%', objectFit: 'cover', display: 'block' }}
+                                style={{ position: 'absolute', inset: '-20%', width: '140%', height: '140%', objectFit: 'cover', display: 'block', filter: flt || 'saturate(1.04) contrast(1.04)' }}
                                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                            )}
+                            {tint && (
+                              <span style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundColor: tint.color, opacity: tint.alpha, mixBlendMode: tint.mode }} />
                             )}
                           </div>
                           <span className="text-[8px] text-center leading-tight truncate w-full" style={{ color: '#8899b3' }}>{m.name.split('(')[0].trim()}</span>
