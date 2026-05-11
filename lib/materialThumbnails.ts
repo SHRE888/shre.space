@@ -197,24 +197,22 @@ function svgToDataUri(svg: string): string {
 }
 
 /**
- * Standard sphere overlay: a soft top-left highlight + bottom-right vignette
- * that makes any flat texture read as a 3D ball. Added at the end of every
- * pattern so the chip looks like a physical material sample.
+ * Standard sphere overlay: just a barely-there top-left specular highlight.
+ *
+ * The dark rim vignette we used to apply at the texture's edges was reading
+ * as a literal "black contour" around every chip — especially noticeable on
+ * lighter materials (white marbles, plasters). We now let the parent
+ * container provide the sphere illusion via its element-colored ring and a
+ * soft box-shadow, and keep the texture itself flat, crisp, and unmuddied.
  */
 const SPHERE_OVERLAY = `
   <defs>
-    <radialGradient id="sphHi" cx="34%" cy="30%" r="55%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.30"/>
-      <stop offset="55%" stop-color="#ffffff" stop-opacity="0.06"/>
+    <radialGradient id="sphHi" cx="32%" cy="26%" r="42%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="60%" stop-color="#ffffff" stop-opacity="0.04"/>
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="sphVig" cx="62%" cy="74%" r="78%">
-      <stop offset="0%" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="70%" stop-color="#000000" stop-opacity="0.06"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.22"/>
-    </radialGradient>
   </defs>
-  <rect width="200" height="200" fill="url(#sphVig)"/>
   <rect width="200" height="200" fill="url(#sphHi)"/>`;
 
 function wrap(inner: string, label: string): string {
@@ -245,23 +243,32 @@ function stoneVeining({ base, accent, deep }: ColorStops): string {
   return `
     <defs>
       <filter id="sg" x="-10%" y="-10%" width="120%" height="120%">
-        <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="3"/>
-        <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.14 0"/>
+        <feTurbulence type="fractalNoise" baseFrequency="0.95" numOctaves="3" seed="3"/>
+        <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.17 0"/>
       </filter>
-      <radialGradient id="sgLite" cx="35%" cy="32%" r="70%">
+      <radialGradient id="sgLite" cx="34%" cy="30%" r="78%">
         <stop offset="0%" stop-color="${base}"/>
-        <stop offset="100%" stop-color="${deep}" stop-opacity="0.55"/>
+        <stop offset="100%" stop-color="${base}"/>
       </radialGradient>
+      <filter id="sgBlur"><feGaussianBlur stdDeviation="0.4"/></filter>
     </defs>
     <rect width="200" height="200" fill="url(#sgLite)"/>
     <rect width="200" height="200" filter="url(#sg)"/>
-    <path d="M-10 60 Q40 40 90 70 T210 65" stroke="${accent}" stroke-width="2.4" fill="none" opacity="0.7" stroke-linecap="round"/>
-    <path d="M-20 100 Q30 120 70 100 T160 130 T230 110" stroke="${deep}" stroke-width="2.8" fill="none" opacity="0.55" stroke-linecap="round"/>
-    <path d="M-10 150 Q40 138 80 158 T180 148" stroke="${accent}" stroke-width="1.6" fill="none" opacity="0.5" stroke-linecap="round"/>
-    <path d="M40 -10 Q70 60 50 110 T70 220" stroke="${deep}" stroke-width="1.3" fill="none" opacity="0.4" stroke-linecap="round"/>
-    <path d="M150 -10 Q140 50 165 100 T140 215" stroke="${accent}" stroke-width="1.1" fill="none" opacity="0.42" stroke-linecap="round"/>
-    <path d="M-10 30 Q22 28 55 38" stroke="${deep}" stroke-width="0.7" fill="none" opacity="0.55"/>
-    <path d="M118 18 Q150 26 188 22" stroke="${accent}" stroke-width="0.8" fill="none" opacity="0.5"/>`;
+    <g filter="url(#sgBlur)">
+      <path d="M-10 50 Q35 35 80 58 Q120 78 160 55 T215 60" stroke="${deep}"   stroke-width="3.0" fill="none" opacity="0.78" stroke-linecap="round"/>
+      <path d="M-10 50 Q35 35 80 58 Q120 78 160 55 T215 60" stroke="${accent}" stroke-width="1.4" fill="none" opacity="0.65" stroke-linecap="round"/>
+      <path d="M-20 95 Q25 115 65 95 Q105 75 145 115 T235 100" stroke="${deep}" stroke-width="2.6" fill="none" opacity="0.7" stroke-linecap="round"/>
+      <path d="M-10 152 Q40 138 82 158 Q120 175 160 145 T215 150" stroke="${deep}"   stroke-width="2.2" fill="none" opacity="0.6" stroke-linecap="round"/>
+      <path d="M-10 152 Q40 138 82 158 Q120 175 160 145 T215 150" stroke="${accent}" stroke-width="1.0" fill="none" opacity="0.55" stroke-linecap="round"/>
+      <path d="M42 -10 Q62 55 48 110 Q34 165 62 220" stroke="${deep}"   stroke-width="1.8" fill="none" opacity="0.55" stroke-linecap="round"/>
+      <path d="M152 -10 Q138 55 168 110 Q148 165 138 220" stroke="${deep}"   stroke-width="1.5" fill="none" opacity="0.5" stroke-linecap="round"/>
+      <path d="M-10 28 Q22 30 56 25 Q80 22 102 32" stroke="${deep}" stroke-width="0.9" fill="none" opacity="0.6"/>
+      <path d="M115 18 Q150 26 188 20" stroke="${deep}" stroke-width="1.0" fill="none" opacity="0.55"/>
+      <path d="M-10 178 Q35 170 70 185 Q108 198 150 180 T215 185" stroke="${deep}" stroke-width="1.2" fill="none" opacity="0.5"/>
+      <path d="M100 60 Q108 95 95 130 Q88 158 105 195" stroke="${accent}" stroke-width="0.7" fill="none" opacity="0.5"/>
+      <path d="M30 80 Q42 95 38 115" stroke="${deep}" stroke-width="0.6" fill="none" opacity="0.45"/>
+      <path d="M170 130 Q160 150 175 170" stroke="${deep}" stroke-width="0.6" fill="none" opacity="0.45"/>
+    </g>`;
 }
 
 function woodGrain({ base, accent, deep }: ColorStops): string {
