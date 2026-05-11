@@ -59,6 +59,19 @@ interface MaterialTextureSpec {
    *  base PNG already matches the desired look (Travertine, Dark marble,
    *  Dolomite snow-white, etc.). */
   filter?: string;
+  /** Optional colour overlay applied on top of the photo via
+   *  `mix-blend-mode`. Use for materials whose target colour is too far
+   *  from the base PNG for `filter` alone to reach — e.g. Sodalite Blue
+   *  on dark-marble, Calacatta Viola on white-marble, Oxidised copper on
+   *  bronze. Format: any valid CSS colour. */
+  tintColor?: string;
+  /** Blend mode for `tintColor`. `'color'` keeps photo luminance and
+   *  replaces hue+saturation (best for deeply pigmented variants).
+   *  `'multiply'` is best for darkening (Shou-sugi-ban). Defaults to
+   *  `'color'`. */
+  tintMode?: 'color' | 'multiply' | 'overlay' | 'soft-light';
+  /** Override the opacity of the tint overlay. Defaults to `0.85`. */
+  tintAlpha?: number;
 }
 
 const MAT_TEXTURE_SPEC: Record<string, MaterialTextureSpec> = {
@@ -67,8 +80,8 @@ const MAT_TEXTURE_SPEC: Record<string, MaterialTextureSpec> = {
   'Travertine (honed)':                       { src: '/materials/travertine.png' },
   'Jura limestone (golden)':                  { src: '/materials/limestone.png' },
   'Pietra Serena (Tuscan)':                   { src: '/materials/limestone.png',     filter: 'hue-rotate(180deg) saturate(0.25) brightness(0.97)' },
-  'Cipollino marble (warm green-veined)':     { src: '/materials/white-marble.png',  filter: 'hue-rotate(70deg) saturate(1.05) brightness(0.98)' },
-  'Green onyx / marble (veined)':             { src: '/materials/white-marble.png',  filter: 'hue-rotate(85deg) saturate(1.6) brightness(0.88)' },
+  'Cipollino marble (warm green-veined)':     { src: '/materials/white-marble.png',  tintColor: '#86946A', tintAlpha: 0.55 },
+  'Green onyx / marble (veined)':             { src: '/materials/white-marble.png',  tintColor: '#3E6E48', tintAlpha: 0.75 },
   'Marrón Emperador (warm brown marble)':     { src: '/materials/walnut-veneer.png', filter: 'saturate(1.15) contrast(1.1) brightness(0.92)' },
   'Volcanic stone (basalt rough)':            { src: '/materials/basalt.png' },
   'Sand-blasted granite (warm)':              { src: '/materials/limestone.png',     filter: 'saturate(1.18) contrast(1.08) brightness(1.02)' },
@@ -80,51 +93,51 @@ const MAT_TEXTURE_SPEC: Record<string, MaterialTextureSpec> = {
   // plasters
   'Clay plaster':                             { src: '/materials/clay-plaster.png' },
   'Lime plaster (warm mineral)':              { src: '/materials/lime-plaster.png' },
-  'Rammed earth / terracotta plaster':        { src: '/materials/clay-plaster.png',  filter: 'hue-rotate(-8deg) saturate(1.25) brightness(0.94)' },
+  'Rammed earth / terracotta plaster':        { src: '/materials/clay-plaster.png',  tintColor: '#C99A6F', tintAlpha: 0.5 },
   'Tadelakt (warm pigmented Moroccan)':       { src: '/materials/clay-plaster.png',  filter: 'hue-rotate(-15deg) saturate(0.85) brightness(1.02)' },
   // concrete + brick
   'Board-formed concrete':                    { src: '/materials/textured-concrete.png', filter: 'saturate(0.85) brightness(0.98)' },
   'Industrial brick':                         { src: '/materials/industrial-brick.png' },
-  'Zellige tile (warm ochre / olive)':        { src: '/materials/matte-ceramic.png', filter: 'hue-rotate(-25deg) saturate(1.4) brightness(0.95)' },
+  'Zellige tile (warm ochre / olive)':        { src: '/materials/matte-ceramic.png', tintColor: '#B98B5C', tintAlpha: 0.65 },
   // textiles
   'Jute / sisal rug':                         { src: '/materials/wool-textile.png',  filter: 'hue-rotate(-10deg) saturate(0.9) brightness(0.95)' },
   'Bouclé (oat / cream)':                     { src: '/materials/wool-textile.png',  filter: 'brightness(1.18) saturate(0.65)' },
-  'Mohair velvet (warm rust / olive)':        { src: '/materials/wool-textile.png',  filter: 'hue-rotate(-22deg) saturate(1.55) brightness(0.8)' },
+  'Mohair velvet (warm rust / olive)':        { src: '/materials/wool-textile.png',  tintColor: '#A65C3A', tintAlpha: 0.7 },
 
   // ── FIRE ──────────────────────────────────────────────────────
   // stones
   'Dark marble (high contrast)':              { src: '/materials/dark-marble.png' },
   'Port Laurent / Saint Laurent marble':      { src: '/materials/dark-marble.png',   filter: 'sepia(0.3) hue-rotate(-15deg) saturate(1.25)' },
-  'Calacatta Viola (white + oxblood veining)':{ src: '/materials/white-marble.png',  filter: 'sepia(0.5) hue-rotate(-55deg) saturate(1.5)' },
-  'Patagonia quartzite (smoky burgundy)':     { src: '/materials/dark-marble.png',   filter: 'sepia(0.35) hue-rotate(-32deg) saturate(1.35) brightness(0.94)' },
-  'Sodalite Blue (deep midnight stone)':      { src: '/materials/dark-marble.png',   filter: 'hue-rotate(195deg) saturate(2.0) brightness(0.92)' },
+  'Calacatta Viola (white + oxblood veining)':{ src: '/materials/white-marble.png',  tintColor: '#7A2F3D', tintAlpha: 0.6 },
+  'Patagonia quartzite (smoky burgundy)':     { src: '/materials/dark-marble.png',   tintColor: '#5C2E2E', tintMode: 'soft-light', tintAlpha: 0.85 },
+  'Sodalite Blue (deep midnight stone)':      { src: '/materials/dark-marble.png',   tintColor: '#1A2C5A', tintAlpha: 0.85 },
   'Red travertine (Persian)':                 { src: '/materials/travertine.png',    filter: 'sepia(0.4) hue-rotate(-25deg) saturate(1.5) brightness(0.94)' },
   'Bardiglio Imperiale (deep grey-black)':    { src: '/materials/dark-marble.png',   filter: 'saturate(0.35) brightness(0.92)' },
   'Dark quartzite':                           { src: '/materials/tuff.png' },
   'Basalt':                                   { src: '/materials/basalt.png' },
   // woods
-  'Shou-sugi-ban (charred timber)':           { src: '/materials/walnut.png',        filter: 'brightness(0.32) saturate(0.4) contrast(1.25)' },
+  'Shou-sugi-ban (charred timber)':           { src: '/materials/walnut.png',        tintColor: '#0A0807', tintMode: 'multiply', tintAlpha: 0.7, filter: 'contrast(1.3)' },
   'Smoked / fumed oak':                       { src: '/materials/walnut-veneer.png', filter: 'brightness(0.72) saturate(0.85)' },
   'Dark herringbone parquet':                 { src: '/materials/walnut.png',        filter: 'brightness(0.85)' },
   // plaster
   'Venetian plaster (polished)':              { src: '/materials/venetian-plaster.png' },
   // metals
-  'Corten steel (weathering)':                { src: '/materials/bronze.png',        filter: 'hue-rotate(-12deg) saturate(1.55) brightness(0.92) contrast(1.1)' },
-  'Oxidized copper':                          { src: '/materials/bronze.png',        filter: 'hue-rotate(95deg) saturate(0.85) brightness(0.95)' },
+  'Corten steel (weathering)':                { src: '/materials/bronze.png',        tintColor: '#9C4E2C', tintAlpha: 0.7 },
+  'Oxidized copper':                          { src: '/materials/bronze.png',        tintColor: '#6FA496', tintAlpha: 0.7 },
   'Burnished antique brass':                  { src: '/materials/bronze.png',        filter: 'brightness(0.92) saturate(0.95)' },
   'Aged brass (polished)':                    { src: '/materials/bronze.png',        filter: 'brightness(1.08) saturate(1.05) contrast(1.05)' },
   'Blackened steel':                          { src: '/materials/blackened-steel.png' },
   'Bronze accents':                           { src: '/materials/bronze.png' },
   // textiles
-  'Oxblood / rust velvet upholstery':         { src: '/materials/wool-textile.png',  filter: 'sepia(0.55) hue-rotate(-30deg) saturate(1.75) brightness(0.66)' },
+  'Oxblood / rust velvet upholstery':         { src: '/materials/wool-textile.png',  tintColor: '#5C1F1A', tintAlpha: 0.85 },
   'Cognac saddle leather':                    { src: '/materials/walnut-veneer.png', filter: 'saturate(1.25) brightness(1.05) contrast(1.05)' },
-  'Charcoal / smoke velvet':                  { src: '/materials/wool-textile.png',  filter: 'brightness(0.42) saturate(0.25)' },
+  'Charcoal / smoke velvet':                  { src: '/materials/wool-textile.png',  tintColor: '#2C2C30', tintAlpha: 0.85 },
 
   // ── WATER ─────────────────────────────────────────────────────
   // stones
-  'Bianco Lasa marble (cool grey-white)':     { src: '/materials/white-marble.png',  filter: 'hue-rotate(180deg) saturate(0.3) brightness(0.97)' },
+  'Bianco Lasa marble (cool grey-white)':     { src: '/materials/white-marble.png',  tintColor: '#9CA0A2', tintMode: 'soft-light', tintAlpha: 0.65 },
   'Smoke quartzite (silver-grey)':            { src: '/materials/tuff.png',          filter: 'saturate(0.4) brightness(1.05)' },
-  'Onice Acqua (translucent water-blue onyx)':{ src: '/materials/white-marble.png',  filter: 'hue-rotate(180deg) saturate(0.95) brightness(0.97)' },
+  'Onice Acqua (translucent water-blue onyx)':{ src: '/materials/white-marble.png',  tintColor: '#5E8A98', tintAlpha: 0.55 },
   'Silver travertine (polished)':             { src: '/materials/travertine.png',    filter: 'saturate(0.15) brightness(1.05) contrast(1.05)' },
   // plasters
   'Microcement (continuous)':                 { src: '/materials/microcement.png' },
@@ -142,7 +155,7 @@ const MAT_TEXTURE_SPEC: Record<string, MaterialTextureSpec> = {
   'Reeded / ribbed fluted glass':             { src: '/materials/diffused-glass.png',filter: 'contrast(1.12)' },
   // ceramic
   'Matte ceramic':                            { src: '/materials/matte-ceramic.png' },
-  'Glass mosaic tile (10–25 mm cool)':        { src: '/materials/matte-ceramic.png', filter: 'hue-rotate(180deg) saturate(1.3) brightness(0.95)' },
+  'Glass mosaic tile (10–25 mm cool)':        { src: '/materials/matte-ceramic.png', tintColor: '#3E6068', tintAlpha: 0.65 },
   // textiles
   'Silk satin (champagne / smoke)':           { src: '/materials/wool-textile.png',  filter: 'brightness(1.1) saturate(0.7) contrast(1.05)' },
   'Cream bouclé':                             { src: '/materials/wool-textile.png',  filter: 'brightness(1.22) saturate(0.5)' },
@@ -169,8 +182,8 @@ const MAT_TEXTURE_SPEC: Record<string, MaterialTextureSpec> = {
   'Anodized champagne aluminium':             { src: '/materials/brushed-metal.png', filter: 'hue-rotate(-30deg) saturate(1.3) brightness(1.05)' },
   // glass
   'Clear glass (low-iron)':                   { src: '/materials/clear-glass.png' },
-  'Dichroic / iridescent glass':              { src: '/materials/clear-glass.png',   filter: 'saturate(2.5) hue-rotate(60deg) contrast(1.3)' },
-  'Tinted translucent glass':                 { src: '/materials/clear-glass.png',   filter: 'hue-rotate(280deg) saturate(0.85) brightness(0.95)' },
+  'Dichroic / iridescent glass':              { src: '/materials/clear-glass.png',   tintColor: '#A464E5', tintMode: 'overlay', tintAlpha: 0.55 },
+  'Tinted translucent glass':                 { src: '/materials/clear-glass.png',   tintColor: '#8E6694', tintAlpha: 0.55 },
   'Frosted satin glass':                      { src: '/materials/diffused-glass.png',filter: 'brightness(1.08)' },
   // composites
   'White Corian (curved seamless)':           { src: '/materials/white-plaster.png', filter: 'brightness(1.08) saturate(0.45) contrast(1.05)' },
@@ -178,7 +191,7 @@ const MAT_TEXTURE_SPEC: Record<string, MaterialTextureSpec> = {
   '3D textured white panel':                  { src: '/materials/white-plaster.png', filter: 'contrast(1.1) saturate(0.6)' },
   // textiles
   'Sheer linen voile drapery':                { src: '/materials/wool-textile.png',  filter: 'brightness(1.2) saturate(0.4)' },
-  'Iridescent satin / lurex':                 { src: '/materials/wool-textile.png',  filter: 'hue-rotate(220deg) saturate(1.3) brightness(1.05) contrast(1.1)' },
+  'Iridescent satin / lurex':                 { src: '/materials/wool-textile.png',  tintColor: '#B0AAC8', tintMode: 'overlay', tintAlpha: 0.6 },
 
   // ── SHARED ────────────────────────────────────────────────────
   'Textured concrete (matte)':                { src: '/materials/textured-concrete.png' },
@@ -199,6 +212,24 @@ export const MATERIAL_SPHERE_IMAGES: Record<string, string> = Object.fromEntries
  */
 export const MATERIAL_TEXTURE_FILTER: Record<string, string | undefined> = Object.fromEntries(
   Object.entries(MAT_TEXTURE_SPEC).map(([k, v]) => [k, v.filter]),
+);
+
+/** Per-label colour overlay spec for materials whose target colour is too
+ *  far from the base PNG for `filter` alone — applied as an absolutely
+ *  positioned div with `mix-blend-mode` on top of the texture <img>. */
+export interface MaterialTintOverlay {
+  color: string;
+  mode: 'color' | 'multiply' | 'overlay' | 'soft-light';
+  alpha: number;
+}
+
+export const MATERIAL_TEXTURE_TINT: Record<string, MaterialTintOverlay | undefined> = Object.fromEntries(
+  Object.entries(MAT_TEXTURE_SPEC).map(([k, v]) => [
+    k,
+    v.tintColor
+      ? { color: v.tintColor, mode: v.tintMode ?? 'color', alpha: v.tintAlpha ?? 0.85 }
+      : undefined,
+  ]),
 );
 
 /**

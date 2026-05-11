@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Element, AdjectiveDef, MaterialDef } from '../types';
-import { ELEMENT_COLORS, ELEMENT_COLORS_MUTED, CANONICAL_MATERIALS, CANONICAL_ATMOSPHERE, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER } from '../constants';
+import { ELEMENT_COLORS, ELEMENT_COLORS_MUTED, CANONICAL_MATERIALS, CANONICAL_ATMOSPHERE, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER, MATERIAL_TEXTURE_TINT } from '../constants';
 import { tick, snap, toggleAmbient, isAmbientPlaying, warmupSpeech } from '../services/soundService';
 
 const ANIM_STYLE = document.createElement('style');
@@ -90,6 +90,53 @@ function buildTextureFilter(name: string): string {
     ? 'saturate(0.96) contrast(1.04) brightness(1.04)'
     : 'saturate(1.04) contrast(1.04)';
   return tint ? `${tint} ${base}` : base;
+}
+
+/**
+ * Material bead inner. Renders the photo texture, an optional colour-overlay
+ * tint for materials whose target colour is far from the base PNG (Sodalite
+ * Blue, Calacatta Viola, Oxidised copper, Shou-sugi-ban…) and a subtle
+ * specular highlight. `mc` is only used as the fallback radial gradient if
+ * the photo fails to load — there is intentionally no element-color ring or
+ * dark contour drawn here.
+ */
+function MaterialBeadInner({
+  name,
+  tex,
+  mc,
+}: { name: string; tex: string | undefined; mc: string }) {
+  const tint = MATERIAL_TEXTURE_TINT[name];
+  return (
+    <>
+      {tex && (
+        <img
+          src={tex}
+          alt=""
+          draggable={false}
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', borderRadius: '50%', display: 'block',
+            transform: 'scale(1.14)',
+            filter: buildTextureFilter(name),
+          }}
+          onError={(e) => {
+            const img = e.currentTarget as HTMLImageElement;
+            img.style.display = 'none';
+            const parent = img.parentElement;
+            if (parent) parent.style.background = `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)`;
+          }}
+        />
+      )}
+      {tint && (
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
+          backgroundColor: tint.color,
+          opacity: tint.alpha,
+          mixBlendMode: tint.mode,
+        }} />
+      )}
+    </>
+  );
 }
 
 /** Clockwise slice order from top-left boundary (-135°) — matches historical quadrant layout */
@@ -997,41 +1044,21 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
               onClick={handleMatClick}
               onMouseEnter={e => { if (!isExp) { (e.currentTarget as HTMLElement).style.transform = 'translate(-50%, -50%) scale(1.08)'; (e.currentTarget as HTMLElement).style.zIndex = '25'; } }}
               onMouseLeave={e => { if (!isExp) { (e.currentTarget as HTMLElement).style.transform = 'translate(-50%, -50%)'; (e.currentTarget as HTMLElement).style.zIndex = ringExp ? '18' : '15'; } }}>
-              {/* Element-colored outer ring — pure accent, no fill inside */}
+              {/* Single clean sphere — soft element-colour glow around it, no
+                  hard ring, no dark contour. The photo texture's natural rim
+                  shadows are hidden by scale(1.14) on the <img>. */}
               <div style={{
-                width: sz + 8, height: sz + 8, borderRadius: '50%', flexShrink: 0,
-                background: `conic-gradient(from 220deg, ${mc}, ${mc}CC, ${mc}, ${mc}E0, ${mc})`,
-                padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                width: sz, height: sz, borderRadius: '50%', position: 'relative', overflow: 'hidden',
+                flexShrink: 0,
+                background: tex
+                  ? 'transparent'
+                  : `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)`,
                 boxShadow: isExp
-                  ? `0 0 22px ${mc}55, 0 4px 14px rgba(0,0,0,0.14)`
-                  : `0 0 12px ${mc}26, 0 2px 8px rgba(0,0,0,0.10)`,
+                  ? `0 0 22px ${mc}66, 0 4px 16px rgba(0,0,0,0.14)`
+                  : `0 0 14px ${mc}38, 0 2px 10px rgba(0,0,0,0.10)`,
                 transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)',
               }}>
-                <div style={{
-                  width: sz, height: sz, borderRadius: '50%', position: 'relative', overflow: 'hidden',
-                  background: tex
-                    ? 'transparent'
-                    : `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)`,
-                }}>
-                  {tex && (
-                    <img
-                      src={tex}
-                      alt=""
-                      draggable={false}
-                      style={{
-                        position: 'absolute', inset: 0, width: '100%', height: '100%',
-                        objectFit: 'cover', borderRadius: '50%', display: 'block',
-                        filter: buildTextureFilter(mat.name),
-                      }}
-                      onError={(e) => {
-                        const img = e.currentTarget as HTMLImageElement;
-                        img.style.display = 'none';
-                        const parent = img.parentElement;
-                        if (parent) parent.style.background = `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)`;
-                      }}
-                    />
-                  )}
-                </div>
+                <MaterialBeadInner name={mat.name} tex={tex} mc={mc} />
               </div>
               <span className={`absolute px-2 py-0.5 rounded-full whitespace-nowrap transition-all ${showLabel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
                 style={{ fontSize: ringExp ? 10 : 9, fontWeight: 500, color: mc, background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(6px)', boxShadow: `0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px ${mc}14`, pointerEvents: 'none', maxWidth: 132, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center',
@@ -1425,26 +1452,13 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                           <div key={mat.name} className="flex flex-col items-center gap-2 cursor-pointer group"
                             onClick={e => { e.stopPropagation(); snap(isMuted); setExpMat(isExp ? null : mat.name); }}>
                             <div style={{
-                              width: isExp ? 112 : 92, height: isExp ? 112 : 92,
+                              width: isExp ? 108 : 88, height: isExp ? 108 : 88,
                               borderRadius: '50%', position: 'relative', overflow: 'hidden',
-                              padding: isExp ? 5 : 4,
-                              boxSizing: 'border-box',
-                              background: `conic-gradient(from 220deg, ${mc}, ${mc}CC, ${mc}, ${mc}E0, ${mc})`,
-                              boxShadow: isExp ? `0 10px 36px rgba(0,0,0,0.20), 0 0 22px ${mc}3A` : `0 4px 14px rgba(0,0,0,0.12), 0 0 10px ${mc}26`,
+                              background: tex ? 'transparent' : `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)`,
+                              boxShadow: isExp ? `0 10px 36px rgba(0,0,0,0.20), 0 0 22px ${mc}55` : `0 4px 14px rgba(0,0,0,0.12), 0 0 12px ${mc}38`,
                               transition: 'all 0.35s ease',
                             }}>
-                              <div style={{ width: '100%', height: '100%', borderRadius: '50%', position: 'relative', overflow: 'hidden', background: tex ? 'transparent' : `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)` }}>
-                                {tex && (
-                                  <img src={tex} alt="" draggable={false}
-                                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block', filter: buildTextureFilter(mat.name) }}
-                                    onError={(e) => {
-                                      const img = e.currentTarget as HTMLImageElement;
-                                      img.style.display = 'none';
-                                      const parent = img.parentElement;
-                                      if (parent) parent.style.background = `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)`;
-                                    }} />
-                                )}
-                              </div>
+                              <MaterialBeadInner name={mat.name} tex={tex} mc={mc} />
                             </div>
                             <span className="px-2 py-0.5 rounded-md text-center" style={{ fontSize: 11, fontWeight: 500, color: '#555', background: 'rgba(255,255,255,0.9)', maxWidth: 100, lineHeight: '1.35', whiteSpace: 'normal', wordBreak: 'break-word' as const }}>
                               {mat.name.split('(')[0].trim()}
@@ -1496,19 +1510,11 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                     <button key={name} onClick={() => { onToggleMaterial?.(name, matPicker); snap(isMuted); }}
                       className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all text-left"
                       style={{ background: sel ? `${mc}0A` : 'transparent', border: `1px solid ${sel ? `${mc}18` : 'transparent'}`, cursor: 'pointer' }}>
-                      <div className="w-10 h-10 rounded-full shrink-0 relative overflow-hidden" style={{ boxShadow: `0 2px 8px rgba(0,0,0,0.14)` , padding: 2, boxSizing: 'border-box', background: `conic-gradient(from 220deg, ${mc}, ${mc}CC, ${mc}, ${mc}E0, ${mc})` }}>
-                        <div style={{ width: '100%', height: '100%', borderRadius: '50%', position: 'relative', overflow: 'hidden', background: tex ? 'transparent' : `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)` }}>
-                          {tex && (
-                            <img src={tex} alt="" draggable={false}
-                              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block', filter: buildTextureFilter(name) }}
-                              onError={(e) => {
-                                const img = e.currentTarget as HTMLImageElement;
-                                img.style.display = 'none';
-                                const parent = img.parentElement;
-                                if (parent) parent.style.background = `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)`;
-                              }} />
-                          )}
-                        </div>
+                      <div className="w-10 h-10 rounded-full shrink-0 relative overflow-hidden" style={{
+                        boxShadow: `0 2px 8px rgba(0,0,0,0.14), 0 0 10px ${mc}30`,
+                        background: tex ? 'transparent' : `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)`,
+                      }}>
+                        <MaterialBeadInner name={name} tex={tex} mc={mc} />
                       </div>
                       <div className="flex-1 min-w-0"><div className="text-[13px] font-medium truncate" style={{ color: '#777' }}>{name}</div></div>
                       {sel && <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: mc }}><svg width="6" height="6" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2.5"><path d="M2 6l3 3 5-5" /></svg></div>}

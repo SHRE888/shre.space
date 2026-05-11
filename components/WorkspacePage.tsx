@@ -13,7 +13,7 @@ import CoreDiagram, { PresetCombo } from './CoreDiagram';
 import { DeepDiveDrawer } from './DeepDiveDrawer';
 import { analyzeImage, ImageAnalysisResult } from '../services/imageAnalysis';
 import { AudioEnergyAnalyzer, AudioAnalysisResult as AudioResult, AudioEnergySnapshot, mergeTextAndAudioPercentages } from '../services/audioAnalysis';
-import { ADJECTIVES_DB, MATERIALS_DB, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER, ELEMENT_COLORS, ELEMENT_COLORS_MUTED, CANONICAL_MATERIALS, CANONICAL_ATMOSPHERE } from '../constants';
+import { ADJECTIVES_DB, MATERIALS_DB, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER, MATERIAL_TEXTURE_TINT, ELEMENT_COLORS, ELEMENT_COLORS_MUTED, CANONICAL_MATERIALS, CANONICAL_ATMOSPHERE } from '../constants';
 
 interface WorkspacePageProps {
   state: UserState;
@@ -1158,15 +1158,20 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                               style={{ animationDelay: `${i * 40}ms` }}
                             >
                               <div
-                                className="w-8 h-8 rounded-full overflow-hidden shadow-sm ring-[1.5px] ring-offset-1 transition-all duration-400 group-hover:scale-110 group-hover:shadow-md group-hover:ring-red-300 shrink-0"
-                                style={{ '--tw-ring-color': ELEMENT_COLORS[m.element] } as React.CSSProperties}
+                                className="w-8 h-8 rounded-full overflow-hidden transition-all duration-400 group-hover:scale-110 group-hover:shadow-md shrink-0 relative"
+                                style={{ boxShadow: `0 0 0 1px ${ELEMENT_COLORS[m.element]}55, 0 0 8px ${ELEMENT_COLORS[m.element]}30, 0 2px 6px rgba(0,0,0,0.10)` }}
                               >
                                 {imgSrc ? (
-                                  <img src={imgSrc} alt={m.name} className="w-full h-full object-cover transition-all duration-500 group-hover:brightness-75" />
+                                  <>
+                                    <img src={imgSrc} alt={m.name} className="w-full h-full object-cover transition-all duration-500 group-hover:brightness-75" style={{ transform: 'scale(1.14)', filter: MATERIAL_TEXTURE_FILTER[m.name] || 'saturate(1.04) contrast(1.04)' }} />
+                                    {(() => {
+                                      const tint = MATERIAL_TEXTURE_TINT[m.name];
+                                      if (!tint) return null;
+                                      return <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none', backgroundColor: tint.color, opacity: tint.alpha, mixBlendMode: tint.mode }} />;
+                                    })()}
+                                  </>
                                 ) : (
-                                  <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: `${ELEMENT_COLORS[m.element]}30` }}>
-                                    <span className="text-[11px] uppercase font-medium text-gray-500 tracking-wide text-center leading-tight px-0.5">{m.name.slice(0, 4)}</span>
-                                  </div>
+                                  <div className="w-full h-full" style={{ background: `radial-gradient(circle at 34% 30%, ${ELEMENT_COLORS[m.element]}E8, ${ELEMENT_COLORS[m.element]}A0)` }} />
                                 )}
                                 <div className="absolute inset-0 rounded-full bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-300">
                                   <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-80">
@@ -2102,14 +2107,20 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                       }`}
                       style={{ backgroundColor: isSelected ? `${pastelColor}18` : 'transparent' }}
                     >
-                      <span className="relative inline-block w-5 h-5 rounded-full overflow-hidden shrink-0" style={{ background: pastelColor, padding: 1.5, boxSizing: 'border-box' }}>
-                        <span className="block w-full h-full rounded-full overflow-hidden relative" style={{ background: `radial-gradient(circle at 34% 30%, ${pastelColor}E8, ${pastelColor}A0)` }}>
-                          {matThumb ? (
-                            <img src={matThumb} alt="" draggable={false}
-                              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: MATERIAL_TEXTURE_FILTER[item] || 'saturate(1.04) contrast(1.04)' }}
-                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-                          ) : null}
-                        </span>
+                      <span className="relative inline-block w-5 h-5 rounded-full overflow-hidden shrink-0" style={{
+                        boxShadow: `0 0 0 1px ${pastelColor}55, 0 0 6px ${pastelColor}40`,
+                        background: matThumb ? 'transparent' : `radial-gradient(circle at 34% 30%, ${pastelColor}E8, ${pastelColor}A0)`,
+                      }}>
+                        {matThumb ? (
+                          <img src={matThumb} alt="" draggable={false}
+                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block', transform: 'scale(1.14)', filter: MATERIAL_TEXTURE_FILTER[item] || 'saturate(1.04) contrast(1.04)' }}
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+                        ) : null}
+                        {(() => {
+                          const tint = MATERIAL_TEXTURE_TINT[item];
+                          if (!tint) return null;
+                          return <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none', backgroundColor: tint.color, opacity: tint.alpha, mixBlendMode: tint.mode }} />;
+                        })()}
                       </span>
                       <span className="leading-none py-0.5">{item}</span>
                     </button>
