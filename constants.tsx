@@ -1,7 +1,8 @@
 import { Question, MaterialDef, AdjectiveDef, Element } from './types';
 import { CANONICAL_MATERIAL_CATALOG, CANONICAL_MATERIAL_GROUPS, getPrimaryElementForMaterial } from './materialsCatalog';
 import { CANONICAL_ADJECTIVES_CATALOG, CANONICAL_ADJECTIVE_GROUPS, getPrimaryElementForAdjective } from './adjectivesCatalog';
-import { buildMaterialThumbnailMap } from './lib/materialThumbnails';
+// (materialThumbnails kept only for type compatibility; the real source of
+//  truth is MAT_TEXTURE_SPEC below.)
 
 // Strict Order for Tie-Breaking: Earth > Fire > Water > Air
 export const ELEMENTS: Element[] = ['earth', 'fire', 'water', 'air'];
@@ -34,59 +35,175 @@ export const WHEEL_PALETTE: Record<Element, { inner: string; middle: string; out
   air:   { inner: '#5A7FA3', middle: '#809CB8', outer: '#A8BCD0', text: '#1a1a1a' },
 };
 
-// Photographic PBR textures shipped under /public/materials/.
-//
-// STRICT 1:1 — every PNG goes to exactly ONE catalog label. Reusing the same
-// photo across multiple labels (e.g. white-marble.png for Calacatta + Thassos
-// + Statuario) made the orbit look like duplicate beads with different
-// captions. Labels without a dedicated PNG render as a clean element-coloured
-// sphere — no procedural lines, no rim, no faux veining — keeping the visual
-// distinct from photographic materials.
-const LOCAL_MAT_OVERRIDES: Record<string, string> = {
-  // ── EARTH ────────────────────────────────────────────────────
-  'Travertine (honed)':                  '/materials/travertine.png',
-  'Jura limestone (golden)':             '/materials/limestone.png',
-  'Natural oak (horizontal)':            '/materials/natural-oak-horizontal.png',
-  'Walnut veneer':                       '/materials/walnut-veneer.png',
-  'Clay plaster':                        '/materials/clay-plaster.png',
-  'Lime plaster (warm mineral)':         '/materials/lime-plaster.png',
-  'Industrial brick':                    '/materials/industrial-brick.png',
-  // ── FIRE ─────────────────────────────────────────────────────
-  'Dark marble (high contrast)':         '/materials/dark-marble.png',
-  'Dark quartzite':                      '/materials/tuff.png',
-  'Basalt':                              '/materials/basalt.png',
-  'Venetian plaster (polished)':         '/materials/venetian-plaster.png',
-  'Blackened steel':                     '/materials/blackened-steel.png',
-  'Bronze accents':                      '/materials/bronze.png',
-  // ── WATER ────────────────────────────────────────────────────
-  'Microcement (continuous)':            '/materials/microcement.png',
-  'Smooth mineral plaster':              '/materials/smooth-mineral.png',
-  'Diffused glass':                      '/materials/diffused-glass.png',
-  'Matte ceramic':                       '/materials/matte-ceramic.png',
-  'Linen / wool textile surfaces':       '/materials/wool-textile.png',
-  // ── AIR ──────────────────────────────────────────────────────
-  'White marble (Calacatta)':            '/materials/white-marble.png',
-  'Dolomite snow-white marble':          '/materials/dolomite-snow.png',
-  'White terrazzo':                      '/materials/white-terrazzo.png',
-  'Light oak / ash':                     '/materials/light-oak.png',
-  'Bleached birch':                      '/materials/bleached-birch.png',
-  'Limewash (bright)':                   '/materials/limewash.png',
-  'White mineral plaster':               '/materials/white-plaster.png',
-  'Pale concrete (smooth)':              '/materials/pale-concrete.png',
-  'Clear glass (low-iron)':              '/materials/clear-glass.png',
-  // ── SHARED ───────────────────────────────────────────────────
-  'Textured concrete (matte)':           '/materials/textured-concrete.png',
-  'Brushed metal':                       '/materials/brushed-metal.png',
-  'Solid oak':                           '/materials/solid-oak.png',
-  'Walnut (natural finish)':             '/materials/walnut.png',
+/**
+ * Photographic texture spec per catalog label.
+ *
+ * Every one of the 78 canonical materials maps to a real PBR PNG under
+ * /public/materials/ plus an optional CSS filter that retints the photo so
+ * materials sharing the same base file still look visually distinct
+ * (Calacatta Viola → white-marble.png with an oxblood sepia, Sodalite Blue
+ * → dark-marble.png pushed deep cobalt, Mohair velvet → wool-textile.png
+ * shifted rust, etc.).
+ *
+ * Why this shape:
+ *  - The previous 1:1 mapping left ~46 labels with no photo, so the orbit
+ *    showed plain colored balls for them ("nothing is visible").
+ *  - The procedural SVG fallback drew hand-stylised veining the user
+ *    rejected as "ხაზები" (lines).
+ *  - Sharing a base PNG + per-label filter gives us photographic surface
+ *    quality on every bead while preserving distinct identity by tint.
+ */
+interface MaterialTextureSpec {
+  src: string;
+  /** CSS `filter` string applied to the <img>; omit for materials whose
+   *  base PNG already matches the desired look (Travertine, Dark marble,
+   *  Dolomite snow-white, etc.). */
+  filter?: string;
+}
+
+const MAT_TEXTURE_SPEC: Record<string, MaterialTextureSpec> = {
+  // ── EARTH ─────────────────────────────────────────────────────
+  // stones
+  'Travertine (honed)':                       { src: '/materials/travertine.png' },
+  'Jura limestone (golden)':                  { src: '/materials/limestone.png' },
+  'Pietra Serena (Tuscan)':                   { src: '/materials/limestone.png',     filter: 'hue-rotate(180deg) saturate(0.25) brightness(0.97)' },
+  'Cipollino marble (warm green-veined)':     { src: '/materials/white-marble.png',  filter: 'hue-rotate(70deg) saturate(1.05) brightness(0.98)' },
+  'Green onyx / marble (veined)':             { src: '/materials/white-marble.png',  filter: 'hue-rotate(85deg) saturate(1.6) brightness(0.88)' },
+  'Marrón Emperador (warm brown marble)':     { src: '/materials/walnut-veneer.png', filter: 'saturate(1.15) contrast(1.1) brightness(0.92)' },
+  'Volcanic stone (basalt rough)':            { src: '/materials/basalt.png' },
+  'Sand-blasted granite (warm)':              { src: '/materials/limestone.png',     filter: 'saturate(1.18) contrast(1.08) brightness(1.02)' },
+  // woods
+  'Natural oak (horizontal)':                 { src: '/materials/natural-oak-horizontal.png' },
+  'Herringbone parquet (warm oak)':           { src: '/materials/solid-oak.png',     filter: 'saturate(1.15) brightness(1.04)' },
+  'Walnut veneer':                            { src: '/materials/walnut-veneer.png' },
+  'Reclaimed weathered timber':               { src: '/materials/walnut.png',        filter: 'saturate(0.55) brightness(1.04) contrast(0.96)' },
+  // plasters
+  'Clay plaster':                             { src: '/materials/clay-plaster.png' },
+  'Lime plaster (warm mineral)':              { src: '/materials/lime-plaster.png' },
+  'Rammed earth / terracotta plaster':        { src: '/materials/clay-plaster.png',  filter: 'hue-rotate(-8deg) saturate(1.25) brightness(0.94)' },
+  'Tadelakt (warm pigmented Moroccan)':       { src: '/materials/clay-plaster.png',  filter: 'hue-rotate(-15deg) saturate(0.85) brightness(1.02)' },
+  // concrete + brick
+  'Board-formed concrete':                    { src: '/materials/textured-concrete.png', filter: 'saturate(0.85) brightness(0.98)' },
+  'Industrial brick':                         { src: '/materials/industrial-brick.png' },
+  'Zellige tile (warm ochre / olive)':        { src: '/materials/matte-ceramic.png', filter: 'hue-rotate(-25deg) saturate(1.4) brightness(0.95)' },
+  // textiles
+  'Jute / sisal rug':                         { src: '/materials/wool-textile.png',  filter: 'hue-rotate(-10deg) saturate(0.9) brightness(0.95)' },
+  'Bouclé (oat / cream)':                     { src: '/materials/wool-textile.png',  filter: 'brightness(1.18) saturate(0.65)' },
+  'Mohair velvet (warm rust / olive)':        { src: '/materials/wool-textile.png',  filter: 'hue-rotate(-22deg) saturate(1.55) brightness(0.8)' },
+
+  // ── FIRE ──────────────────────────────────────────────────────
+  // stones
+  'Dark marble (high contrast)':              { src: '/materials/dark-marble.png' },
+  'Port Laurent / Saint Laurent marble':      { src: '/materials/dark-marble.png',   filter: 'sepia(0.3) hue-rotate(-15deg) saturate(1.25)' },
+  'Calacatta Viola (white + oxblood veining)':{ src: '/materials/white-marble.png',  filter: 'sepia(0.5) hue-rotate(-55deg) saturate(1.5)' },
+  'Patagonia quartzite (smoky burgundy)':     { src: '/materials/dark-marble.png',   filter: 'sepia(0.35) hue-rotate(-32deg) saturate(1.35) brightness(0.94)' },
+  'Sodalite Blue (deep midnight stone)':      { src: '/materials/dark-marble.png',   filter: 'hue-rotate(195deg) saturate(2.0) brightness(0.92)' },
+  'Red travertine (Persian)':                 { src: '/materials/travertine.png',    filter: 'sepia(0.4) hue-rotate(-25deg) saturate(1.5) brightness(0.94)' },
+  'Bardiglio Imperiale (deep grey-black)':    { src: '/materials/dark-marble.png',   filter: 'saturate(0.35) brightness(0.92)' },
+  'Dark quartzite':                           { src: '/materials/tuff.png' },
+  'Basalt':                                   { src: '/materials/basalt.png' },
+  // woods
+  'Shou-sugi-ban (charred timber)':           { src: '/materials/walnut.png',        filter: 'brightness(0.32) saturate(0.4) contrast(1.25)' },
+  'Smoked / fumed oak':                       { src: '/materials/walnut-veneer.png', filter: 'brightness(0.72) saturate(0.85)' },
+  'Dark herringbone parquet':                 { src: '/materials/walnut.png',        filter: 'brightness(0.85)' },
+  // plaster
+  'Venetian plaster (polished)':              { src: '/materials/venetian-plaster.png' },
+  // metals
+  'Corten steel (weathering)':                { src: '/materials/bronze.png',        filter: 'hue-rotate(-12deg) saturate(1.55) brightness(0.92) contrast(1.1)' },
+  'Oxidized copper':                          { src: '/materials/bronze.png',        filter: 'hue-rotate(95deg) saturate(0.85) brightness(0.95)' },
+  'Burnished antique brass':                  { src: '/materials/bronze.png',        filter: 'brightness(0.92) saturate(0.95)' },
+  'Aged brass (polished)':                    { src: '/materials/bronze.png',        filter: 'brightness(1.08) saturate(1.05) contrast(1.05)' },
+  'Blackened steel':                          { src: '/materials/blackened-steel.png' },
+  'Bronze accents':                           { src: '/materials/bronze.png' },
+  // textiles
+  'Oxblood / rust velvet upholstery':         { src: '/materials/wool-textile.png',  filter: 'sepia(0.55) hue-rotate(-30deg) saturate(1.75) brightness(0.66)' },
+  'Cognac saddle leather':                    { src: '/materials/walnut-veneer.png', filter: 'saturate(1.25) brightness(1.05) contrast(1.05)' },
+  'Charcoal / smoke velvet':                  { src: '/materials/wool-textile.png',  filter: 'brightness(0.42) saturate(0.25)' },
+
+  // ── WATER ─────────────────────────────────────────────────────
+  // stones
+  'Bianco Lasa marble (cool grey-white)':     { src: '/materials/white-marble.png',  filter: 'hue-rotate(180deg) saturate(0.3) brightness(0.97)' },
+  'Smoke quartzite (silver-grey)':            { src: '/materials/tuff.png',          filter: 'saturate(0.4) brightness(1.05)' },
+  'Onice Acqua (translucent water-blue onyx)':{ src: '/materials/white-marble.png',  filter: 'hue-rotate(180deg) saturate(0.95) brightness(0.97)' },
+  'Silver travertine (polished)':             { src: '/materials/travertine.png',    filter: 'saturate(0.15) brightness(1.05) contrast(1.05)' },
+  // plasters
+  'Microcement (continuous)':                 { src: '/materials/microcement.png' },
+  'Smooth mineral plaster':                   { src: '/materials/smooth-mineral.png' },
+  'Tadelakt (cool pigmented Moroccan)':       { src: '/materials/smooth-mineral.png',filter: 'hue-rotate(180deg) saturate(0.5) brightness(0.98)' },
+  // metals
+  'Mirror-polished stainless steel':          { src: '/materials/brushed-metal.png', filter: 'brightness(1.15) saturate(0.5) contrast(1.12)' },
+  'Hammered metal (rippled)':                 { src: '/materials/brushed-metal.png', filter: 'contrast(1.15)' },
+  'Satin chrome':                             { src: '/materials/brushed-metal.png', filter: 'brightness(1.08) saturate(0.7)' },
+  'Polished nickel':                          { src: '/materials/brushed-metal.png', filter: 'hue-rotate(180deg) saturate(0.3) brightness(1.02)' },
+  // glass
+  'Diffused glass':                           { src: '/materials/diffused-glass.png' },
+  'Glass blocks (translucent)':               { src: '/materials/diffused-glass.png',filter: 'saturate(1.12) brightness(0.97)' },
+  'Curved bent glass':                        { src: '/materials/clear-glass.png',   filter: 'brightness(1.05)' },
+  'Reeded / ribbed fluted glass':             { src: '/materials/diffused-glass.png',filter: 'contrast(1.12)' },
+  // ceramic
+  'Matte ceramic':                            { src: '/materials/matte-ceramic.png' },
+  'Glass mosaic tile (10–25 mm cool)':        { src: '/materials/matte-ceramic.png', filter: 'hue-rotate(180deg) saturate(1.3) brightness(0.95)' },
+  // textiles
+  'Silk satin (champagne / smoke)':           { src: '/materials/wool-textile.png',  filter: 'brightness(1.1) saturate(0.7) contrast(1.05)' },
+  'Cream bouclé':                             { src: '/materials/wool-textile.png',  filter: 'brightness(1.22) saturate(0.5)' },
+  'Linen / wool textile surfaces':            { src: '/materials/wool-textile.png' },
+  'Pale grey wool felt':                      { src: '/materials/wool-textile.png',  filter: 'saturate(0.2) brightness(1.05)' },
+
+  // ── AIR ───────────────────────────────────────────────────────
+  // stones
+  'White marble (Calacatta)':                 { src: '/materials/white-marble.png' },
+  'Thassos marble (pure white)':              { src: '/materials/white-marble.png',  filter: 'brightness(1.06) saturate(0.5)' },
+  'Dolomite snow-white marble':               { src: '/materials/dolomite-snow.png' },
+  'Bianco Statuario (luminous white)':        { src: '/materials/white-marble.png',  filter: 'brightness(1.03) saturate(0.75)' },
+  'White terrazzo':                           { src: '/materials/white-terrazzo.png' },
+  // woods
+  'Light oak / ash':                          { src: '/materials/light-oak.png' },
+  'Bleached birch':                           { src: '/materials/bleached-birch.png' },
+  // plasters
+  'Limewash (bright)':                        { src: '/materials/limewash.png' },
+  'White mineral plaster':                    { src: '/materials/white-plaster.png' },
+  // concrete
+  'Pale concrete (smooth)':                   { src: '/materials/pale-concrete.png' },
+  // metals
+  'Metallic silver surface':                  { src: '/materials/brushed-metal.png', filter: 'brightness(1.12)' },
+  'Anodized champagne aluminium':             { src: '/materials/brushed-metal.png', filter: 'hue-rotate(-30deg) saturate(1.3) brightness(1.05)' },
+  // glass
+  'Clear glass (low-iron)':                   { src: '/materials/clear-glass.png' },
+  'Dichroic / iridescent glass':              { src: '/materials/clear-glass.png',   filter: 'saturate(2.5) hue-rotate(60deg) contrast(1.3)' },
+  'Tinted translucent glass':                 { src: '/materials/clear-glass.png',   filter: 'hue-rotate(280deg) saturate(0.85) brightness(0.95)' },
+  'Frosted satin glass':                      { src: '/materials/diffused-glass.png',filter: 'brightness(1.08)' },
+  // composites
+  'White Corian (curved seamless)':           { src: '/materials/white-plaster.png', filter: 'brightness(1.08) saturate(0.45) contrast(1.05)' },
+  'Fluted white panel':                       { src: '/materials/white-plaster.png', filter: 'contrast(1.08)' },
+  '3D textured white panel':                  { src: '/materials/white-plaster.png', filter: 'contrast(1.1) saturate(0.6)' },
+  // textiles
+  'Sheer linen voile drapery':                { src: '/materials/wool-textile.png',  filter: 'brightness(1.2) saturate(0.4)' },
+  'Iridescent satin / lurex':                 { src: '/materials/wool-textile.png',  filter: 'hue-rotate(220deg) saturate(1.3) brightness(1.05) contrast(1.1)' },
+
+  // ── SHARED ────────────────────────────────────────────────────
+  'Textured concrete (matte)':                { src: '/materials/textured-concrete.png' },
+  'Brushed metal':                            { src: '/materials/brushed-metal.png' },
+  'Solid oak':                                { src: '/materials/solid-oak.png' },
+  'Walnut (natural finish)':                  { src: '/materials/walnut.png' },
 };
 
-export const MATERIAL_SPHERE_IMAGES: Record<string, string> = buildMaterialThumbnailMap(LOCAL_MAT_OVERRIDES);
+/** `label → PNG URL`. Every canonical material has an entry. */
+export const MATERIAL_SPHERE_IMAGES: Record<string, string> = Object.fromEntries(
+  Object.entries(MAT_TEXTURE_SPEC).map(([k, v]) => [k, v.src]),
+);
+
+/**
+ * `label → CSS filter` for materials that reuse a shared base PNG. Apply on
+ * the texture <img>. Returns `undefined` when no filter is required (the
+ * base PNG already matches the material).
+ */
+export const MATERIAL_TEXTURE_FILTER: Record<string, string | undefined> = Object.fromEntries(
+  Object.entries(MAT_TEXTURE_SPEC).map(([k, v]) => [k, v.filter]),
+);
 
 /**
  * Single-shot helper for ad-hoc thumbnail lookups. Returns the local PNG URL
- * if one exists for the label, otherwise an empty string so callers can fall
- * back to a clean element-coloured sphere instead of a procedural pattern.
+ * if one exists for the label, otherwise an empty string.
  */
 export const getMaterialThumbnail = (label: string): string =>
   MATERIAL_SPHERE_IMAGES[label] || '';

@@ -13,7 +13,7 @@ import CoreDiagram, { PresetCombo } from './CoreDiagram';
 import { DeepDiveDrawer } from './DeepDiveDrawer';
 import { analyzeImage, ImageAnalysisResult } from '../services/imageAnalysis';
 import { AudioEnergyAnalyzer, AudioAnalysisResult as AudioResult, AudioEnergySnapshot, mergeTextAndAudioPercentages } from '../services/audioAnalysis';
-import { ADJECTIVES_DB, MATERIALS_DB, MATERIAL_SPHERE_IMAGES, ELEMENT_COLORS, ELEMENT_COLORS_MUTED, CANONICAL_MATERIALS, CANONICAL_ATMOSPHERE } from '../constants';
+import { ADJECTIVES_DB, MATERIALS_DB, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER, ELEMENT_COLORS, ELEMENT_COLORS_MUTED, CANONICAL_MATERIALS, CANONICAL_ATMOSPHERE } from '../constants';
 
 interface WorkspacePageProps {
   state: UserState;
@@ -2106,7 +2106,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                         <span className="block w-full h-full rounded-full overflow-hidden relative" style={{ background: `radial-gradient(circle at 34% 30%, ${pastelColor}E8, ${pastelColor}A0)` }}>
                           {matThumb ? (
                             <img src={matThumb} alt="" draggable={false}
-                              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: 'saturate(1.02) contrast(1.02)' }}
+                              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: MATERIAL_TEXTURE_FILTER[item] || 'saturate(1.04) contrast(1.04)' }}
                               onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                           ) : null}
                         </span>

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Element, AdjectiveDef, MaterialDef } from '../types';
-import { ELEMENT_COLORS, ELEMENT_COLORS_MUTED, CANONICAL_MATERIALS, CANONICAL_ATMOSPHERE, MATERIAL_SPHERE_IMAGES } from '../constants';
+import { ELEMENT_COLORS, ELEMENT_COLORS_MUTED, CANONICAL_MATERIALS, CANONICAL_ATMOSPHERE, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER } from '../constants';
 import { tick, snap, toggleAmbient, isAmbientPlaying, warmupSpeech } from '../services/soundService';
 
 const ANIM_STYLE = document.createElement('style');
@@ -77,6 +77,20 @@ const MATERIAL_RING_PACKING_RADIUS_PX = 30;
 const ATMOSPHERE_RING_PACKING_RADIUS_PX = 14;
 
 const MAT_TEX: Record<string, string> = MATERIAL_SPHERE_IMAGES;
+
+/**
+ * Compose the per-material CSS `filter` for the texture <img>. Adds a tiny
+ * saturate/contrast lift on top of the catalog tint so PBR photos pop at
+ * orbit-bead scale without looking heavily processed. Travertine gets a
+ * subtle warm-toned counterweight inherited from the previous calibration.
+ */
+function buildTextureFilter(name: string): string {
+  const tint = MATERIAL_TEXTURE_FILTER[name];
+  const base = /travertine/i.test(name)
+    ? 'saturate(0.96) contrast(1.04) brightness(1.04)'
+    : 'saturate(1.04) contrast(1.04)';
+  return tint ? `${tint} ${base}` : base;
+}
 
 /** Clockwise slice order from top-left boundary (-135°) — matches historical quadrant layout */
 const SECTOR_ORDER: Element[] = ['air', 'fire', 'earth', 'water'];
@@ -977,7 +991,6 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
             }
           };
           const showLabel = isExp || ringExp;
-          const isTravertine = /travertine/i.test(mat.name);
           return (
             <div key={mat.name} className="absolute group orb-item"
               style={{ left: cx, top: cy, transform: 'translate(-50%, -50%)', transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)', zIndex: isExp ? 26 : ringExp ? 18 : 15, cursor: 'pointer' }}
@@ -1008,9 +1021,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                       style={{
                         position: 'absolute', inset: 0, width: '100%', height: '100%',
                         objectFit: 'cover', borderRadius: '50%', display: 'block',
-                        filter: isTravertine
-                          ? 'saturate(0.94) contrast(1.02) brightness(1.04)'
-                          : 'saturate(1.02) contrast(1.02)',
+                        filter: buildTextureFilter(mat.name),
                       }}
                       onError={(e) => {
                         const img = e.currentTarget as HTMLImageElement;
@@ -1425,7 +1436,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                               <div style={{ width: '100%', height: '100%', borderRadius: '50%', position: 'relative', overflow: 'hidden', background: tex ? 'transparent' : `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)` }}>
                                 {tex && (
                                   <img src={tex} alt="" draggable={false}
-                                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block', filter: 'saturate(1.02) contrast(1.02)' }}
+                                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block', filter: buildTextureFilter(mat.name) }}
                                     onError={(e) => {
                                       const img = e.currentTarget as HTMLImageElement;
                                       img.style.display = 'none';
@@ -1489,7 +1500,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                         <div style={{ width: '100%', height: '100%', borderRadius: '50%', position: 'relative', overflow: 'hidden', background: tex ? 'transparent' : `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)` }}>
                           {tex && (
                             <img src={tex} alt="" draggable={false}
-                              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block', filter: 'saturate(1.02) contrast(1.02)' }}
+                              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block', filter: buildTextureFilter(name) }}
                               onError={(e) => {
                                 const img = e.currentTarget as HTMLImageElement;
                                 img.style.display = 'none';
