@@ -1155,13 +1155,28 @@ const VARIATION_DIRECTIVES = {
 // Each entry stays inside the 24-35mm tilt-shift envelope mandated by the
 // system instruction; only the standpoint and crop change.
 const CAMERA_VANTAGES = [
-  'Camera at eye-level (≈ 1.55 m), one-point perspective looking down the long axis of the room. Symmetrical-leaning composition with the primary furniture group at the golden-section line.',
-  'Camera at eye-level, two-point perspective from a room corner — both side walls visible, furniture arranged in an L along them. 30 mm equivalent, slight off-axis tilt of the verticals corrected.',
-  'Camera lowered to seated eye-level (≈ 1.15 m), framing the room past a foreground object (chair back, console edge, plant leaf) so the main scene reads as the middle plane.',
-  'Camera high (≈ 1.85 m, standing) and pulled toward one wall, looking diagonally across the room toward the brightest window or aperture. Strong light-to-shadow gradient across the floor.',
-  'Camera in the doorway / threshold of an adjacent space, framing the main room through an architectural opening (door, archway, beam, column). Layered foreground-midground-background reading.',
+  'Camera at eye-level (≈ 1.55 m), one-point perspective looking down the long axis of the room. Symmetrical-leaning composition with the primary furniture group at the golden-section line. Camera is fully INSIDE the room — no doorway, no arch, no column edge framing the shot.',
+  'Camera at eye-level, two-point perspective from a room corner — both side walls visible, furniture arranged in an L along them. 30 mm equivalent, vertical lines corrected. Camera stands clean inside the corner, no foreground architectural element framing the view.',
+  'Camera at eye-level (≈ 1.55 m), three-quarter view from one of the long walls — primary furniture group sits in the middle plane, focal-point wall reads clearly across the back. 30-35 mm equivalent.',
+  'Camera high (≈ 1.85 m, standing) and pulled toward one wall, looking diagonally across the room toward the brightest window or aperture. Strong light-to-shadow gradient across the floor. No foreground arch / door / column framing the shot.',
+  'Camera at eye-level near the focal-point wall, looking back toward the seating / activity zone. Reverse-shot of the primary view — the focal element (TV / fireplace / art / bar back) is behind the camera; foreground reads the working surface or coffee-table cluster.',
   'Camera close to the dominant window or skylight, looking back into the room. Daylight comes from behind the camera, walls and ceiling read with even soft illumination, deep furniture-side shadows.',
 ] as const;
+
+/**
+ * Bans the "viewed through an arch / doorway / vestibule" framing that the
+ * model defaults to when given any commercial or hospitality program. The
+ * user explicitly flagged this as the failure mode that ruins otherwise good
+ * renders: a beautiful coffee shop reduced to "a coffee shop seen through a
+ * concrete arch in a darker foreground room". Camera stays INSIDE the room
+ * being designed, not inside the neighbour.
+ */
+export const CAMERA_FRAMING_DISCIPLINE = `CAMERA FRAMING DISCIPLINE (mandatory — overrides any decorative impulse to "frame" the shot):
+- The camera is INSIDE the room being designed — feet on its floor, lens at human eye-level. NEVER place the camera in an adjacent room, vestibule, hallway, or outside the door looking in.
+- NO foreground arch, archway, doorway frame, vestibule, dark portal, dark column, dark beam, dark "tunnel" effect, or any other architectural element framing the scene from a darker foreground plane. The room IS the scene — it does not need a proscenium.
+- NO "viewed-through-an-opening" composition. NO black-bordered keyhole shots. NO arch-shaped vignettes. The frame edges are the photograph's edges, not an in-scene wall cutout.
+- Walls of the room being designed read FULL from floor to ceiling on at least two sides of the frame. Side walls are the room's own walls — not a darker shell behind which we glimpse another room.
+- If the brief mentions an archway or vault as a feature of THIS room, it may appear AS a wall opening within the room (e.g. a doorway to the kitchen visible on one side wall) — never as the foreground frame the camera shoots through.`;
 
 // --- CORE PROMPT ENGINE ---
 
@@ -2090,6 +2105,50 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
     P.push(`SPACE CONFIG SUMMARY (active one-line brief from workspace or user edit — treat as authoritative for project type, rooms/context, scale, and atmosphere cues; keep the image consistent with it): ${spaceConfigLine}`);
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // INPUT FIDELITY LOCK — the user's wheel/survey/space-config picks
+  // must reach the image, not get lost behind generic SHRE poetry.
+  // Front-loaded so the model treats these as hard constraints,
+  // not soft hints.
+  // ─────────────────────────────────────────────────────────────
+  {
+    const dist = activeDist;
+    const distLine = `Earth ${Math.round(dist.earth)}% · Fire ${Math.round(dist.fire)}% · Water ${Math.round(dist.water)}% · Air ${Math.round(dist.air)}%`;
+    const adjLine = input.adjectivesSelected.length
+      ? input.adjectivesSelected.map((a) => a.label).join(', ')
+      : '(none selected)';
+    const matLine = input.materialsSelected.length
+      ? input.materialsSelected.slice(0, 10).map((m) => `${m.name}${m.placementNote ? ` [${m.placementNote}]` : ''}`).join('; ')
+      : '(SHRE defaults)';
+    const styleDir = input.diagnosis?.styleDirection || null;
+    const diagPalette = input.diagnosis?.palette || null;
+    const archCtx = input.archContext ? ` · context: ${input.archContext}` : '';
+    const roomsLine = input.rooms && input.rooms.length > 0 ? input.rooms.join(', ') : (primaryRoom || input.spaceCategory);
+    const lightLine = `daylight: ${naturalLight}`;
+    const paletteLine = colorPalette && colorPalette !== 'auto' ? `palette: ${colorPalette}` : 'palette: auto';
+    const budgetLine = `budget tier: ${budgetLevel}`;
+    const aspectLine = input.aspectRatio ? `aspect: ${input.aspectRatio}` : '';
+
+    P.push(
+      [
+        `USER INPUT FIDELITY LOCK (treat every line as a non-negotiable design datum — every render below must visibly honour these picks):`,
+        `- Project: ${input.spaceCategory}${archCtx}`,
+        `- Rooms / program in frame: ${roomsLine}`,
+        `- Floor area: ${areaM2} m² — fixture density, fixture count, and furniture quantity must read this footprint, not double it.`,
+        `- Clear ceiling height: ${ceilingH} m — pendants drop, wall heights, and door / window head heights all scale to this datum.`,
+        `- SHRE energy distribution (must be visually readable in materials + light + atmosphere): ${distLine}`,
+        `- Selected adjectives (mood register the room must carry): ${adjLine}`,
+        `- Selected materials (must appear by name on real surfaces — see placement notes when given): ${matLine}`,
+        styleDir ? `- Diagnosis style direction: ${styleDir}` : '',
+        diagPalette ? `- Diagnosis palette direction: ${diagPalette}` : '',
+        `- ${lightLine} · ${paletteLine} · ${budgetLine}${aspectLine ? ` · ${aspectLine}` : ''}`,
+        input.spaceNote ? `- User note about the space: "${input.spaceNote.trim()}"` : '',
+        input.userNote ? `- User note for this generation: "${input.userNote.trim()}"` : '',
+        `If any element of this block contradicts a stylistic default lower in the prompt, this block wins. The user did not pick this brief by accident.`,
+      ].filter(Boolean).join('\n'),
+    );
+  }
+
   P.push(buildHumanScaleAndProportionBlock(areaM2, ceilingH, input.spaceCategory, primaryRoom));
   const programEquipScale = buildProgramEquipmentScaleBlock(areaM2, ceilingH, primaryRoom, input.spaceCategory);
   if (programEquipScale) P.push(programEquipScale);
@@ -2195,6 +2254,7 @@ These are SMALL decor and lighting accents distributed in the room — they do N
 
   P.push(buildAntiUtopianControlBlock(roomKey));
   P.push(FUNCTIONAL_PLACEMENT_LOGIC);
+  P.push(CAMERA_FRAMING_DISCIPLINE);
 
   if (roomKey === 'Bathroom' || roomKey === 'Restroom') {
     P.push(buildBathroomArchitecturalBlock(shrePrimary, firePct));
@@ -2305,11 +2365,14 @@ ${contextOverride ? `- ROOM CHARACTER (overrides generic styling): ${contextOver
 
   P.push(
     `PHOTOGRAPHIC REALISM GATE (mandatory):
-- Editorial architectural photograph — Dezeen / ArchDaily caliber. Medium-format clarity, subtle depth-of-field on distant planes, believable contact shadows, no CGI plastic gloss.
+- Editorial architectural photograph — Dezeen / ArchDaily / Wallpaper* / Frame caliber. Medium-format clarity (think Hasselblad H6D-100c or Phase One IQ4 — tilt-shift verticals corrected). Subtle depth-of-field on distant planes, believable contact shadows, no CGI plastic gloss.
 - ${cameraVantage}. ${composition.name}: ${composition.desc}
+- Camera is INSIDE the room being designed — no foreground arch / doorway / vestibule / dark portal framing the shot. The photograph's edges are the frame; the room is the subject.
 - Materials read as installed construction: veining variation, wood grain direction, plaster trowel marks, metal brushing, fabric weave — never stamped repeating texture.
-- LOGICAL DESIGN: every placement functional for ${roomKey}; circulation clear; furniture scaled to ${areaM2} m²; proportions credible for ${ceilingH} m ceiling.
-- ANTI-AI: no hyper-detail overload, no fake reflections, no surreal geometry, no random luxury clutter, no identical marble on every surface.`,
+- LOGICAL DESIGN: every placement functional for ${roomKey}; circulation clear; furniture scaled to ${areaM2} m²; proportions credible for ${ceilingH} m ceiling. The user picked these numbers — honour them.
+- BRAND CULTURE: viewers must recognise the design culture — at least 3 distinct manufacturers across seating + tables + lighting, real specifiable products. No generic "blob furniture", no AI fantasy pieces, no impossible silhouettes.
+- ANTI-AI: no hyper-detail overload, no fake reflections, no surreal geometry, no random luxury clutter, no identical marble on every surface, no pristine empty showroom, no "viewed through an opening" composition, no chandelier centred on empty floor, no sofa facing a blank wall.
+- USE-WORTHY OUTCOME: a paying client should be able to take this render to a contractor and brief from it — every product nameable, every dimension buildable, every detail constructible by standard trades.`,
   );
 
   P.push(
@@ -2478,7 +2541,7 @@ ${contextOverride ? `- ROOM CHARACTER (overrides generic styling): ${contextOver
     : primary === 'earth' ? 'Furniture should feel chunky, low-slung, and grounded — deep modular sofas in natural linen, olive/sage velvet, or warm cream (Baxter, Flexform, Meridiani). Thick solid wood tables — real walnut or reclaimed oak with proper joinery (mortise-and-tenon, doweled). Bar stools with rounded padded forms in sage velvet. Handmade ceramic collections on open shelving. Heavy woven or jute rugs. Wabi-sabi aesthetic: surfaces show real age, warmth, and patina — not artificially distressed but genuinely aged or handcrafted.'
     : primary === 'fire' ? 'Furniture should have dramatic material contrast — deep rust/cognac/copper-toned velvet (Dedar, Rubelli) or full-grain leather (Poltrona Frau, Baxter) upholstery against dark marble and blackened steel frames. Warm oxidized metal finishes on real branded fixtures. Bold, curated, intense — every piece from an identifiable manufacturer.'
     : 'Furniture should feel refined, forward-looking, and buildable — metallic silver upholstered armchairs (Fritz Hansen Egg in silver, Cassina LC7), stainless steel pedestal tables (Fritz Hansen Series, Vitra), thermoformed white Corian counters (within real bending limits), tinted laminated glass partitions (standard architectural glass with colored PVB interlayer). Dichroic glass panels (real 3M Dichroic Film product) as art accents. LED cove lighting in standard aluminum extrusion channels (iGuzzini, Deltalight). 3D textured wall panels (commercially manufactured relief tiles). White opal globe lights (Flos Glo-Ball) and LED ring pendants (Flos Arrangements, Artemide Discovery). Fluted GRC or MDF columns with CNC-milled profiles. AIR is forward-looking minimalism grounded in REAL PRODUCTS — natural wood and airy organic textures welcome for warmth. Every element is sourceable from real manufacturers and installable by real trades.';
-  P.push(`Furniture: ${furnitureItems.join('; ')}. Lighting fixtures: ${lightItems.join('; ')}. ${furnitureFormNote} BRAND & SILHOUETTE: Primary seating, main tables, and hero lighting must read as real premium contract or designer pieces — distinctive silhouettes associated with known manufacturers (B&B Italia, Minotti, Poliform, Cassina, Vitra, Fritz Hansen, Moroso, Molteni&C, Hay, Living Divani, Edra, Baxter, Poltrona Frau tier; lighting Flos, Artemide, Louis Poulsen, &Tradition, Foscarini, Luceplan, Tom Dixon, etc.) — not anonymous blob furniture for those focal roles. Secondary pieces may be quieter. Correct proportions: seating 42-45cm seat height, dining tables 72-75cm, bars/counters ~90-105cm as appropriate. Everything sits on real surfaces with contact shadows; nothing floats or blocks code-clear circulation.`);
+  P.push(`Furniture: ${furnitureItems.join('; ')}. Lighting fixtures: ${lightItems.join('; ')}. ${furnitureFormNote} BRAND & SILHOUETTE — REAL SOURCEABLE PRODUCTS (mandatory): The image must read as a project styled with REAL, currently-manufactured, world-market design pieces — the kind an architect actually specs from a showroom or trade catalogue. Use distinctive silhouettes associated with named manufacturers — pull from a DIVERSE roster, never repeat the same 2-3 brands across every render. Reference vocabulary by category: SOFAS & SEATING: B&B Italia (Tufty-Time, Camaleonda, Bend, Le Bambole), Minotti (Lawrence, Jacques, Quadrado), Poliform (Saint-Germain, Mondrian), Cassina (LC2/LC3/LC5 Le Corbusier, 290 Maralunga, Soriana), Vitra (Eames LCW, Mariposa, Polder, Suita), Molteni&C (Paul, Sloane), Living Divani (Extrasoft, Neowall), Edra (Standard, Boa, On the Rocks), Baxter (Tactile, Chester Moon, Viktor), Flexform (Groundpiece, Magnum), Knoll (Florence Knoll, Platner), Moroso (Misfits, Redondo), De Padova (Louisiana), Poltrona Frau (Vanity Fair, Chester One), Gubi (Beetle, Bat). DINING & SIDE TABLES: Cassina (LC6, Eros), Poliform (Howard, Trip), B&B Italia (Maxalto, Athos), Molteni (Mateo, Asterias), Walter Knoll (Tama, Liz), Fritz Hansen (Super-Elliptical, PK51), e15 (Bigfoot, Habibi), Carl Hansen (CH327, CH011), Maxalto (Solo, Apta). LIGHTING — chandeliers + pendants + sconces + floor lamps drawn from named houses: Flos (IC, Skygarden, Arco, 2097, Aim, Glo-Ball, Bilboquet, String Lights), Artemide (Tolomeo, Nesso, Tizio, Discovery, Dioscuri), Louis Poulsen (PH 5, AJ, Yuh, Patera, Panthella), &Tradition (Flowerpot, Bellevue, Formakami, Mass), Foscarini (Twiggy, Anisha, Aplomb, Le Soleil), Luceplan (Costanza, Trama, Hope, Mesh), Tom Dixon (Melt, Mirror Ball, Plane, Spring), Lee Broom (Orion, Crystal Bulb, Eclipse), Bocci (14, 28, 73, 84), Apparatus (Trapeze, Cloud, Talisman, Tube), DCW éditions (Lampe Gras, In The Tube), Vibia (Wireflow, Match, North), Catellani & Smith (Sissi, Macchina della Luce), Roll & Hill (Modo, Halo, Rudi), Santa & Cole (M64, Cesta), Anglepoise (Type 75). CHAIRS & STOOLS: Fritz Hansen (Egg, Swan, Series 7, PK22), Hay (AAC, Rey, Mags), Vitra (Eames DSW/DSR, HAL, Tip Ton), Carl Hansen (CH24 Wishbone, CH88, CH33), Gubi (Bestlite, Beetle, F3), Magis (Spun, Steelwood), Cappellini (S Chair), Knoll (Tulip, Brno, Womb). PROPORTIONS stay honest: seating 42-45 cm seat height; dining tables 72-75 cm; bars/counters ~90-105 cm. EACH RENDER MUST PULL FROM AT LEAST 3 DISTINCT BRAND FAMILIES across seating + tables + lighting — never all-one-brand showroom, never anonymous blob furniture in focal roles. Anything that is not a real, sourceable, currently-manufactured piece reads as failure. Everything sits on real surfaces with contact shadows; nothing floats or blocks code-clear circulation.`);
 
   // [5a-bis] Occasional iconic “trust” object — most generations, skip ~1 in 4 for calmer scenes
   if (genIdx % 4 !== 3) {
