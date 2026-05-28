@@ -119,12 +119,44 @@ const EDIT_SYSTEM_INSTRUCTION = [
   'FORBIDDEN: Reinterpreting the brief. Broad restyle of the image. Changing camera or geometry. Moving or replacing assets not named. Altering lighting globally. Adding decorative clutter the user did not request. Any change beyond the written instruction.',
 ].join(' ');
 
-const resolveGeminiApiKey = (): string | undefined => {
-  // Support both legacy and current env var names.
-  // - GEMINI_API_KEY: most common in deployments / docs
-  // - API_KEY: kept for backwards compatibility with older local setups
-  return process.env.GEMINI_API_KEY || process.env.API_KEY;
+export const USER_API_KEY_STORAGE_KEY = 'shre.userGeminiApiKey';
+
+const readUserApiKey = (): string | undefined => {
+  // Browser-local override: anyone visiting the live site can paste their own
+  // key and it stays in their browser only — never committed, never deployed,
+  // never visible to anyone else. This is the user-facing escape hatch when
+  // the build-baked key is suspended / over-quota.
+  if (typeof window === 'undefined') return undefined;
+  try {
+    const value = window.localStorage.getItem(USER_API_KEY_STORAGE_KEY);
+    return value && value.trim().length > 0 ? value.trim() : undefined;
+  } catch {
+    return undefined;
+  }
 };
+
+const resolveGeminiApiKey = (): string | undefined => {
+  // Resolution order:
+  // 1. User-pasted key in localStorage (browser-local, never leaves device)
+  // 2. GEMINI_API_KEY env var (Vite-baked at build time)
+  // 3. API_KEY env var (legacy compat)
+  return readUserApiKey() || process.env.GEMINI_API_KEY || process.env.API_KEY;
+};
+
+export const setUserApiKey = (key: string | undefined): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (key && key.trim().length > 0) {
+      window.localStorage.setItem(USER_API_KEY_STORAGE_KEY, key.trim());
+    } else {
+      window.localStorage.removeItem(USER_API_KEY_STORAGE_KEY);
+    }
+  } catch {
+    // localStorage may be blocked (private window, storage full, etc.)
+  }
+};
+
+export const hasUserApiKey = (): boolean => !!readUserApiKey();
 
 const getClient = () => {
   const apiKey = resolveGeminiApiKey();
@@ -244,7 +276,7 @@ export const generateImageFromPrompt = async (
     // key back, so we must NOT surface it to the UI.
     if (lower.includes('consumer_suspended') || lower.includes('has been suspended')) {
       throw new Error(
-        'The Gemini API key has been suspended by Google. Generate a new key at https://aistudio.google.com/apikey, set GEMINI_API_KEY (or API_KEY) in the environment, and restart the server.'
+        'GEMINI_KEY_SUSPENDED'
       );
     }
 
@@ -255,7 +287,7 @@ export const generateImageFromPrompt = async (
       lower.includes('invalid api key') ||
       lower.includes('api key expired')
     ) {
-      throw new Error('Invalid Gemini API key. Check GEMINI_API_KEY (or API_KEY) and restart the server.');
+      throw new Error('GEMINI_KEY_INVALID');
     }
 
     // Permission denied (other than suspension)

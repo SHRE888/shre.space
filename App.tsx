@@ -11,11 +11,117 @@ import AddCustomMaterialModal from './components/AddCustomMaterialModal';
 import { loadState, saveState, clearState } from './services/storageService';
 import { calculateAnalysis, buildUniversalPrompt, buildTargetedEditPrompt } from './services/promptEngine';
 import { buildDiagnosis } from './services/shreDiagnosis';
-import { generateImageFromPrompt, dataUrlToFile } from './services/geminiService';
+import { generateImageFromPrompt, dataUrlToFile, setUserApiKey, hasUserApiKey } from './services/geminiService';
 import { interpretRefinementFeedback } from './services/refinementFeedback';
 import { getInitialSelection, getSelectionFromPercentages } from './services/refinementLogic';
 import { SHORT_QUESTIONS, ELEMENT_COLORS, CANONICAL_MATERIALS, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER, MATERIAL_TEXTURE_TINT, generateSurveyQuestions } from './constants';
 import { getRecommendedProfessionalPartners, type ProfessionalPartner } from './lib/professionalPartners';
+
+// --- API KEY ENTRY PANEL (browser-local override) ---
+// Lets the user paste their own Gemini API key when the build-baked key is
+// suspended / over-quota. Stored only in this browser's localStorage — never
+// committed, never deployed, never visible to anyone else. This is the escape
+// hatch that breaks the "build-key gets suspended → site dies" cycle.
+const ApiKeyEntryPanel = ({
+  isSuspended,
+  onSaved,
+}: {
+  isSuspended: boolean;
+  onSaved: () => void;
+}) => {
+  const [keyInput, setKeyInput] = React.useState('');
+  const [hasStoredKey, setHasStoredKey] = React.useState<boolean>(() => hasUserApiKey());
+  const [error, setError] = React.useState<string | null>(null);
+
+  const handleSave = () => {
+    const trimmed = keyInput.trim();
+    if (!trimmed) {
+      setError('შეიყვანე key.');
+      return;
+    }
+    if (!/^AIza[0-9A-Za-z_-]{20,}$/.test(trimmed)) {
+      setError('key არასწორი ფორმატის ჩანს — Google Gemini key იწყება „AIza"-თი.');
+      return;
+    }
+    setUserApiKey(trimmed);
+    setHasStoredKey(true);
+    setError(null);
+    setKeyInput('');
+    onSaved();
+  };
+
+  const handleClear = () => {
+    setUserApiKey(undefined);
+    setHasStoredKey(false);
+    setError(null);
+  };
+
+  return (
+    <div className="mt-4 mb-2 w-full rounded-xl border border-gray-200 bg-white p-5 text-left">
+      <p className="text-[12px] uppercase tracking-[0.25em] font-semibold text-gray-700 mb-2">
+        {isSuspended ? 'ააამოქმედე ერთი წუთში' : 'API key გესაჭიროება'}
+      </p>
+      <p className="text-[12.5px] text-gray-600 leading-[1.6] mb-4">
+        Google-ის key {isSuspended ? '„suspended"-ად მონიშნა' : 'არ მუშაობს'}. შენი პირადი key
+        ჩასვი ქვემოთ — ის ჩაიწერება მხოლოდ <span className="font-medium">ამ ბრაუზერში</span>, არსად არ
+        გადაიგზავნება, არც gitში, არც deploy-ში. შენი key ვერავინ ნახავს.
+      </p>
+
+      <ol className="text-[12px] text-gray-500 leading-[1.7] space-y-1 list-decimal pl-5 mb-4">
+        <li>
+          აიღე უფასო key →{' '}
+          <a
+            href="https://aistudio.google.com/apikey"
+            target="_blank"
+            rel="noreferrer"
+            className="underline font-medium text-gray-800 hover:text-black"
+          >
+            aistudio.google.com/apikey
+          </a>
+        </li>
+        <li>დააკოპირე key (იწყება „AIza…")</li>
+        <li>ჩასვი ქვემოთ და დააჭირე „შენახვა"</li>
+      </ol>
+
+      <div className="flex gap-2">
+        <input
+          type="password"
+          value={keyInput}
+          onChange={(e) => { setKeyInput(e.target.value); setError(null); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+          placeholder="AIzaSy..."
+          autoComplete="off"
+          spellCheck={false}
+          className="flex-1 px-3 py-2 text-[12px] font-mono rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:border-gray-400 focus:outline-none transition-colors"
+        />
+        <button
+          onClick={handleSave}
+          className="px-4 py-2 rounded-lg text-[12px] uppercase tracking-[0.15em] font-semibold text-white bg-gray-800 hover:bg-black transition-colors active:scale-[0.97]"
+        >
+          შენახვა
+        </button>
+      </div>
+
+      {error && (
+        <p className="text-[11.5px] text-red-500 mt-2 leading-relaxed">{error}</p>
+      )}
+
+      {hasStoredKey && (
+        <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+          <span className="text-[11px] text-gray-400">
+            შენი key შენახულია ბრაუზერში
+          </span>
+          <button
+            onClick={handleClear}
+            className="text-[11px] text-gray-400 hover:text-gray-700 underline"
+          >
+            წაშლა
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // --- LANDING PAGE ---
 const Landing = () => {
@@ -1263,60 +1369,36 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
   // --- ERROR STATE ---
   if (genError) {
-    const isSuspendedKey =
-      /suspend|consumer_suspended/i.test(genError) ||
-      /api key/i.test(genError);
+    const isKeyProblem =
+      /GEMINI_KEY_SUSPENDED|GEMINI_KEY_INVALID|suspend|consumer_suspended|api key/i.test(genError);
+    const isSuspended = /GEMINI_KEY_SUSPENDED|suspend/i.test(genError);
     return (
-      <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-[#fafafa] relative overflow-hidden px-4">
-        <div className="relative z-10 flex flex-col items-center max-w-lg px-6">
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-[#fafafa] relative overflow-hidden px-4 py-8 overflow-y-auto">
+        <div className="relative z-10 flex flex-col items-center max-w-lg px-6 w-full">
           <div className="w-14 h-14 rounded-full flex items-center justify-center mb-6" style={{ background: `${domColor}10`, border: `1.5px solid ${domColor}25` }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={domColor} strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           </div>
-          <h2 className="text-[14px] uppercase tracking-[0.4em] font-semibold text-gray-600 mb-3">
-            {isSuspendedKey ? 'API Key დაბლოკილია' : 'გენერაცია ვერ შესრულდა'}
+          <h2 className="text-[14px] uppercase tracking-[0.4em] font-semibold text-gray-600 mb-3 text-center">
+            {isKeyProblem ? 'API Key გესაჭიროება' : 'გენერაცია ვერ შესრულდა'}
           </h2>
-          <p className="text-[13px] text-gray-500 text-center leading-relaxed mb-2">{genError}</p>
-
-          {isSuspendedKey && (
-            <div className="mt-4 mb-6 w-full rounded-xl border border-gray-200 bg-white p-5 text-left">
-              <p className="text-[12px] uppercase tracking-[0.25em] font-semibold text-gray-700 mb-3">
-                როგორ ჩავრთო საიტი ისევ:
-              </p>
-              <ol className="text-[12.5px] text-gray-600 leading-[1.7] space-y-2 list-decimal pl-5">
-                <li>
-                  ახალი key აიღე{' '}
-                  <a
-                    href="https://aistudio.google.com/apikey"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline font-medium text-gray-800 hover:text-black"
-                  >
-                    Google AI Studio
-                  </a>
-                  -დან.
-                </li>
-                <li>
-                  AI Studio-ში გახსენი ეს app-ი და{' '}
-                  <span className="font-medium text-gray-800">Settings → Environment Variables</span>
-                  -ში ჩასვი <code className="px-1.5 py-0.5 rounded bg-gray-100 text-[11px]">GEMINI_API_KEY</code> ახალი key-ით.
-                </li>
-                <li>
-                  დააჭირე <span className="font-medium text-gray-800">Republish / Redeploy</span>
-                  &nbsp;— ძველი build-ი ძველ key-ს ინახავს.
-                </li>
-                <li>
-                  ლოკალურად რომ შეამოწმო: <code className="px-1.5 py-0.5 rounded bg-gray-100 text-[11px]">.env.local</code>{' '}
-                  ფაილში ჩაწერე <code className="px-1.5 py-0.5 rounded bg-gray-100 text-[11px]">GEMINI_API_KEY=შენი_key</code>{' '}
-                  და გაუშვი <code className="px-1.5 py-0.5 rounded bg-gray-100 text-[11px]">npm run dev</code>.
-                </li>
-              </ol>
-              <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">
-                შენიშვნა: key-ის &laquo;suspended&raquo; სტატუსი Google-ის მხარეს არის — კოდით ვერ გაიხსნება, საჭიროა ახალი key.
-              </p>
-            </div>
+          {!isKeyProblem && (
+            <p className="text-[13px] text-gray-500 text-center leading-relaxed mb-2">{genError}</p>
           )}
 
-          <div className="flex gap-3 mt-2">
+          {isKeyProblem && (
+            <ApiKeyEntryPanel
+              isSuspended={isSuspended}
+              onSaved={() => {
+                setGenError(null);
+                setLoading(true);
+                setPhase('generating');
+                setLoadProgress(0);
+                setGenerationKey(k => k + 1);
+              }}
+            />
+          )}
+
+          <div className="flex gap-3 mt-4">
             <button onClick={() => { setGenError(null); setLoading(true); setPhase('generating'); setLoadProgress(0); setGenerationKey(k => k + 1); }}
               className="px-6 py-2.5 rounded-lg text-[12px] uppercase tracking-[0.2em] font-semibold text-white transition-all hover:shadow-lg active:scale-[0.97]"
               style={{ background: `linear-gradient(135deg, ${domColor}, ${domColor}cc)` }}>
