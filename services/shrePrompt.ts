@@ -492,11 +492,23 @@ CANDLES, VOTIVES & SMALL DECOR ANCHOR RULE:
 - Candles read as REAL candles: wax body, wick, drip evidence where appropriate, scaled to the holder. Not abstract glowing points of light.
 - Decorative objects (vases, books, sculptures, trays, small ceramics) sit on real surfaces with contact shadows. Never floating, never embedded in walls without a niche or bracket.
 
-RUG & TEXTILE STYLE MATCH RULE:
-- Rugs must match the STYLE REGISTER of the brief, not undermine it. A contemporary editorial bar / minimalist lounge / sleek hospitality interior takes plain hand-loomed wool, neutral flatweave, jute, sisal, mohair, or low-pile contract rugs — never a Persian, Oriental, Turkish, Kilim, Anatolian, or tribal-pattern rug unless the brief specifically calls for that register.
-- Persian / Oriental / Kilim / heavy patterned domestic rugs are reserved for projects whose adjectives, materials, or program explicitly call for "traditional", "eclectic", "tribal", "ethnic", "vintage textile", "library", "study", or similar registers. Default modern hospitality and contemporary residential renders use plain or geometric low-pile rugs.
-- Rug size matches the zone: living-room rug stops 20-30 cm short of the sofa front legs OR runs fully under the seating group; bar lounge area rug anchors a clear conversation cluster — no random domestic rug shoved under a working bar with no seating cluster above it.
-- Rug colour and tone supports the active palette — not a clashing strong red Persian under a cool stone bar with cognac leather.
+RUG & TEXTILE STYLE MATCH RULE — STRICT:
+- DEFAULT RUG RULE: plain hand-loomed wool, neutral flatweave, jute, sisal, mohair, low-pile bouclé, geometric low-pile contemporary contract rug, OR no rug at all. This is the only acceptable rug vocabulary unless the brief opts out below.
+- PERSIAN / ORIENTAL / KILIM / TURKISH / ANATOLIAN / TRIBAL / heavily patterned / fringed domestic rugs are FORBIDDEN by default. They appear ONLY if the brief's adjectives, materials, or notes EXPLICITLY contain words like "traditional", "eclectic", "vintage textile", "library", "study", "antique", "heritage", or "kilim". For every other brief — contemporary, modern, minimalist, editorial, hospitality, bar, restaurant, café, hotel, office — these rugs are an automatic failure.
+- NO ornate red/burgundy Persian rugs in modern bars. NO oriental medallion rugs in lounges. NO fringed domestic rugs in working hospitality spaces. NO tribal pattern under a working bar counter or in front of bar stools.
+- Rug size matches the zone: living-room rug stops 20-30 cm short of the sofa front legs OR runs fully under the seating group; lounge area rug anchors a clear conversation cluster — no random domestic rug shoved into a working bar / island / service zone where no seating cluster exists.
+- Rug colour and tone supports the active palette — never a clashing strong red Persian against cool stone, never a saturated saturated oriental against a cognac + travertine palette.
+
+SINGLE PROGRAM DISCIPLINE (mandatory — solves the "everything in one shot" failure mode):
+- The brief names ONE primary program (Bar, Coffee Shop, Living Room, Bedroom, Kitchen, etc.). Render ONLY that program clearly and well.
+- DO NOT mix unrelated programs into the same frame. A BAR shot shows the bar + back-bar + bar stools — NOT a residential sofa + coffee table + persian rug + reading nook + dining table all at once. A COFFEE SHOP shot shows the barista station + café seating — not a sofa + bedroom in the back. A LIVING ROOM shows seating + focal-point wall — not a kitchen island + dining table + library.
+- If the brief specifies an open-plan combo (e.g. "open kitchen + living room") that combination is allowed AS NAMED — but no extra programs are invented.
+- A sofa inside a bar working zone is WRONG. A bed inside a living room is WRONG. A dining table fused to the bar working counter is WRONG. Adjacent program suggestions stay implied through a doorway or wall opening, never staged inside the hero zone of another program.
+
+SPATIAL COHERENCE & LIGHTING UNITY (mandatory):
+- The whole frame is ONE space with ONE coherent light story. Avoid bright-front + dark-cave compositions where half the frame is bathed in editorial daylight and the other half drops into a black void with no logical light source.
+- Side walls and adjacent zones read at consistent luminance — not "sunny bar on the right, mysterious dark mirror lounge on the left". If a darker zone exists it is logically lit (table lamp, sconce, ambient glow) and clearly readable as part of the same room.
+- No fragmented compositions. No two-rooms-glued-together collages. No reflective black mirror wall on one side eating half the frame for no reason.
 
 EVERY OBJECT JUSTIFIES ITSELF: chandeliers, sconces, pendants, lamps, candles, votives, mirrors, art, plants, rugs, windows, doors — each must answer "what function or sightline does this serve here, and does it fit the style register of the brief?". If no answer, the object is removed rather than scattered as decoration.`;
 
