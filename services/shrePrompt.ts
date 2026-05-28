@@ -486,7 +486,19 @@ FOCAL POINT LOGIC:
 - Bedrooms: bed faces a TV wall, a fireplace, or a window — not a blank wall.
 - Bars, restaurants, cafés: focal point = back-bar / barista station / open kitchen / wine wall. Stools/seats orient toward it.
 
-EVERY OBJECT JUSTIFIES ITSELF: chandeliers, sconces, pendants, lamps, mirrors, art, plants, windows, doors — each must answer "what function or sightline does this serve here?". If no answer, the object is removed rather than scattered as decoration.`;
+CANDLES, VOTIVES & SMALL DECOR ANCHOR RULE:
+- Candles ALWAYS sit ON a physical surface: a table, a side table, a console, a mantel, a tray, a windowsill, a wall-mounted shelf, a wall niche, or a wall sconce holder with a visible bracket. NEVER floating in mid-air. NEVER glowing dots suspended in space with no holder.
+- Wall-mounted candle holders MUST show their bracket / shelf / metalwork visibly mounted to the wall — if the holder isn't visible, the candle does not appear.
+- Candles read as REAL candles: wax body, wick, drip evidence where appropriate, scaled to the holder. Not abstract glowing points of light.
+- Decorative objects (vases, books, sculptures, trays, small ceramics) sit on real surfaces with contact shadows. Never floating, never embedded in walls without a niche or bracket.
+
+RUG & TEXTILE STYLE MATCH RULE:
+- Rugs must match the STYLE REGISTER of the brief, not undermine it. A contemporary editorial bar / minimalist lounge / sleek hospitality interior takes plain hand-loomed wool, neutral flatweave, jute, sisal, mohair, or low-pile contract rugs — never a Persian, Oriental, Turkish, Kilim, Anatolian, or tribal-pattern rug unless the brief specifically calls for that register.
+- Persian / Oriental / Kilim / heavy patterned domestic rugs are reserved for projects whose adjectives, materials, or program explicitly call for "traditional", "eclectic", "tribal", "ethnic", "vintage textile", "library", "study", or similar registers. Default modern hospitality and contemporary residential renders use plain or geometric low-pile rugs.
+- Rug size matches the zone: living-room rug stops 20-30 cm short of the sofa front legs OR runs fully under the seating group; bar lounge area rug anchors a clear conversation cluster — no random domestic rug shoved under a working bar with no seating cluster above it.
+- Rug colour and tone supports the active palette — not a clashing strong red Persian under a cool stone bar with cognac leather.
+
+EVERY OBJECT JUSTIFIES ITSELF: chandeliers, sconces, pendants, lamps, candles, votives, mirrors, art, plants, rugs, windows, doors — each must answer "what function or sightline does this serve here, and does it fit the style register of the brief?". If no answer, the object is removed rather than scattered as decoration.`;
 
 export const buildAntiUtopianControlBlock = (roomKey?: string | null): string => {
   const addendum = roomKey ? ANTI_UTOPIAN_ROOM_ADDENDA[roomKey] : undefined;
