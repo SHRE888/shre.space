@@ -119,9 +119,20 @@ const EDIT_SYSTEM_INSTRUCTION = [
   'FORBIDDEN: Reinterpreting the brief. Broad restyle of the image. Changing camera or geometry. Moving or replacing assets not named. Altering lighting globally. Adding decorative clutter the user did not request. Any change beyond the written instruction.',
 ].join(' ');
 
+const resolveGeminiApiKey = (): string | undefined => {
+  // Support both legacy and current env var names.
+  // - GEMINI_API_KEY: most common in deployments / docs
+  // - API_KEY: kept for backwards compatibility with older local setups
+  return process.env.GEMINI_API_KEY || process.env.API_KEY;
+};
+
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) throw new Error("API Key not found. Set GEMINI_API_KEY in .env");
+  const apiKey = resolveGeminiApiKey();
+  if (!apiKey) {
+    throw new Error(
+      "Gemini API key not found. Set GEMINI_API_KEY (or API_KEY) in your environment and restart the server.",
+    );
+  }
   return new GoogleGenAI({ apiKey });
 };
 
@@ -233,7 +244,7 @@ export const generateImageFromPrompt = async (
     // key back, so we must NOT surface it to the UI.
     if (lower.includes('consumer_suspended') || lower.includes('has been suspended')) {
       throw new Error(
-        'The Gemini API key has been suspended by Google. Generate a new key at https://aistudio.google.com/apikey, replace GEMINI_API_KEY in .env, and restart the server.'
+        'The Gemini API key has been suspended by Google. Generate a new key at https://aistudio.google.com/apikey, set GEMINI_API_KEY (or API_KEY) in the environment, and restart the server.'
       );
     }
 
@@ -244,7 +255,7 @@ export const generateImageFromPrompt = async (
       lower.includes('invalid api key') ||
       lower.includes('api key expired')
     ) {
-      throw new Error('Invalid Gemini API key. Check GEMINI_API_KEY in .env and restart the server.');
+      throw new Error('Invalid Gemini API key. Check GEMINI_API_KEY (or API_KEY) and restart the server.');
     }
 
     // Permission denied (other than suspension)
