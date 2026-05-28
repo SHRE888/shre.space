@@ -1263,15 +1263,60 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
   // --- ERROR STATE ---
   if (genError) {
+    const isSuspendedKey =
+      /suspend|consumer_suspended/i.test(genError) ||
+      /api key/i.test(genError);
     return (
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-[#fafafa] relative overflow-hidden px-4">
-        <div className="relative z-10 flex flex-col items-center max-w-md px-6">
+        <div className="relative z-10 flex flex-col items-center max-w-lg px-6">
           <div className="w-14 h-14 rounded-full flex items-center justify-center mb-6" style={{ background: `${domColor}10`, border: `1.5px solid ${domColor}25` }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={domColor} strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           </div>
-          <h2 className="text-[14px] uppercase tracking-[0.4em] font-semibold text-gray-600 mb-3">Generation Failed</h2>
-          <p className="text-[13px] text-gray-400 text-center leading-relaxed mb-6">{genError}</p>
-          <div className="flex gap-3">
+          <h2 className="text-[14px] uppercase tracking-[0.4em] font-semibold text-gray-600 mb-3">
+            {isSuspendedKey ? 'API Key დაბლოკილია' : 'გენერაცია ვერ შესრულდა'}
+          </h2>
+          <p className="text-[13px] text-gray-500 text-center leading-relaxed mb-2">{genError}</p>
+
+          {isSuspendedKey && (
+            <div className="mt-4 mb-6 w-full rounded-xl border border-gray-200 bg-white p-5 text-left">
+              <p className="text-[12px] uppercase tracking-[0.25em] font-semibold text-gray-700 mb-3">
+                როგორ ჩავრთო საიტი ისევ:
+              </p>
+              <ol className="text-[12.5px] text-gray-600 leading-[1.7] space-y-2 list-decimal pl-5">
+                <li>
+                  ახალი key აიღე{' '}
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline font-medium text-gray-800 hover:text-black"
+                  >
+                    Google AI Studio
+                  </a>
+                  -დან.
+                </li>
+                <li>
+                  AI Studio-ში გახსენი ეს app-ი და{' '}
+                  <span className="font-medium text-gray-800">Settings → Environment Variables</span>
+                  -ში ჩასვი <code className="px-1.5 py-0.5 rounded bg-gray-100 text-[11px]">GEMINI_API_KEY</code> ახალი key-ით.
+                </li>
+                <li>
+                  დააჭირე <span className="font-medium text-gray-800">Republish / Redeploy</span>
+                  &nbsp;— ძველი build-ი ძველ key-ს ინახავს.
+                </li>
+                <li>
+                  ლოკალურად რომ შეამოწმო: <code className="px-1.5 py-0.5 rounded bg-gray-100 text-[11px]">.env.local</code>{' '}
+                  ფაილში ჩაწერე <code className="px-1.5 py-0.5 rounded bg-gray-100 text-[11px]">GEMINI_API_KEY=შენი_key</code>{' '}
+                  და გაუშვი <code className="px-1.5 py-0.5 rounded bg-gray-100 text-[11px]">npm run dev</code>.
+                </li>
+              </ol>
+              <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">
+                შენიშვნა: key-ის &laquo;suspended&raquo; სტატუსი Google-ის მხარეს არის — კოდით ვერ გაიხსნება, საჭიროა ახალი key.
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-3 mt-2">
             <button onClick={() => { setGenError(null); setLoading(true); setPhase('generating'); setLoadProgress(0); setGenerationKey(k => k + 1); }}
               className="px-6 py-2.5 rounded-lg text-[12px] uppercase tracking-[0.2em] font-semibold text-white transition-all hover:shadow-lg active:scale-[0.97]"
               style={{ background: `linear-gradient(135deg, ${domColor}, ${domColor}cc)` }}>
