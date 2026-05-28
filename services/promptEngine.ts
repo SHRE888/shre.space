@@ -2581,20 +2581,64 @@ ${contextOverride ? `- ROOM CHARACTER (overrides generic styling): ${contextOver
   // [7] LIGHTING — natural + artificial
   P.push(`Lighting: ${lightScenario} ${profile.lightPhrases.slice(0, balancedBlend ? 3 : 2).join(', ')}. Light behaves with physical accuracy: warm golden glow absorbed by wood grain, soft milky diffusion across plaster walls, crisp specular highlights on polished metal reflecting the room, translucent glow through glass casting colored shadows. One dominant natural light direction with soft gradual shadow falloff. Secondary fill light from opposite direction at 1/3 intensity. Warm ambient pools (2700K) from concealed architectural lighting in shadow gaps and shelf edges. The lighting alone tells you the time of day and the atmosphere of the space.`);
 
-  // [7b] CEILING — clean by default
-  const ceilingIntensity = activeDist[primary] >= 60 ? 'high' : activeDist[primary] >= 40 ? 'medium' : 'low';
-  const ceilingDirective = primary === 'air'
-    ? (ceilingIntensity === 'high' ? 'Ceiling may feature subtle wave-form or flowing ridge accents with concealed LED — but keep it restrained and elegant, not overloaded.' : 'CEILING MUST BE CLEAN AND SIMPLE — flat white or gently curved with concealed LED cove lighting. NO complex wave sculptures, no overloaded ceiling ornamentation. Clean minimal ceiling is the AIR priority.')
-    : primary === 'water'
-    ? (ceilingIntensity === 'high' ? 'Ceiling may feature a curved chrome canopy or parametric form over the main zone.' : 'Ceiling is clean — smooth white or light plaster with concealed ambient lighting. Chrome and parametric forms stay on walls/counters, not ceiling.')
-    : primary === 'fire'
-    ? 'Ceiling is dark and restrained — dark-toned or recessed with minimal track lighting. No decorative ceiling elements.'
-    : 'Ceiling is honest — exposed beams if contextual, otherwise clean plaster with warm ambient light.';
-  P.push(`CEILING TREATMENT (important): ${ceilingDirective} The ceiling should NOT be overloaded or visually heavy unless the design brief specifically calls for a dramatic overhead statement. Default is always clean and architecturally resolved.`);
+  // [7b] CEILING TREATMENT — variety pool rotated per generation so back-to-back
+  // renders don't all show the same "flat plaster + concealed LED cove" ceiling.
+  // Each entry stays architecturally honest (real fabrication, ≤ 2.8-3.5 m
+  // residential heights / ≤ 4-6 m commercial) and respects the element register.
+  const CEILING_TREATMENTS_BY_ELEMENT: Record<Element, string[]> = {
+    earth: [
+      'Exposed solid timber beams in oak or walnut at ~80-120 cm spacing, infill plaster between beams, recessed warm 2700K downlights aligned with beam centres, no LED strips on the beam faces.',
+      'Flat lime-plaster ceiling (warm white, hand-trowelled with subtle texture) with two slim matte-black surface-mounted track rails running parallel, warm 2700K spots on each track aimed at art / shelving — no cove.',
+      'Coffered plaster ceiling with shallow rectangular recesses, single warm pendant centred over the dining/coffee-table cluster, soft uplight from a perimeter cove washing the field.',
+      'Open soft-industrial ceiling — exposed reclaimed wood joists with iron straps, infill plaster, single linear surface-mounted brass tube light over the working surface, no cove, no plasterboard.',
+      'Lime-washed ceiling with one architectural skylight or ridge rooflight over the main zone, no overhead fixtures directly under daylight — task lighting handled by floor / table lamps.',
+    ],
+    fire: [
+      'Dark matte-charcoal plaster ceiling with a single matte-black surface-mounted track running the long axis, warm 2700K spots aimed at the feature wall — no cove, no decorative element.',
+      'Smoked-oak or walnut slatted ceiling (10 cm spacing) over the main zone, perimeter shadow gap with concealed warm LED, no central pendant — slats carry the rhythm.',
+      'Flat dark-bronze plaster ceiling with two recessed linear LED slots flanking a hero pendant cluster (Apparatus Cane, Bocci 73, or Tom Dixon Melt) centred over the coffee-table / dining surface.',
+      'Bronze-mesh dropped ceiling panel over the bar / island, framed by perimeter shadow gap with warm cove glow — keeps the ceiling alive without ornamental clutter.',
+    ],
+    water: [
+      'Flat smooth white plaster ceiling with a single chrome-finish recessed cove ring around the main zone, warm-cool 3500K, fixture-free elsewhere.',
+      'Polished plaster ceiling with a curved chrome canopy hovering over the coffee-table / bar — pendant fixtures hidden inside the canopy, soft diffuse halo around the edge.',
+      'Mirror-finish stretched ceiling fabric on a subtle curve (Barrisol acoustic mirror) over the main zone, perimeter shadow gap with cool LED, reflects the floor below at low intensity.',
+      'Plain plaster ceiling with a slim chrome track and three small chrome-pendant spheres (Tom Dixon Mirror Ball) clustered over the focal surface.',
+    ],
+    air: [
+      'Flat white plaster ceiling with concealed perimeter LED cove washing the wall heads — no central pendant, no track, no recessed downlights visible. Clean and quiet.',
+      'Gently curved plasterboard cove ceiling (single sweeping curve from one wall to the other) with concealed cool-white LED at the spring line, no other ceiling fixtures.',
+      'Slim white-painted recessed downlights on a clean orthogonal grid (40 × 40 cm spacing inside a square zone), no cove, no pendant, no track — minimal architectural light.',
+      'Floating plasterboard ceiling raft 10 cm below the slab over the main zone, perimeter shadow gap with cool LED, single white opal globe (Flos Glo-Ball) on a slim stem at the centre.',
+      'Continuous slatted oak ceiling in a pale finish (Hunter Douglas linear) at 5 cm spacing, no cove, soft daylight is the primary source.',
+    ],
+  };
+  const ceilingPool = CEILING_TREATMENTS_BY_ELEMENT[primary];
+  const ceilingChoice = ceilingPool[genIdx % ceilingPool.length];
+  const ceilingSecondaryPool = secondary !== primary ? CEILING_TREATMENTS_BY_ELEMENT[secondary] : [];
+  const ceilingSecondaryHint =
+    ceilingSecondaryPool.length > 0 && Math.round(activeDist[secondary]) >= 25
+      ? ` Hybrid accent (${Math.round(activeDist[secondary])}% ${secondary}): allow one supporting cue from the ${secondary} ceiling vocabulary (e.g., ${ceilingSecondaryPool[(genIdx + 1) % ceilingSecondaryPool.length].split(',')[0]}), but do not let it dominate.`
+      : '';
+  P.push(
+    `CEILING TREATMENT (this render — vary across generations, never repeat the same default):\n` +
+    `${ceilingChoice}${ceilingSecondaryHint}\n` +
+    `Strict rules: ceiling stays at the declared clear height (${ceilingH} m); no stone / marble / onyx slab cladding on the ceiling; no random downlight constellation scattered across the field; fixtures align to functional zones below; the chosen treatment is consistent across the whole frame, not patchwork.`,
+  );
 
-  // [8] CAMERA & PHOTOGRAPHY
-  const focalLength = areaM2 >= 120 ? '24mm' : areaM2 >= 80 ? '28mm' : areaM2 >= 40 ? '30mm' : '35mm';
-  P.push(`Photography: ${focalLength} tilt-shift lens on Phase One IQ4 150MP digital back. Camera height 110cm (standing eye level). Use a slightly longer focal for small m² so the frame does not exaggerate width — match lens to stated footprint. PERFECTLY CORRECTED VERTICALS — all vertical lines are absolutely straight. f/8–f/11 aperture, deep focus with slight natural bokeh on distant planes. Color science: neutral with warm bias, no post-processing filters, no HDR, no saturation boost, no Instagram look. Light behaves physically — soft shadow gradients from windows, warm amber pools from recessed downlights, material-accurate reflections (mirror-polish shows room reflections, matte absorbs light). Depth composition: clear foreground detail (edge of table, plant leaf), sharp mid-ground (main furniture group), soft atmospheric background (distant wall or window view). The image quality matches Dezeen's "House of the Year" photography standard.`);
+  // [8] CAMERA & PHOTOGRAPHY — professional architectural photography standard
+  const focalLength = areaM2 >= 120 ? '24mm' : areaM2 >= 80 ? '28mm' : areaM2 >= 40 ? '32mm' : '35mm';
+  P.push(
+    `PROFESSIONAL ARCHITECTURAL PHOTOGRAPHY (mandatory — this is not a CGI render, it is a photograph of a built space):\n` +
+    `- Body: Phase One IQ4 150 MP digital back OR Hasselblad H6D-100c medium-format. Lens: ${focalLength} tilt-shift (Schneider PC-TS or Canon TS-E). Camera height 1.50-1.60 m (standing eye-level), tripod-mounted, spirit-levelled, mirror-locked.\n` +
+    `- PERFECTLY CORRECTED VERTICALS via tilt-shift movement — every vertical line in the frame is absolutely plumb. Horizons are level. No barrel distortion, no perspective convergence, no leaning walls.\n` +
+    `- Aperture f/8–f/11 for full depth of field. Sharp from near foreground to far wall. Subtle natural depth-of-field falloff on distant planes only — never a wide-aperture portrait blur on furniture.\n` +
+    `- Exposure: balanced ETTR (expose-to-the-right) base, +0 EV bias, then graduated ND or window-blend equivalent so the window does NOT blow out and the interior does NOT crush to black. Window view reads softly bright with visible exterior content. Interior reads with full mid-tones.\n` +
+    `- Color science: neutral with mild warm bias, daylight white-balance calibrated to ~5200 K, mixed-light correction subtle. NO HDR halos, NO Instagram filter, NO saturation boost, NO orange-and-teal grade, NO Lightroom "architecture" preset, NO fake bloom or chromatic aberration. Skin-tone-safe palette.\n` +
+    `- Light behaves physically: soft shadow gradients from windows; warm amber pools from concealed cove and downlights; material-accurate reflections (mirror polish shows the room cleanly, matte fabric absorbs light); contact shadows under every floor object.\n` +
+    `- Composition: foreground element with crisp edge (table corner, plant leaf, book stack) → sharp mid-ground hero (the primary furniture group) → softer atmospheric background (focal-point wall, distant window). Rule of thirds with the hero group at the golden-section intersection. Generous 15-20 % breathing margin around the frame — NOTHING cropped at the edge.\n` +
+    `- Output target: the image must look indistinguishable from a Dezeen / ArchDaily / Wallpaper* / Frame project photograph — not a 3D visualisation, not an AI render, not a real-estate listing photo.`,
+  );
 
   // [9] FRAMING + CAMERA VANTAGE (rotates per generation so back-to-back
   // renders read as different shots of the same project)
