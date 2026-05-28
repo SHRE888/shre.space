@@ -1,10 +1,22 @@
-import { UserState, AnalysisResult, Element, PromptResult, PromptInput, GenerationPackage, Vector4, MaterialDef, ColorPalette, BudgetLevel } from '../types';
+import { UserState, AnalysisResult, Element, PromptResult, PromptInput, GenerationPackage, Vector4, MaterialDef, ColorPalette, BudgetLevel, CompositionMode, DominanceStrength } from '../types';
 import { SHORT_QUESTIONS, ELEMENTS, COMBINATION_ARTICLES, PROMPT_BANS, ELEMENT_ARCH_TERMS } from '../constants';
 import { scrubBannedTokens } from './bannedTokens';
 import { elementLanguageProfile } from './elementLanguage';
 import { buildDesignSummary } from './designSummary';
+import { getEnabledMaterials } from './refinementLogic';
 import { buildBudgetBrandDirective } from '../lib/brandCatalog';
 import { getMaterialCategory, type MaterialCategory } from '../materialsCatalog';
+import {
+  buildSHREPromptBody,
+  buildAtmosphereCalibrationBlock,
+  buildAntiUtopianControlBlock,
+  buildBathroomArchitecturalBlock,
+  BATHROOM_ACCENT_DECOR,
+  readElements,
+  ELEMENT_DAYLIGHT_QUALITY,
+  ELEMENT_ACCENT_DECOR,
+  ROOM_ATMOSPHERE_REFINEMENT,
+} from './shrePrompt';
 
 /** One-line summary of workspace space config; shown/edited in results footer and fed to the image prompt */
 export const formatSpaceConfigOneLiner = (p: UserState['params']): string => {
@@ -34,64 +46,171 @@ const sortElementsByDistribution = (activeDist: Vector4): Element[] =>
     return d;
   });
 
-// --- ADAPTER / LEGACY SUPPORT ---
-export const calculateAnalysis = (state: UserState): AnalysisResult => {
-  const scores: Record<Element, number> = { air: 0, fire: 0, water: 0, earth: 0 };
+/**
+ * Largest-remainder (Hare) rounding. Distributes integer percentage shares
+ * across the four elements so the total is EXACTLY 100 after rounding —
+ * naive Math.round can return 99 or 101, which breaks the SHRE invariant
+ * that diagnostic percentages add to 100. Allows 0% per element.
+ */
+export const largestRemainderRound = (raw: Record<Element, number>): Record<Element, number> => {
+  const order: Element[] = ['earth', 'fire', 'water', 'air'];
+  const floors: Record<Element, number> = { earth: 0, fire: 0, water: 0, air: 0 };
+  const remainders: Array<{ el: Element; rem: number }> = [];
+  let assigned = 0;
+  for (const el of order) {
+    const v = Math.max(0, raw[el]);
+    const f = Math.floor(v);
+    floors[el] = f;
+    assigned += f;
+    remainders.push({ el, rem: v - f });
+  }
+  let shortfall = 100 - assigned;
+  // Hand out the missing units to the largest fractional remainders,
+  // breaking ties via catalog order so the result is deterministic.
+  remainders.sort((a, b) => {
+    if (b.rem !== a.rem) return b.rem - a.rem;
+    return order.indexOf(a.el) - order.indexOf(b.el);
+  });
+  let i = 0;
+  while (shortfall > 0 && i < remainders.length) {
+    floors[remainders[i].el] += 1;
+    shortfall -= 1;
+    i += 1;
+  }
+  // If the raw vector was all zeros (shouldn't happen — calculateAnalysis
+  // guards against it — but be safe), fall back to a flat 25-each.
+  if (Object.values(floors).every((v) => v === 0)) {
+    return { earth: 25, fire: 25, water: 25, air: 25 };
+  }
+  return floors;
+};
 
+/**
+ * SHRE composition mode (type lives in types.ts). Determines how the
+ * elemental distribution behaves as a SPATIAL IDENTITY, not just which
+ * number is largest:
+ *
+ *   - 'SingleDominant' — one element clearly leads (gap to runner-up ≥ 10)
+ *   - 'NarrowLead'     — primary leads by 5–9 (atmospheric leadership rule,
+ *                        per user spec: a small gap can still control identity)
+ *   - 'DualCore'       — top two are within 5 of each other (joint identity)
+ *   - 'Triadic'        — three elements each ≥ 15, fourth < 10
+ *   - 'Minimal'        — only two elements have meaningful presence (≥ 5)
+ *
+ * The image prompt and the client report both branch on this so they agree.
+ */
+export const detectComposition = (pct: Record<Element, number>): CompositionMode => {
+  const sorted = (Object.entries(pct) as Array<[Element, number]>).sort((a, b) => b[1] - a[1]);
+  const [p1, p2, p3, p4] = sorted.map(([, v]) => v);
+  const gap12 = p1 - p2;
+  const meaningfulCount = sorted.filter(([, v]) => v >= 5).length;
+
+  // Minimal — only two elements have any presence at all
+  if (meaningfulCount <= 2) return 'Minimal';
+
+  // Triadic — top three all carry weight, fourth is a trace
+  if (p3 >= 15 && p4 < 10) return 'Triadic';
+
+  // Dual-core — top two within 5%; neither alone controls
+  if (gap12 < 5) return 'DualCore';
+
+  // Narrow lead — 5–9% gap; primary controls identity by atmospheric leadership
+  // but the report explains the dual tension instead of suppressing the runner-up
+  if (gap12 < 10) return 'NarrowLead';
+
+  return 'SingleDominant';
+};
+
+export const dominanceStrengthFor = (composition: CompositionMode): DominanceStrength => {
+  if (composition === 'DualCore') return 'dual';
+  if (composition === 'NarrowLead') return 'narrow';
+  return 'clear';
+};
+
+/**
+ * Sum survey-answer weights into an integer-percentage distribution that
+ * adds to EXACTLY 100. No floors, no forced balance — 0% is allowed. If
+ * the user skipped the survey we return a flat 25/25/25/25 so downstream
+ * code doesn't have to guard against undefined.
+ */
+export const calculateAnalysis = (state: UserState): AnalysisResult => {
   if (state.shortSurveySkipped) {
-      const flat = { air: 25, fire: 25, water: 25, earth: 25 };
-      return {
-          percentages: flat,
-          primary: 'earth',
-          secondary: 'air',
-          estimate: { cost: {low:0, high:0}, timeline: {low:0, high:0} }
-      };
+    const flat: Record<Element, number> = { earth: 25, fire: 25, water: 25, air: 25 };
+    return {
+      percentages: flat,
+      primary: 'earth',
+      secondary: 'air',
+      composition: 'DualCore',
+      dominanceStrength: 'dual',
+      estimate: { cost: { low: 0, high: 0 }, timeline: { low: 0, high: 0 } },
+    };
   }
 
+  // Sum weighted-percentage contributions across all answered questions.
+  // Each answer's weights already sum to 100, so totalScore = 100 × n
+  // where n is the number of answered questions — normalization below
+  // divides by totalScore to produce the final per-element percentage.
+  const scores: Record<Element, number> = { earth: 0, fire: 0, water: 0, air: 0 };
   Object.entries(state.shortSurveyAnswers).forEach(([qId, answerIdx]) => {
-    const question = SHORT_QUESTIONS.find(q => q.id === qId);
+    const question = SHORT_QUESTIONS.find((q) => q.id === qId);
     if (question && question.options[answerIdx]) {
       const weights = question.options[answerIdx].weights;
       Object.entries(weights).forEach(([el, weight]) => {
-        if(weight) scores[el as Element] += weight;
+        if (weight) scores[el as Element] += weight;
       });
     }
   });
 
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0) || 1;
-  const percentages: any = {};
-  ELEMENTS.forEach(el => {
-    percentages[el] = (scores[el] / totalScore) * 100;
-  });
+  const raw: Record<Element, number> = {
+    earth: (scores.earth / totalScore) * 100,
+    fire:  (scores.fire  / totalScore) * 100,
+    water: (scores.water / totalScore) * 100,
+    air:   (scores.air   / totalScore) * 100,
+  };
+  const percentages = largestRemainderRound(raw);
+
+  // Verify the invariant — should always be true after largest-remainder
+  // rounding, but if a future bug breaks it we want to know loudly.
+  const totalAfter = percentages.earth + percentages.fire + percentages.water + percentages.air;
+  if (totalAfter !== 100) {
+    console.error(`SHRE: largestRemainderRound produced sum ${totalAfter}, expected 100. Raw:`, raw);
+  }
 
   const sorted = sortElementsByDistribution(percentages as Vector4);
-  
+  const composition = detectComposition(percentages);
+  const dominanceStrength = dominanceStrengthFor(composition);
+
   const area = state.params.squareMeters || 100;
   const isInterior = state.params.domain === 'interior';
-  const baseCost = isInterior ? 1500 : 2500; 
+  const baseCost = isInterior ? 1500 : 2500;
   const complexityMultiplier = (percentages.fire + percentages.water) / 40 + 1;
   const estimatedTotal = area * baseCost * complexityMultiplier;
-  
+
   return {
     percentages,
     primary: sorted[0],
     secondary: sorted[1],
+    composition,
+    dominanceStrength,
     estimate: {
       cost: {
         low: Math.round(estimatedTotal * 0.9),
-        high: Math.round(estimatedTotal * 1.2)
+        high: Math.round(estimatedTotal * 1.2),
       },
       timeline: {
         low: Math.round(Math.sqrt(area)),
-        high: Math.round(Math.sqrt(area) * 1.5)
-      }
-    }
+        high: Math.round(Math.sqrt(area) * 1.5),
+      },
+    },
   };
 };
 
 // --- REAL-WORLD PRODUCT REFERENCES ---
-// Maps each material in our catalog to specific real-world brands and product lines
-const MATERIAL_PRODUCT_MAP: Record<string, { brand: string; product: string; finish: string }[]> = {
+// Maps each material in our catalog to specific real-world brands and product lines.
+// Exported because services/shrePrompt.ts uses it to derive brand+finish for
+// user-selected materials (user-wins logic in the SHRE prompt body).
+export const MATERIAL_PRODUCT_MAP: Record<string, { brand: string; product: string; finish: string }[]> = {
   // ── EARTH ──────────────────────────────────────────────────────────────
   'Travertine (honed)':                       [{ brand: 'Stone Italiana', product: 'Navona travertine slab', finish: 'honed unfilled cross-cut, warm cream-beige' }],
   'Jura limestone (golden)':                  [{ brand: 'Solnhofen / Jura Marmor', product: 'Jura beige limestone slab', finish: 'honed with fossil inclusions, warm golden-beige' }],
@@ -766,8 +885,10 @@ function buildMaterialPaletteReconciliationBlock(
 // Surface roles for material placement — architecture thinks in surfaces, not abstract lists
 const SURFACE_ROLES = ['floor', 'main wall', 'accent wall / feature', 'ceiling / overhead', 'cabinetry / joinery', 'countertop / table surface', 'upholstery / textile', 'hardware / accents'] as const;
 
-// Map material names to their natural architectural surface
-const MATERIAL_SURFACE_AFFINITY: Record<string, string> = {
+// Map material names to their natural architectural surface.
+// Exported because services/shrePrompt.ts uses it to fill the
+// {application} field of the SHRE prompt body for user-selected materials.
+export const MATERIAL_SURFACE_AFFINITY: Record<string, string> = {
   // EARTH
   'Travertine (honed)': 'floor and wall cladding',
   'Jura limestone (golden)': 'floor slab, stair tread, vanity top — warm beige limestone with fossil interest',
@@ -869,16 +990,33 @@ const MATERIAL_SURFACE_AFFINITY: Record<string, string> = {
   'Walnut (natural finish)': 'dining table, desk, or joinery',
 };
 
-// Build explicit material placement instructions from user's selected materials
-const buildMaterialPlacement = (materials: { name: string }[]): string => {
+// Build explicit material placement instructions from user's selected materials.
+//
+// Each material gets a sentence in the form "SURFACE: material-or-product".
+// Custom materials (user-defined) honor the user's `placementNote` when one
+// is provided — the note becomes the authoritative surface so the model
+// places the material exactly where the user asked for it. Catalog
+// materials fall back to MATERIAL_SURFACE_AFFINITY → SURFACE_ROLES.
+const buildMaterialPlacement = (
+  materials: Array<{ name: string; placementNote?: string; isCustom?: boolean }>,
+): string => {
   if (materials.length === 0) return '';
   const placements: string[] = [];
   materials.forEach((m, i) => {
     const products = MATERIAL_PRODUCT_MAP[m.name];
-    const surface = MATERIAL_SURFACE_AFFINITY[m.name] || SURFACE_ROLES[i % SURFACE_ROLES.length];
-    if (products && products.length > 0) {
+    // 1) User-typed placement note wins (treats whatever the user wrote
+    //    as the assigned surface — e.g. "kitchen island front panel").
+    // 2) Otherwise fall back to the canonical affinity / surface roles.
+    const userSurface = m.placementNote?.trim();
+    const surface = userSurface && userSurface.length > 0
+      ? userSurface
+      : (MATERIAL_SURFACE_AFFINITY[m.name] || SURFACE_ROLES[i % SURFACE_ROLES.length]);
+    if (products && products.length > 0 && !m.isCustom) {
       const p = products[0];
       placements.push(`${surface}: ${p.brand} ${p.product}, ${p.finish}`);
+    } else if (m.isCustom) {
+      // Custom finish: tag visibly so the AI doesn't substitute a stock material.
+      placements.push(`${surface}: ${m.name} (USER-DEFINED FINISH — do not substitute)`);
     } else {
       placements.push(`${surface}: ${m.name}`);
     }
@@ -888,7 +1026,7 @@ const buildMaterialPlacement = (materials: { name: string }[]): string => {
 
 /** Hard requirement: ≥80% of catalog picks clearly visible (rounded up); target 100%. */
 const buildUserSelectedMaterialsMandatory = (
-  materials: Array<{ name: string }>,
+  materials: Array<{ name: string; isCustom?: boolean; placementNote?: string }>,
   materialPlacement: string,
 ): string => {
   const exact = materials.map((m) => m.name).join('; ');
@@ -896,6 +1034,10 @@ const buildUserSelectedMaterialsMandatory = (
   const minVisible = Math.max(1, Math.ceil(n * 0.8));
   const anchors = materials
     .map((m) => {
+      if (m.isCustom) {
+        const where = m.placementNote ? ` — apply to ${m.placementNote}` : '';
+        return `${m.name} (USER-DEFINED — render as the actual material described${where}; never substitute a stock finish)`;
+      }
       const prods = MATERIAL_PRODUCT_MAP[m.name];
       if (!prods?.length) return `${m.name} (match catalog name visually — real supplier-grade finish)`;
       const p = prods[0];
@@ -1179,7 +1321,9 @@ FORBIDDEN for this category: façades that look like a detached house, domestic 
 /** All interiors: circulation, bar logic, simplicity — complements program-specific rules */
 const PRACTICAL_LAYOUT_SIMPLICITY_BLOCK = `PRACTICAL LAYOUT & OPERATIONAL REALISM (mandatory): Design for real entry, movement, and daily operation. Clear paths: ingress from entrance toward service and seating; egress and staff routes readable; customer aisles typically ≥90 cm, service/tray paths ≥120 cm where F&B applies. Bars and counters sit on walls or islands that logically carry power, water, drainage, and storage — not arbitrary floating sculptures. If stained glass or vitrage is in the scene, keep it on façade, entrance, clerestory, or dedicated feature surface — never use the stained-glass plane as the main bar back with equipment mounted through it. Avoid dead-end furniture, blocked doors, purely decorative volumes that waste floor plate, and formal gimmicks that contradict running the space. Prefer straightforward zoning (serve / sit / wait / circulate) with modest complexity — legible and easy to operate, not a maze.`;
 
-const FURNITURE_SERVICE_LINE_SANITY_BLOCK = `FURNITURE vs BAR / SERVICE COUNTER (mandatory wherever a bar, barista counter, or long service run appears): NEVER place sofas, sectionals, or deep lounge upholstery leaning on, fused to, or jammed against the bar face — that creates fake “living room” staging, blocks knee space, and leaves absurd unreachable voids behind furniture. Bar seating = stools with proper overhang and aisle; nearby loose seating = chairs and small tables on walkable floor, with full perimeter circulation for staff and guests. Every seat must be reachable and usable — no purely decorative clusters that ignore ergonomics.`;
+const FURNITURE_SERVICE_LINE_SANITY_BLOCK = `FURNITURE vs BAR / SERVICE COUNTER / KITCHEN ISLAND (mandatory wherever a bar, barista counter, kitchen island, peninsula, or long service run appears — residential AND commercial): NEVER place sofas, sectionals, lounge chairs, or deep upholstery leaning on, fused to, or jammed against the island or counter face. The minimum gap from the closest edge of any upholstered piece to the island / bar / counter is 90 cm — a real walkable corridor where a person can pass with a tray. Sofa-to-island flush placement is an automatic layout failure; relocate the sofa, shrink it, or omit it. Bar / island seating = stools at the counter with 25-30 cm knee overhang and 90 cm aisle behind; loose lounge seating = chairs and small tables on walkable floor with full perimeter circulation for staff and guests. Every seat must be reachable and usable from at least one side — no decorative clusters wedged into corners that ignore ergonomics.`;
+
+const ISLAND_HARDWARE_LOGIC_BLOCK = `ISLAND / BAR / PENINSULA HARDWARE & FACADE (mandatory whenever a kitchen island, bar block, peninsula, or freestanding service counter appears): Cabinet handles, knobs, drawer pulls, finger-grip channels, push-to-open seams, hinge lines, and any operable hardware live ONLY on the WORKING side — the side where staff or the cook stands. The DINING / SEATING / GUEST-FACING side of an island or bar is a CLEAN finished panel: a continuous waterfall stone wrap, a fluted wood or plaster facade, a flat veneered panel, a board-and-batten run, a polished metal sheet, or an upholstered banquette skirt — never visible drawer fronts, hinge gaps, or pulls. Same logic on reception desks, ticket counters, and millwork credenzas: hardware faces staff, the public face is flush and finished. If the camera shows both sides, the working side may show neat cabinet rhythm with subtle hardware, but the seated guest's side stays clean. Backs of islands NEVER carry working drawer fronts visible to the dining area.`;
 
 const CAFE_COFFEE_SEATING_BLOCK = `CAFÉ / COFFEE SHOP TYPOLOGY (mandatory when the room is Café or Coffee Shop): Residential-scale sofas and sectionals are NOT appropriate — omit them by default. Seating vocabulary = café chairs, bar stools, counter stools, small 2-top and 4-top tables, communal high table with stools, optional compact bench along a wall or short window perch — never a bulky sofa as the hero. Armchairs at most in low count if m² allows and always away from the service line. The image must read as a working specialty-coffee floor, not a living room with an espresso machine.`;
 
@@ -1236,16 +1380,16 @@ const ROOM_PROGRAMS: Record<string, {
     forbiddenItems: ['bed', 'bathtub', 'office desk', 'wardrobe'],
     materialPriority: 'durable stone or engineered countertops, ceramic or stone backsplash, hardwood or tile flooring, painted or veneer cabinetry',
     cameraHint: 'eye-level from dining area looking toward counter and cabinetry, 28-32mm',
-    spatialRules: 'Work triangle between sink, cooktop, and refrigerator. Min 120cm between parallel counters. Island requires 100cm clearance on all working sides. Upper cabinets 45-50cm above counter.',
-    layoutLogic: 'Efficient work zones: prep, cook, clean. Task lighting under upper cabinets. Pendant lights over island/peninsula. Ventilation above cooktop.',
+    spatialRules: 'Work triangle between sink, cooktop, and refrigerator. Min 120cm between parallel counters. Island requires 100cm clearance on ALL working sides — never less, never blocked by a sofa or armchair. Upper cabinets 45-50cm above counter. ISLAND HARDWARE LAW: cabinet doors, drawer fronts, knobs, pulls, and visible hardware appear ONLY on the working (cook) side of the island; the seating / dining side shows a clean unbroken finished panel (waterfall stone, fluted wood, flat veneer, or upholstered banquette skirt) — NEVER backside drawer fronts or knobs visible from the living / dining area. SOFA-TO-ISLAND CLEARANCE: when a sofa or sectional is in the same room as a kitchen island, the minimum gap between sofa edge and island edge is 90cm — a walkable corridor. Never fuse sofa to island, never wedge a sectional against the island face.',
+    layoutLogic: 'Efficient work zones: prep, cook, clean. Task lighting under upper cabinets. Pendant lights over island/peninsula. Ventilation above cooktop. Living area (if open plan) is set BACK from the island with a clear walkway between zones — sofas face the lounge focal point, not the kitchen work surface.',
   },
   'Bathroom': {
-    requiredElements: ['vanity with basin', 'mirror above vanity', 'shower or bathtub', 'towel storage'],
-    forbiddenItems: ['bed', 'sofa', 'dining table', 'kitchen island', 'wardrobe'],
-    materialPriority: 'waterproof surfaces — porcelain tile, natural stone, microcement, glass partitions, matte ceramic',
-    cameraHint: 'eye-level from doorway showing vanity and shower/tub, 28-35mm',
-    spatialRules: 'Vanity opposite or adjacent to shower. Min 70cm clearance in front of vanity. Shower glass partition or curtain. Floor drain slope. Wet zone separated from dry zone.',
-    layoutLogic: 'Wet zone (shower/tub) separated from dry zone (vanity, toilet). Mirror with integrated or flanking lighting. Recessed shelving in shower wall.',
+    requiredElements: ['vanity with basin', 'mirror with integrated architectural lighting', 'glass shower screen or walk-in shower', 'towel storage (rail or niche)'],
+    forbiddenItems: ['bed', 'sofa', 'dining table', 'kitchen island', 'wardrobe', 'curtains', 'drapery', 'voile', 'sheers', 'window soft treatments', 'curtains in mirror reflection', 'indoor trees', 'spa resort staging', 'wine glass', 'bath caddy', 'excessive candles', 'living-room textiles'],
+    materialPriority: 'waterproof surfaces — porcelain tile, natural stone, microcement, glass partitions, matte ceramic, brushed metal hardware',
+    cameraHint: 'eye-level from doorway showing vanity and shower zone, 28-35mm',
+    spatialRules: 'Dry zone (vanity, mirror, optional hearth) separated from wet zone (shower/tub behind glass). Min 70cm clearance in front of vanity. NO curtains or drapery anywhere — including mirror reflections. Glass partition only for wet zone. Floor drain slope in shower.',
+    layoutLogic: 'Functional wet/dry split. Mirror with integrated LED or flanking sconces — architectural, not theatrical. When Fire element ≥ 30%: built-in hearth in dry zone on marble/brass feature wall, ventilated and away from shower.',
   },
   'Dining': {
     requiredElements: ['dining table with appropriate number of chairs', 'pendant light above table', 'clear floor around table for chair pull-out'],
@@ -1466,6 +1610,50 @@ const getDefaultRoomProgram = (roomName: string) => ({
   spatialRules: 'Furniture does not block circulation. All items properly scaled to room size.',
   layoutLogic: 'Logical arrangement serving the room purpose.',
 });
+
+/**
+ * WORKING / IN-USE CONTENT per room type.
+ *
+ * The user flagged renders that were "empty showrooms" — a bar with no
+ * bottles, an office with no monitors, a kitchen with no pots. The SHRE
+ * body alone never names this working content; the ROOM PROGRAM preamble
+ * block injects it explicitly so the model knows the room is captured
+ * mid-service / in active use, with all the equipment a real operator
+ * would have on the surfaces. Each entry lists VISIBLE WORKING OBJECTS,
+ * not finishes — the SHRE body already handles materials.
+ */
+const WORKING_CONTENT_BY_ROOM: Record<string, string> = {
+  'Bar': 'back-bar fully stocked with rows of spirit bottles on backlit shelves (200+ bottles across multiple tiers), tiered glassware racks (coupe, rocks, highball, wine glasses), an espresso machine on a counter end with portafilters and a tamper, ice well with metal jiggers and bar spoons, garnish trays with citrus wheels and fresh herbs, cocktail shakers, strainers, muddlers laid out on the counter, draft taps or soda gun, a wine fridge or glazed wine cellar visible behind, a half-made cocktail or two glasses with ice mid-service, a folded bar towel draped over the rail',
+  'Restaurant': 'tables set with linen napkins, water glasses, wine glasses, polished cutlery in place, charger plates, menu cards in folders, small candles lit on each table, bread baskets with butter, salt & pepper mills, a service tray with empty glassware on a side station, an exposed pass with two plated dishes mid-service, a wine carafe and a corkscrew on a side cart',
+  'Kitchen': 'pots simmering on the cooktop with steam visible, a wooden cutting board with a sliced sourdough and a knife, fresh herbs (rosemary, thyme, basil) in glass jars, a fruit bowl with citrus, a stand mixer or espresso machine on the counter, hanging copper utensils, a draped tea towel, a sourdough starter in a jar, an open cookbook with a recipe marked',
+  'Living Room': 'hardback books stacked on the coffee table and lower shelves, a thrown wool blanket on the sofa with natural folds, a half-finished cup of tea on a side table, a stack of magazines and art books, a fresh-cut floral arrangement in a ceramic vase, framed art on the wall (two or three pieces grouped), vinyl records or art books on a low console, a folded pair of reading glasses',
+  'Bedroom': 'a freshly made bed with a thrown duvet (one corner folded back) and reading pillows, a folded throw at the foot, a bedside lamp lit pooling warm light, a hardback book face-down on the nightstand with a glass of water, slippers parallel by the bed, an open wardrobe revealing hung garments and folded textiles, a watch and a small dish of cufflinks on the dresser',
+  'Bathroom': 'rolled white towels on open shelving or a ladder rail (2-3 visible), a glass shower screen with fine water droplets, a wall-mounted mirror with integrated or flanking vanity lighting, a folded hand towel on a hook, a quality soap dispenser at the basin, a built-in niche with functional toiletries — bathroom objects only, no spa-resort staging',
+  'Office': 'ergonomic task chairs at each desk, two monitors per workstation showing soft glowing screens (low-light office content visible), keyboards with worn keys, paper trays with sorted documents, indoor plants beside each desk (monstera, snake plant, pothos), a coffee station with mugs and a milk pitcher, a whiteboard with handwritten notes and sticky notes, a printer alcove with a stack of printed paper, headphones resting on a desk, a steaming mug on one desk',
+  'Study': 'an open hardback book on the desk with a fountain pen and a pair of reading glasses, a brass desk lamp lit creating a warm pool of light, an ink pot, a stack of letters and papers held by a brass paperweight, books floor-to-ceiling on the shelves with leather spines, a leather wing chair turned slightly toward the desk, an old globe or framed antique map, a tumbler of whisky on a side table',
+  'Lobby': 'a manned reception counter with two terminals and an open guest book, brass key tags hung on a board, a luggage trolley with two stacked cases off to one side, a substantial fresh-flower arrangement on a side console, magazines fanned on a low coffee table, brochures in a holder, a doorman bell, a coat rack with a folded jacket and an umbrella near the entrance, a uniformed concierge silhouette',
+  'Reception': 'a manned reception counter with terminals, an open appointment book, brass call bell, business cards in a holder, a fresh-flower arrangement on a side console, magazines on a low coffee table, a coat rack with a folded jacket, a wayfinding signboard',
+  'Lounge': 'two cocktail glasses with a half-finished drink and one with melting ice on a side table, hardback books and design magazines fanned on a coffee table, a thrown wool blanket on the sofa, a beeswax candle lit on the console, a vinyl record sleeve on the side cabinet, a fresh-cut floral arrangement in a heavy vase, framed black-and-white photographs grouped on the wall, a folded newspaper',
+  'VIP Lounge': 'two crystal whisky glasses with a half-finished pour and a single ice sphere on a side table, hardback books fanned on a coffee table, a thrown velvet throw on the sofa, lit beeswax candles in brass holders, a brass tray with a decanter and two glasses, framed art on the wall, a fresh-cut floral arrangement, an open cigar box on a console',
+  'Dining': 'a table fully set with linen napkins, wine glasses, water glasses, polished cutlery, charger plates, a low center floral arrangement or candelabra with lit candles, bread on a wooden board with a knife, a half-poured carafe of red wine, a side console with extra plates and a decanter, a wine bottle being opened, a folded tablecloth',
+  'Hallway': 'a console with mail stacked and a brass key bowl, a coat rack with a draped jacket and a scarf, a tall mirror reflecting a pool of light, a runner rug, a single framed photograph or landscape painting, a small plant on a stool, an umbrella in a brass stand, a stack of magazines on the console',
+  'Guest Room': 'a hotel-made bed with crisp white linens and a thrown duvet, a luggage bench at the foot with an open suitcase revealing folded garments, a desk with stationery and a small lit lamp, a tray with two glass water bottles and tumblers, a folded newspaper, slippers parallel, a folded white robe hung on the open wardrobe, a small fruit bowl on the desk',
+  'Terrace': 'two half-finished glasses of wine on the table, a folded linen napkin, a lit citronella candle in a brass holder, potted herbs in terracotta planters (rosemary, thyme, lavender), a thrown wool blanket draped over the lounge chair, an open hardback book face-down on the side table, a tall vase of fresh-cut greenery or seasonal flowers, a wooden tray with a coffee pot',
+  'Cafe': 'a working espresso machine on the counter (steam wand in use), a hand-grinder beside it, ceramic cups stacked in pairs, a pastry case with fresh croissants and tarts visible, a chalkboard menu hand-written, fresh roses or seasonal flowers in a small ceramic vase, a stack of design magazines on the communal table, two cups of coffee with latte art on a window-counter, a folded cloth, fresh herbs in a glass jar',
+  'Coffee Shop': 'a working La Marzocco or Victoria Arduino espresso machine on the counter with portafilters out, a hand-brew V60 station with a kettle, a Mahlkönig grinder bank with multiple hoppers, ceramic cups stacked in pairs, a pastry case with fresh croissants and tarts, a chalkboard menu hand-written, a small ceramic vase with seasonal flowers, two cups of coffee with latte art on a window-counter, a stack of design magazines on the communal table, a folded barista cloth, fresh-roasted bean bags branded',
+  'Wine Room': 'wine bottles laid out on the tasting counter with two stemmed glasses, an open notebook with tasting notes, a corkscrew, a small plate of cheese and crackers, a candle lit, a decanter of red wine being aired, a stack of wine reference books, a wine rack visible behind with hundreds of bottles labeled by region',
+  'Meeting Room': 'a long table set with notepads and pens at each seat, glass water carafes and tumblers, an open laptop on the table showing a soft glow, a remote control beside a screen, a tray with coffee cups and saucers, fresh-cut flowers in a low vase, a fruit bowl, a folded agenda on each pad',
+  'Coworking': 'shared tables with two laptops open, ceramic coffee cups, notebooks with pens, indoor plants on shelf dividers, a coffee station with a milk pitcher and a row of mugs, a whiteboard with sticky notes, headphones resting on one desk, a stack of books with bookmarks, a steaming cup, a folded jacket on a chair-back',
+  'Shop': 'curated product displays on shelves and tables with merchandise arranged in palettes, a checkout counter with a tablet POS terminal, a paper bag with handles on the counter, a folded garment or item being wrapped in tissue, fresh flowers in a vase, a printed price card, a small plant beside the till, a coat rack',
+  'Counter': 'a working service counter with a tablet POS, ceramic cups stacked, a milk pitcher, a small bell, a folded cloth, a tray with two cups of coffee mid-service, a small chalkboard with daily specials, fresh flowers in a glass jar',
+  'Seating': 'small tables set with menus, a candle lit, two glasses of water with lemon slices, folded linen napkins, an open menu, a folded magazine on an adjacent table, fresh flowers in a small vase, an empty wine glass mid-pour',
+  'Restroom': 'rolled hand towels stacked in a tray, a brass soap dispenser, a small floral arrangement or a single stem in a slim vase, a folded cotton mat by the basin, a candle lit, a small basket with fresh towels, a hanging white linen towel, a wood stool',
+  'Exhibition': 'framed art evenly spaced on the walls with neat gallery labels beside each piece, a sculpture on a centred plinth, a bench in the middle of the room for visitors, a printed gallery brochure on a small console, soft pools of accent light on each work, a discreet attendant chair, a glass of water on a side table',
+  'Entrance': 'a console with a guest book and a brass pen, a small floral arrangement, an umbrella stand with two folded umbrellas, a coat rack with a folded scarf and jacket, a folded newspaper on the console, a mirror reflecting the entry pool of light, a small lamp lit',
+  'Balcony': 'two outdoor chairs with thrown cotton blankets, a small table with a tray of two coffee cups and a folded napkin, potted herbs in terracotta planters, a small candle in a glass lantern, an open hardback book face-down, a folded magazine, a wooden footstool',
+  'Kids Room': 'a low bed with thrown patterned bedding, a soft toy or two on the pillow, a small desk with crayons and an open sketchbook with childlike drawings, a wooden toy on the floor, a hanging mobile, a small plant, a folded blanket draped over the chair, books with picture spines on the low shelf',
+  'Laundry': 'a folded stack of clean white towels on the counter, a wicker basket with crisp folded linens, a small plant on the shelf, a brass-handled iron resting upright, a folded ironing board against the wall, a small bottle of detergent and a soap dish, a hanging rack with two folded shirts',
+};
 
 // ── COMPOSITION STRATEGIES (anti-repetition) ──
 /** Must stay aligned with App.tsx IMAGE_HOTSPOTS (x,y = % from left, top) for pin-to-pixel coherence */
@@ -1898,6 +2086,237 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   const programEquipScale = buildProgramEquipmentScaleBlock(areaM2, ceilingH, primaryRoom, input.spaceCategory);
   if (programEquipScale) P.push(programEquipScale);
 
+  // Resolve dominant + secondary early so the LIFE & DAYLIGHT and
+  // ELEMENTAL ACCENT LAYER preamble blocks can be element-aware before
+  // the SHRE body is assembled.
+  const { primary: shrePrimary, secondary: shreSecondary } = readElements(activeDist);
+
+  // ─────────────────────────────────────────────────────────────
+  // ROOM PROGRAM — functional working content.
+  // ─────────────────────────────────────────────────────────────
+  // The legacy block that pushed roomProgram.requiredElements is disabled
+  // inside the SHRE refactor, so the SHRE body had no idea what objects
+  // must be physically present in the room. The user flagged this
+  // explicitly ("a bar must have drinks, equipment and corresponding
+  // gear placed, just like other spaces"). This block re-injects the
+  // program data PLUS an explicit "in-use working content" list per room
+  // type so the render reads as a working space mid-service, not an
+  // empty showroom.
+  const workingContent = WORKING_CONTENT_BY_ROOM[roomKey] || 'task tools, in-use objects, and signs of recent activity proportional to the room type';
+  P.push(
+    `ROOM PROGRAM — FUNCTIONAL WORKING CONTENT (must be physically present and visible in the render):
+- REQUIRED ELEMENTS in this ${roomKey}: ${roomProgram.requiredElements.join('; ')}.
+- LAYOUT LOGIC: ${roomProgram.layoutLogic}
+- SPATIAL RULES: ${roomProgram.spatialRules}
+- FORBIDDEN in this room (do not render): ${roomProgram.forbiddenItems.join(', ')}.
+- IN-USE WORKING OBJECTS (must be visible on the surfaces): ${workingContent}.
+- The room is captured MID-SERVICE / IN ACTIVE USE — there is always something happening: a half-finished drink, a steaming cup, an open book, a thrown jacket, a folded napkin, a lit candle, an in-progress task. NEVER render an empty showroom-clean version of a working space — that is the failure mode.`,
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // LIFE & DAYLIGHT — mandatory atmosphere of inhabitation.
+  // ─────────────────────────────────────────────────────────────
+  // The user described the previous render as "no sun comes in, no joy,
+  // no gravitas, nothing happening". This block injects natural daylight
+  // (element-tinted to match the dominant element's emotional register),
+  // mandatory plant life, layered textiles, and signs of recent human
+  // use so every render reads as inhabited and considered — not sterile,
+  // not a marketing render.
+  P.push(
+    `LIFE & DAYLIGHT — MANDATORY ATMOSPHERE (the room must feel inhabited, refined, and emotionally calibrated — never sterile):
+- NATURAL DAYLIGHT enters the space: ${ELEMENT_DAYLIGHT_QUALITY[shrePrimary]}. Daylight is the BASE light source; the SHRE fixture + concealed cove LED + one warm task lamp at human-eye height layer ON TOP — daylight first, fixtures second. No flat global fill, no fake HDR, no night scene unless explicitly requested.
+- PLANT LIFE is mandatory where the room type allows: at least one substantial green presence proportional to the space — olive tree in clay, dracaena, ficus, fern, monstera, eucalyptus in a vase, or herbs in jars. Skip in Bathroom, Restroom, wine cellars, or ultra-minimal galleries.
+- SIGNS OF RECENT HUMAN USE: evidence proportional to ${roomKey} — folded napkin, steaming cup, half-open book, draped jacket, fresh flowers, in-progress task. Working spaces show tools of the trade (bar tools, espresso cups, desk papers) — not random decor props. Bathrooms show functional use only (folded towel, soap at basin) — never spa-resort fantasy props.
+- LAYERED TEXTILES (where the space type allows): at minimum one rug or runner, one cushion family, one throw or linen — never bare-everywhere hard surfaces in residential or lounge types. Skip entirely in Bathroom and Restroom — no curtains, throws, or living-room textiles.
+- REFINED EMOTIONAL DENSITY: warmth and gravitas together — restrained luxury, quiet intelligence, photographed calm. Not Pinterest cliché, not developer showroom, not algorithmic perfection.`,
+  );
+
+  // ─────────────────────────────────────────────────────────────
+  // ELEMENTAL ACCENT LAYER — proportional decor from non-dominant elements.
+  // ─────────────────────────────────────────────────────────────
+  // The dominant + secondary elements set context and atmosphere via the
+  // SHRE body. Every OTHER element with ≥5% weight enters the room as
+  // DECOR + LIGHTING accents proportional to its % — this is the user's
+  // explicit method ("dominant and secondary create context, the rest
+  // enter as supporting decor and accent details proportional to their
+  // %"). Accents NEVER clad walls or floors; they appear as lighting
+  // fixtures, decor pieces, textiles, or in-use details only.
+  {
+    const allElements: Element[] = ['earth', 'fire', 'water', 'air'];
+    const elementPct = (el: Element) => Math.round(activeDist[el]);
+    const tertiaryLines: string[] = [];
+    for (const el of allElements) {
+      if (el === shrePrimary || el === shreSecondary) continue;
+      const pct = elementPct(el);
+      if (pct < 5) continue;
+      const intensity = pct >= 20 ? 'substantial presence' : pct >= 12 ? 'visible presence' : 'subtle hint';
+      const accentLine =
+        roomKey === 'Bathroom' || roomKey === 'Restroom'
+          ? BATHROOM_ACCENT_DECOR[el]
+          : ELEMENT_ACCENT_DECOR[el];
+      tertiaryLines.push(`- ${el.toUpperCase()} accent (${pct}%, ${intensity}): ${accentLine}.`);
+    }
+    if (tertiaryLines.length > 0) {
+      P.push(
+        `ELEMENTAL ACCENT LAYER — non-dominant elements enter as DECOR + LIGHTING proportional to their %:
+${tertiaryLines.join('\n')}
+These are SMALL decor and lighting accents distributed in the room — they do NOT replace the primary materials, they do NOT clad walls or floors. They give the room emotional range so it reads as multi-note and alive, not single-element flat. The room's atmosphere = (dominant element context) + (secondary element register) + (tertiary/quaternary accents above as decor and lighting).`,
+      );
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // REALITY ANCHOR — surface & ceiling discipline.
+  // ─────────────────────────────────────────────────────────────
+  // The SHRE body alone is too sparse: when the dominant element is
+  // stone-heavy (Water with marble picks, Earth with travertine picks,
+  // Air with white marble), the image model defaults to a "marble box"
+  // — cladding floor, walls AND ceiling in the same stone. The user
+  // flagged this explicitly ("marble on the ceiling is nonsense, this
+  // is not conceptual design"). These rules restore the surface
+  // discipline that used to live in the legacy [7b] / [12b] blocks.
+  P.push(
+    `REALITY ANCHOR — SURFACE & CEILING DISCIPLINE (non-negotiable, applies to every render):
+- CEILING IS NEVER CLAD IN STONE, MARBLE, ONYX, QUARTZITE OR ANY SLAB MATERIAL. The ceiling is clean smooth plaster (white or pale neutral) with concealed LED cove lighting at the perimeter. Beam profiles, plaster cornices and recessed downlights are acceptable; stone, marble or onyx cladding on the ceiling is FORBIDDEN regardless of the dominant element.
+- NO SINGLE-MATERIAL ROOM. Every render must show AT LEAST THREE distinct material families on the visible surfaces (e.g. stone + wood + plaster, or stone + metal + textile). Even when the user picks four stones, only ONE of them clads a feature wall — the others appear as counter, bar front, vanity top or accent panel. No "marble box", no "concrete box", no "all-one-finish" wrap.
+- EACH NAMED MATERIAL HOLDS ONE SURFACE FAMILY. Floors are floors; walls are walls; counters are counters. A material listed as "feature wall" does NOT also become the floor and the ceiling. A material listed as "floor" does NOT climb the walls.
+- STONE GETS A FEATURE WALL ONLY ONCE PER ROOM. The dominant stone clads ONE feature wall (or one column, or one bar back) — not three walls, not a wrap-around, not the soffit, not the ceiling. The other walls are plaster.
+- CONSTRUCTION EVIDENCE IS MANDATORY: visible 3 mm shadow gap where floor meets wall, real baseboards or flush reveals, edge profiles on stone counters, mitred corners on slabs, grout lines where appropriate. Surfaces are installed onto substrates, not floating.
+- REAL, REALISTIC, NOT CONCEPTUAL. This is a constructed interior delivered to a paying client — not a showroom render, not a competition board, not a stone-supplier promo. If a decision can't be built by a contractor with standard methods, simplify until it can.`,
+  );
+
+  P.push(buildAntiUtopianControlBlock(roomKey));
+
+  if (roomKey === 'Bathroom' || roomKey === 'Restroom') {
+    P.push(buildBathroomArchitecturalBlock(shrePrimary, firePct));
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // SHRE v1.0 — authoritative prompt BODY.
+  // ─────────────────────────────────────────────────────────────
+  // The user mandated that the image prompt follow the SHRE 5-step
+  // structure (material+brand+application × 3, accent detail, furniture,
+  // lighting, atmosphere, K+light, surface finish, closing line).
+  //
+  // Policy: USER-WINS material selection — user-picked catalog materials
+  // fill the primary/secondary/accent slots first; the SHRE element
+  // pools only fill any remaining slots.
+  //
+  // The preamble above (DOMAIN LOCK + SPACE CONFIG SUMMARY + scale /
+  // ceiling + program-equipment scale) is retained so the model still
+  // gets the spatial brief. The legacy verbose realism / composition /
+  // atmosphere / camera / anti-repetition blocks were dropped per spec.
+  const shreSpaceLabel = primaryRoom
+    ? `${primaryRoom} within a ${input.spaceCategory} project, ${areaM2} m², ${ceilingH} m ceiling`
+    : input.domain === 'architecture'
+      ? `${input.spaceCategory} building${input.archContext ? ` in a ${input.archContext} setting` : ''}, ${areaM2} m² floor plate, ${ceilingH} m typical floor-to-floor`
+      : `${input.spaceCategory} interior, ${areaM2} m², ${ceilingH} m ceiling`;
+  const shreUserMaterials = input.materialsSelected.map((m) => {
+    const w = m.vec;
+    const order: Element[] = ['earth', 'fire', 'water', 'air'];
+    let bestEl: Element = 'earth';
+    let bestVal = -Infinity;
+    for (const el of order) {
+      if ((w as any)[el] > bestVal) { bestVal = (w as any)[el]; bestEl = el; }
+    }
+    return {
+      id: m.id,
+      name: m.name,
+      element: bestEl,
+      image: m.imagePath || '',
+      isShared: false,
+      elementWeights: {
+        earth: (w.earth || 0) / 100,
+        fire:  (w.fire  || 0) / 100,
+        water: (w.water || 0) / 100,
+        air:   (w.air   || 0) / 100,
+      },
+    } as MaterialDef;
+  });
+  // SHRE prompt body — authoritative format per user spec.
+  // When a diagnosis is attached, its style/palette/materials are fed
+  // through so the rendered image agrees with the report screen.
+  P.push(buildSHREPromptBody({
+    spaceLabel: shreSpaceLabel,
+    primary: shrePrimary,
+    secondary: shreSecondary,
+    activeDist: activeDist as Vector4,
+    userMaterials: shreUserMaterials,
+    generationIndex: input.generationIndex ?? 0,
+    diagnosis: input.diagnosis,
+    primaryRoom,
+  }));
+
+  // ── SPACE RELEVANCE LOCK — room typology must match (was only in legacy body) ──
+  if (input.domain !== 'architecture') {
+    const roomTypeLabel = primaryRoom || roomKey;
+    P.push(
+      `SPACE RELEVANCE LOCK (mandatory — wrong typology = failed render):
+- THIS IMAGE IS EXACTLY: ${roomTypeLabel} within ${input.spaceCategory}. Camera and program: ${roomProgram.cameraHint}
+- LAYOUT: ${roomProgram.layoutLogic}
+- SPATIAL RULES: ${roomProgram.spatialRules}
+${spaceIdentity ? `- CATEGORY IDENTITY: ${spaceIdentity}` : ''}
+${contextOverride ? `- ROOM CHARACTER (overrides generic styling): ${contextOverride}` : ''}
+- FORBIDDEN: do not render a generic living room, empty showroom, or wrong commercial/residential typology when the brief says ${roomTypeLabel}. Every object must belong in this room type.`,
+    );
+    P.push(PRACTICAL_LAYOUT_SIMPLICITY_BLOCK);
+    P.push(FURNITURE_SERVICE_LINE_SANITY_BLOCK);
+    P.push(ISLAND_HARDWARE_LOGIC_BLOCK);
+    if (primaryRoom === 'Coffee Shop' || primaryRoom === 'Cafe') {
+      P.push(CAFE_COFFEE_SEATING_BLOCK);
+    }
+    if (isCommercialPublicInteriorCategory(input.spaceCategory)) {
+      P.push(COMMERCIAL_GLAZING_VITRAGE_BLOCK);
+      P.push(buildCommercialCeilingMepBlock(areaM2, ceilingH, firePct, primary));
+    }
+  } else if (spaceIdentity) {
+    P.push(`SPACE IDENTITY (exterior): ${spaceIdentity}`);
+  }
+
+  // ── ATMOSPHERE CALIBRATION + active daylight scenario (computed but was not emitted) ──
+  P.push(
+    buildAtmosphereCalibrationBlock({
+      primary: shrePrimary,
+      secondary: shreSecondary,
+      activeDist: activeDist as Vector4,
+      roomLabel: primaryRoom || roomKey,
+      roomAtmosphereHint: ROOM_ATMOSPHERE_REFINEMENT[roomKey],
+      userAdjectives,
+      lightTime: baseLight.time,
+      lightDesc: lightScenario,
+    }),
+  );
+  if (atmosphereBlock) {
+    P.push(atmosphereBlock);
+  }
+
+  P.push(
+    `LIGHTING SCENARIO (${baseLight.time}): ${lightScenario}. Architectural fixtures from the SHRE lighting roster support this scenario at low intensity — never overpower natural daylight.`,
+  );
+
+  P.push(
+    `PHOTOGRAPHIC REALISM GATE (mandatory):
+- Editorial architectural photograph — Dezeen / ArchDaily caliber. Medium-format clarity, subtle depth-of-field on distant planes, believable contact shadows, no CGI plastic gloss.
+- ${cameraVantage}. ${composition.name}: ${composition.desc}
+- Materials read as installed construction: veining variation, wood grain direction, plaster trowel marks, metal brushing, fabric weave — never stamped repeating texture.
+- LOGICAL DESIGN: every placement functional for ${roomKey}; circulation clear; furniture scaled to ${areaM2} m²; proportions credible for ${ceilingH} m ceiling.
+- ANTI-AI: no hyper-detail overload, no fake reflections, no surreal geometry, no random luxury clutter, no identical marble on every surface.`,
+  );
+
+  P.push(
+    `IMAGE CLEANLINESS (mandatory — the frame must look like a professional architectural photo, not a noisy render):
+- NO visible speckles, dots, fireflies, film grain, sensor noise, or salt-and-pepper artifacts on walls, ceiling, floor, marble, metal, or plaster — surfaces are CLEAN and smooth unless real material texture (veining, wood pore, plaster trowel) requires it.
+- NO dust motes, airborne particles, floating light dots, sparkle overlays, or bokeh clutter in the air — daylight is clean and legible.
+- NO post-process grain, no HDR halos, no oversharpening halos, no repeated noise pattern across dark and light zones.
+- Smooth tonal transitions in shadow and highlight; micro-texture only where the material is genuinely textured (stone vein, fabric weave) — never random pixel speckle.`,
+  );
+
+  // ── LEGACY VERBOSE BODY — DISABLED ───────────────────────────
+  // The blocks below ([0b] through [12b]) were the pre-SHRE prompt body.
+  // They're skipped via the `false &&` guard so they no longer contribute
+  // to the image prompt — but the code is kept verbatim so we can revert
+  // by flipping the guard to `true` if needed.
+  if (false as boolean) {
   // [0b] ELEMENT ENERGY AS ABSTRACT SPATIAL LOGIC — not literal
   P.push(`ELEMENT ENERGY IS ABSTRACT DESIGN LOGIC — translated EXCLUSIVELY into REAL, BUILDABLE architectural decisions. Earth, Fire, Water, Air = materiality, atmosphere, form, contrast, softness, openness, lighting behavior. They are NEVER literal — no flames, no water waves, no wind effects, no soil or dirt, no element symbols, no conceptual art installations. Translate elemental energy into CONSTRUCTABLE architectural and design choices: real materials from real manufacturers, real construction methods, real furniture from real brands, real lighting systems, real spatial proportions that follow building codes. Every design decision inspired by element energy must pass the test: "Could an architecture firm specify this in construction documents and a contractor build it?"`);
 
@@ -1964,6 +2383,7 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   if (input.domain !== 'architecture') {
     P.push(PRACTICAL_LAYOUT_SIMPLICITY_BLOCK);
     P.push(FURNITURE_SERVICE_LINE_SANITY_BLOCK);
+    P.push(ISLAND_HARDWARE_LOGIC_BLOCK);
     if (primaryRoom === 'Coffee Shop' || primaryRoom === 'Cafe') {
       P.push(CAFE_COFFEE_SEATING_BLOCK);
     }
@@ -2160,6 +2580,7 @@ The generated interior must feel like a direct 3D realization of this exact floo
 - If this is INTERIOR: the camera is inside a room. No exterior building facades visible. Windows show realistic exterior views (landscape, city, garden) but the composition is interior.
 - If this is ARCHITECTURE: the camera is outside. Show the building in its context. No room interiors visible beyond what's naturally seen through windows from outside.
 - The result must look like it was designed by a top-tier architecture firm (Olson Kundig, John Pawson, Tadao Ando, Studio Mumbai, Norm Architects caliber) and photographed for publication. It must look like a COMPLETED, DELIVERED PROJECT — not a concept render or competition entry.`);
+  } // end LEGACY VERBOSE BODY — DISABLED block (kept verbatim for revert)
 
   // [13] REFINEMENT
   if (input.refinementFeedback) {
@@ -2182,7 +2603,7 @@ The generated interior must feel like a direct 3D realization of this exact floo
   const rawPrompt = P.join('\n\n');
   const finalPrompt = scrubBannedTokens(rawPrompt);
 
-  const negativePrompt = "3D render, CGI, concept art, Unreal Engine, V-Ray render, artificial perfection, plastic-looking surfaces, fisheye distortion, barrel distortion, tilted verticals, leaning walls, cropped furniture, cut-off edges, floating objects, furniture embedded in walls, impossible geometry, wrong proportions, oversized furniture, undersized furniture, blocked doorways, literal element symbols, actual flames, actual water waves, actual wind effects, soil or dirt piles, elemental symbols, cartoon, illustration, text overlay, watermarks, people, human figures, HDR tonemapping, Instagram filter, oversaturation, IKEA catalog look, Pinterest cliché, developer showroom, beige sofa repetition, symmetrical staged catalog, empty room, bare walls without texture, flat uniform surfaces without grain or variation, video game aesthetic, low resolution, blurry, noisy, compression artifacts, AI face artifacts, extra fingers, deformed objects, impossible shadows, multiple light source directions, clinical fluorescent lighting, random decorative objects with no purpose, meaningless accent lights, fake luxury gold trim, non-buildable fantasy forms, clutter, objects that serve no function";
+  const negativePrompt = "3D render, CGI, concept art, Unreal Engine, V-Ray render, artificial perfection, plastic-looking surfaces, fisheye distortion, barrel distortion, tilted verticals, leaning walls, cropped furniture, cut-off edges, floating objects, furniture embedded in walls, impossible geometry, wrong proportions, oversized furniture, undersized furniture, blocked doorways, literal element symbols, actual flames, actual water waves, actual wind effects, soil or dirt piles, elemental symbols, cartoon, illustration, text overlay, watermarks, people, human figures, HDR tonemapping, Instagram filter, oversaturation, IKEA catalog look, Pinterest cliché, developer showroom, beige sofa repetition, symmetrical staged catalog, empty room, bare walls without texture, flat uniform surfaces without grain or variation, video game aesthetic, low resolution, blurry, noisy, compression artifacts, AI face artifacts, extra fingers, deformed objects, impossible shadows, multiple light source directions, clinical fluorescent lighting, random decorative objects with no purpose, meaningless accent lights, fake luxury gold trim, non-buildable fantasy forms, clutter, objects that serve no function, wrong room typology, residential sofa in coffee shop, living room posing as restaurant, generic showroom instead of named room type, bar without back-bar, kitchen without work surfaces, bedroom without bed, night scene without request, marble ceiling, marble box interior, sofa fused to kitchen island, film grain, speckle noise, fireflies, render noise, dust motes, airborne particles, floating white dots, salt and pepper noise, sparkle overlay, bokeh dots, grainy texture, noisy plaster, noisy marble, cinematic fantasy interior, spa cliché, utopian luxury scene, theatrical haze, volumetric god rays, dramatic orange glow, bathroom curtains, curtains in mirror, voile drapery, sheer curtains, indoor tree in bathroom, spa resort staging, wine glass on bath caddy, overdesigned spa bathroom, AI luxury fantasy, dreamy atmosphere, fake light leaks, decorative curtains without window, split composition";
 
   const designSummary = buildDesignSummary(input, activeDist);
   
@@ -2381,7 +2802,10 @@ export const buildUniversalPrompt = (state: UserState, options?: PromptOptions):
     return { id: adj.id, label: adj.label, vec };
   });
 
-  const materialInputs = state.refinement.selectedMaterials.map(mat => {
+  const materialInputs = getEnabledMaterials(
+    state.refinement.selectedMaterials,
+    state.refinement.disabledMaterialIds,
+  ).map(mat => {
     const w = mat.elementWeights;
     const vec: Vector4 = {
       earth: (w?.earth || 0) * 100,
@@ -2389,7 +2813,27 @@ export const buildUniversalPrompt = (state: UserState, options?: PromptOptions):
       water: (w?.water || 0) * 100,
       air: (w?.air || 0) * 100,
     };
-    return { id: mat.id, name: mat.name, category: 'finish', vec, imagePath: mat.image };
+    // Forward `isCustom` + `placementNote` when present so the prompt engine
+    // can honour user-defined materials with explicit placement intent.
+    //
+    // Precedence for the routed placement note:
+    //   1. The custom material's own placementNote (set on the modal)
+    //   2. Catalog-side per-material placement (state.refinement.materialPlacements[id])
+    // If both exist, custom wins; otherwise whichever is present.
+    const customMeta = mat as Partial<{ isCustom: boolean; placementNote: string }>;
+    const perMatNote = state.refinement.materialPlacements?.[mat.id];
+    const routedNote = (customMeta.placementNote && customMeta.placementNote.trim().length > 0)
+      ? customMeta.placementNote
+      : perMatNote;
+    return {
+      id: mat.id,
+      name: mat.name,
+      category: 'finish',
+      vec,
+      imagePath: mat.image,
+      isCustom: customMeta.isCustom === true,
+      placementNote: routedNote,
+    };
   });
 
   const area = Math.max(8, Math.min(50000, Math.round(Number(state.params.squareMeters) > 0 ? Number(state.params.squareMeters) : 100)));
@@ -2431,6 +2875,9 @@ export const buildUniversalPrompt = (state: UserState, options?: PromptOptions):
     refinementFeedback: options?.refinementFeedback,
     userNote: options?.userNote,
     aspectRatio: state.params.resolution,
+    // SHRE v2 — forward the 7-section diagnosis so the image prompt
+    // agrees with the client report (style direction, palette, picks).
+    diagnosis: state.analysis?.diagnosis,
   };
 
   const pkg = buildGenerationPackage(input);

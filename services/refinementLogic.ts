@@ -1,5 +1,11 @@
-import { Element, AdjectiveDef, MaterialDef, UserState } from '../types';
-import { ELEMENTS, ADJECTIVES_DB, MATERIALS_DB, SHORT_QUESTIONS, DEEP_QUESTIONS } from '../constants';
+import { Element, AdjectiveDef, MaterialDef, UserState, Diagnosis } from '../types';
+import { ELEMENTS, ADJECTIVES_DB, MATERIALS_DB, MATERIAL_SPHERE_IMAGES, SHORT_QUESTIONS, DEEP_QUESTIONS } from '../constants';
+import {
+  materialCountsFromDistribution,
+  REPRESENTATIVE_MATERIALS_BY_ELEMENT,
+  ALLOWED_CATEGORIES_BY_ELEMENT,
+} from './shreDiagnosis';
+import { CANONICAL_MATERIAL_BY_LABEL } from '../materialsCatalog';
 
 export const getInitialSelection = (percentages: Record<Element, number>): { adjectives: AdjectiveDef[], materials: MaterialDef[] } => {
   // Sort elements by percentage high to low, break ties using standard order
@@ -28,82 +34,238 @@ export const getInitialSelection = (percentages: Record<Element, number>): { adj
   return { adjectives, materials };
 };
 
-export const getSelectionFromPercentages = (percentages: Record<Element, number>): { adjectives: AdjectiveDef[], materials: MaterialDef[] } => {
+// ─────────────────────────────────────────────────────────────────────────────
+// MATERIAL SELECTION (SHRE v2.0 strict)
+// ─────────────────────────────────────────────────────────────────────────────
+// Picks N materials for the given element by walking REPRESENTATIVE order
+// (defined in services/shreDiagnosis.ts). The representative order is
+// curated to span surface categories — stone → wood → plaster → metal →
+// glass → textile → composite — so picking N from the top never returns
+// "5 versions of white marble". Picks also avoid duplicating an underlying
+// base texture PNG (the user-reported "marble box" failure mode where
+// multiple Air materials all share /materials/white-marble.png).
+//
+// Falls back to MATERIALS_DB filtered by element when the representative
+// pool is exhausted (rare — the representative list has 7+ entries per
+// element).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const pickDiverseMaterialsForElement = (
+  element: Element,
+  count: number,
+  used: Set<string>,
+  usedPngs: Set<string>,
+): MaterialDef[] => {
+  if (count <= 0) return [];
+  const out: MaterialDef[] = [];
+  const pool = REPRESENTATIVE_MATERIALS_BY_ELEMENT[element];
+  const allowed = ALLOWED_CATEGORIES_BY_ELEMENT[element];
+
+  // Pass 1 — walk the representative list, skipping anything that
+  // would duplicate a base PNG already on the orbit.
+  for (const label of pool) {
+    if (out.length >= count) break;
+    if (used.has(label)) continue;
+    const m = MATERIALS_DB.find((x) => x.name === label);
+    if (!m) continue;
+    const c = CANONICAL_MATERIAL_BY_LABEL[label];
+    if (c && !allowed.includes(c.category)) continue;
+    const png = MATERIAL_SPHERE_IMAGES[label];
+    if (png && usedPngs.has(png)) continue;
+    used.add(label);
+    if (png) usedPngs.add(png);
+    out.push(m);
+  }
+
+  // Pass 2 — if we still need more, allow a base-PNG collision (with
+  // distinct tint/crop the bead still reads differently). Pull from
+  // the representative pool first, then MATERIALS_DB fallback.
+  if (out.length < count) {
+    for (const label of pool) {
+      if (out.length >= count) break;
+      if (used.has(label)) continue;
+      const m = MATERIALS_DB.find((x) => x.name === label);
+      if (!m) continue;
+      used.add(label);
+      out.push(m);
+    }
+  }
+
+  if (out.length < count) {
+    const elPool = MATERIALS_DB.filter((m) => m.element === element);
+    for (const m of elPool) {
+      if (out.length >= count) break;
+      if (used.has(m.name)) continue;
+      used.add(m.name);
+      out.push(m);
+    }
+  }
+
+  return out;
+};
+
+/**
+ * Map a DiagnosisMaterial (from shreDiagnosis.ts) into a MaterialDef so
+ * the workspace state can carry it through unchanged. Falls back to the
+ * MATERIALS_DB entry by name when present, otherwise reconstructs a
+ * MaterialDef from the canonical catalog.
+ */
+const diagnosisMaterialToDef = (label: string): MaterialDef | null => {
+  const existing = MATERIALS_DB.find((m) => m.name === label);
+  if (existing) return existing;
+  const c = CANONICAL_MATERIAL_BY_LABEL[label];
+  if (!c) return null;
+  return {
+    id: c.id,
+    name: c.label,
+    element: c.elementWeights.earth >= 0.5
+      ? 'earth'
+      : c.elementWeights.fire >= 0.5
+        ? 'fire'
+        : c.elementWeights.water >= 0.5
+          ? 'water'
+          : 'air',
+    image: MATERIAL_SPHERE_IMAGES[c.label] || '',
+    isShared: c.isShared,
+    elementWeights: c.elementWeights,
+  };
+};
+
+/**
+ * Build the workspace's auto-selected adjectives + materials from an
+ * elemental distribution. Two callers:
+ *
+ *   1. App.tsx finalizeSurvey  — after the survey completes; the
+ *      `diagnosis` argument carries the SHRE 7-section report's
+ *      material picks so the workspace orbit shows EXACTLY what the
+ *      report claimed.
+ *   2. WorkspacePage internal re-fits — when the user adjusts the
+ *      distribution slider; no diagnosis is passed and the picker
+ *      falls back to its own category-diverse representative order.
+ *
+ * Strict SHRE v2 rules (always enforced):
+ *   - Material count per element follows materialCountsFromDistribution
+ *     (Primary 3, Secondary 0-2, Third 0-2, Weak 0-1).
+ *   - Picks span surface categories per element (no 5 versions of
+ *     white marble); base-PNG collisions are avoided in the first pass.
+ *   - Adjectives still use the proportional rule (1-8 by element share).
+ */
+export const getSelectionFromPercentages = (
+  percentages: Record<Element, number>,
+  diagnosis?: Diagnosis | null,
+): { adjectives: AdjectiveDef[], materials: MaterialDef[] } => {
+  // ── ADJECTIVES — proportional rule (unchanged) ─────────────────────────
   const maxAdjectives = 8;
-  const maxMaterials = 7;
-  
-  // Calculate how many items each element should have based on percentages
   const adjCounts: Record<Element, number> = { air: 0, fire: 0, water: 0, earth: 0 };
-  const matCounts: Record<Element, number> = { air: 0, fire: 0, water: 0, earth: 0 };
-  
-  // Distribute adjectives proportionally (elements below 5% get nothing)
   let adjTotal = 0;
-  ELEMENTS.forEach(el => {
+  ELEMENTS.forEach((el) => {
     if (percentages[el] < 5) { adjCounts[el] = 0; return; }
     const count = Math.round((percentages[el] / 100) * maxAdjectives);
     adjCounts[el] = Math.max(1, Math.min(count, maxAdjectives));
     adjTotal += adjCounts[el];
   });
-  
-  // Adjust if total exceeds max (remove from lowest-percentage elements first)
   while (adjTotal > maxAdjectives) {
     const sortedByPercent = [...ELEMENTS].sort((a, b) => percentages[a] - percentages[b]);
     let reduced = false;
     for (const el of sortedByPercent) {
-      if (adjCounts[el] > 1) {
-        adjCounts[el]--;
-        adjTotal--;
-        reduced = true;
-        break;
-      }
-    }
-    if (!reduced) break; // all at minimum, can't reduce further
-  }
-  
-  // Distribute materials proportionally (elements below 5% get nothing)
-  let matTotal = 0;
-  ELEMENTS.forEach(el => {
-    if (percentages[el] < 5) { matCounts[el] = 0; return; }
-    const count = Math.round((percentages[el] / 100) * maxMaterials);
-    matCounts[el] = Math.max(1, Math.min(count, maxMaterials));
-    matTotal += matCounts[el];
-  });
-  
-  // Adjust if total exceeds max (remove from lowest-percentage elements first)
-  while (matTotal > maxMaterials) {
-    const sortedByPercent = [...ELEMENTS].sort((a, b) => percentages[a] - percentages[b]);
-    let reduced = false;
-    for (const el of sortedByPercent) {
-      if (matCounts[el] > 1) {
-        matCounts[el]--;
-        matTotal--;
-        reduced = true;
-        break;
-      }
+      if (adjCounts[el] > 1) { adjCounts[el]--; adjTotal--; reduced = true; break; }
     }
     if (!reduced) break;
   }
-  
-  // Select items for each element
+
   const adjectives: AdjectiveDef[] = [];
-  const materials: MaterialDef[] = [];
-  
-  ELEMENTS.forEach(el => {
-    const elAdjectives = ADJECTIVES_DB.filter(a => a.element === el);
-    const elMaterials = MATERIALS_DB.filter(m => m.element === el);
-    
-    // Select top N adjectives for this element
+  ELEMENTS.forEach((el) => {
+    const elAdjectives = ADJECTIVES_DB.filter((a) => a.element === el);
     for (let i = 0; i < adjCounts[el] && i < elAdjectives.length; i++) {
       adjectives.push(elAdjectives[i]);
     }
-    
-    // Select top N materials for this element
-    for (let i = 0; i < matCounts[el] && i < elMaterials.length; i++) {
-      materials.push(elMaterials[i]);
-    }
   });
-  
+
+  // ── MATERIALS ──────────────────────────────────────────────────────────
+  let materials: MaterialDef[] = [];
+
+  // Fast path — the diagnosis report already picked 5-8 materials with
+  // the right count per element and the right category spread. Mirror
+  // those picks 1:1 so the workspace orbit and the report agree exactly.
+  if (diagnosis && Array.isArray(diagnosis.materials) && diagnosis.materials.length > 0) {
+    materials = diagnosis.materials
+      .map((dm) => diagnosisMaterialToDef(dm.label))
+      .filter((m): m is MaterialDef => m !== null);
+  } else {
+    // Slow path — no diagnosis attached. Apply the SHRE strict count rule
+    // and walk the representative-material list per element.
+    const matCounts = materialCountsFromDistribution(percentages);
+    const used = new Set<string>();
+    const usedPngs = new Set<string>();
+
+    // Sort elements high → low so primary picks happen first; primary
+    // gets first crack at any low-collision PNGs.
+    const sorted = [...ELEMENTS].sort((a, b) => percentages[b] - percentages[a]);
+    for (const el of sorted) {
+      materials.push(...pickDiverseMaterialsForElement(el, matCounts[el], used, usedPngs));
+    }
+  }
+
+  // Soft validation — log warnings if the resulting set violates the
+  // SHRE MATERIAL VARIATION RULE. Doesn't throw; the picker upstream
+  // already tried to avoid these failure modes, so a warning here means
+  // either the representative pool was too narrow or a diagnosis pick
+  // overlapped on a base PNG.
+  if (typeof console !== 'undefined' && (typeof process === 'undefined' || (process as any).env?.NODE_ENV !== 'production')) {
+    validateMaterialSelection(materials, percentages);
+  }
+
   return { adjectives, materials };
+};
+
+/**
+ * Soft validation logger — warns about violations of the SHRE MATERIAL
+ * SELECTION LOCK / VARIATION RULE before render:
+ *   - Any base PNG appearing in ≥ 3 picks (visual collision).
+ *   - An element below 5% with a non-zero pick (absent → 0).
+ *   - An element above 30% with no pick (primary must be represented).
+ *   - Total picks below 5 or above 8 (MATERIAL VARIATION RULE).
+ */
+export const validateMaterialSelection = (
+  materials: MaterialDef[],
+  percentages: Record<Element, number>,
+): string[] => {
+  const warnings: string[] = [];
+
+  // PNG-collision check
+  const pngCounts: Record<string, number> = {};
+  for (const m of materials) {
+    const png = MATERIAL_SPHERE_IMAGES[m.name];
+    if (!png) continue;
+    pngCounts[png] = (pngCounts[png] || 0) + 1;
+  }
+  for (const [png, n] of Object.entries(pngCounts)) {
+    if (n >= 3) {
+      warnings.push(`SHRE material variation: base PNG ${png} appears in ${n} picks (>=3 → visual collision)`);
+    }
+  }
+
+  // Per-element absence / overrepresentation
+  const byElement: Record<Element, number> = { earth: 0, fire: 0, water: 0, air: 0 };
+  for (const m of materials) byElement[m.element] += 1;
+  for (const el of ELEMENTS) {
+    if (percentages[el] < 5 && byElement[el] > 0) {
+      warnings.push(`SHRE material logic: ${el} at ${percentages[el]}% should be 0 picks, got ${byElement[el]}`);
+    }
+    if (percentages[el] >= 30 && byElement[el] === 0) {
+      warnings.push(`SHRE material logic: ${el} at ${percentages[el]}% should be primary register, got 0 picks`);
+    }
+  }
+
+  // Total picks
+  if (materials.length < 5 || materials.length > 8) {
+    warnings.push(`SHRE material variation: total ${materials.length} materials, expected 5-8`);
+  }
+
+  if (warnings.length > 0) {
+    console.warn('[SHRE material validation]', warnings);
+  }
+  return warnings;
 };
 
 export const getAutoFillItems = (
@@ -156,6 +318,20 @@ const normalize = (scores: Record<Element, number>): Record<Element, number> => 
     return result;
 };
 
+/** Materials that are selected and toggled ON for generation. */
+export function getEnabledMaterials(
+  materials: MaterialDef[],
+  disabledIds?: string[],
+): MaterialDef[] {
+  if (!disabledIds?.length) return materials;
+  const off = new Set(disabledIds);
+  return materials.filter((m) => !off.has(m.id));
+}
+
+export function isMaterialEnabled(materialId: string, disabledIds?: string[]): boolean {
+  return !disabledIds?.includes(materialId);
+}
+
 export const calculateRefinedDistribution = (state: UserState): Record<Element, number> => {
   const { analysis, deepSurveyAnswers, refinement } = state;
 
@@ -189,7 +365,7 @@ export const calculateRefinedDistribution = (state: UserState): Record<Element, 
   refinement.selectedAdjectives.forEach((a) => {
     selectionScores[a.element] += 1;
   });
-  refinement.selectedMaterials.forEach((m: any) => {
+  getEnabledMaterials(refinement.selectedMaterials, refinement.disabledMaterialIds).forEach((m: any) => {
     const points =
       typeof m.coverage === 'number' && Number.isFinite(m.coverage)
         ? m.coverage

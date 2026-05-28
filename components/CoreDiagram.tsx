@@ -1,7 +1,9 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Element, AdjectiveDef, MaterialDef } from '../types';
-import { ELEMENT_COLORS, ELEMENT_COLORS_MUTED, CANONICAL_MATERIALS, CANONICAL_ATMOSPHERE, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER, MATERIAL_TEXTURE_TINT } from '../constants';
+import { ELEMENT_COLORS, ELEMENT_COLORS_MUTED, CANONICAL_MATERIALS, CANONICAL_ATMOSPHERE, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER, MATERIAL_TEXTURE_TINT, MATERIAL_TEXTURE_TRANSFORM } from '../constants';
 import { tick, snap, toggleAmbient, isAmbientPlaying, warmupSpeech } from '../services/soundService';
+import { isMaterialEnabled } from '../services/refinementLogic';
+import { MaterialEnableToggle } from './MaterialEnableToggle';
 
 const ANIM_STYLE = document.createElement('style');
 ANIM_STYLE.textContent = `
@@ -50,6 +52,8 @@ interface CoreDiagramProps {
   onAdjust: (element: Element, newValue: number) => void;
   onToggleLock: (element: Element) => void;
   onToggleMaterial?: (name: string, element: Element) => void;
+  disabledMaterialIds?: string[];
+  onToggleMaterialEnabled?: (materialId: string, e: React.MouseEvent) => void;
   onToggleAtmosphere?: (word: string, element: Element) => void;
   isMuted?: boolean;
   onBrilliantChange?: (combo: PresetCombo | null) => void;
@@ -106,6 +110,7 @@ function MaterialBeadInner({
   mc,
 }: { name: string; tex: string | undefined; mc: string }) {
   const tint = MATERIAL_TEXTURE_TINT[name];
+  const xform = MATERIAL_TEXTURE_TRANSFORM[name] ?? { objectPosition: 'center', zoom: 1.14 };
   return (
     <>
       {tex && (
@@ -115,8 +120,9 @@ function MaterialBeadInner({
           draggable={false}
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', borderRadius: '50%', display: 'block',
-            transform: 'scale(1.14)',
+            objectFit: 'cover', objectPosition: xform.objectPosition,
+            borderRadius: '50%', display: 'block',
+            transform: `scale(${xform.zoom})`,
             filter: buildTextureFilter(name),
           }}
           onError={(e) => {
@@ -429,13 +435,17 @@ const ATMO_REFS: Record<Element, { title: string; style: string; desc: string; i
     { title: 'Marble & Water Feature', style: 'Flowing water wall, veined marble, ambient glow', desc: 'Floor-to-ceiling water cascade over honed marble, recessed LED coves, floating bench — meditative fluid space', img: 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=600&q=80&fit=crop' },
     { title: 'Nordic Blue Kitchen', style: 'Deep blue cabinetry, brass hardware, cool tones', desc: 'Midnight blue lacquer fronts, veined marble counters, brushed brass pulls, pendant globes — calm sophisticated depth', img: 'https://images.unsplash.com/photo-1556909114-44e3e70034e2?w=600&q=80&fit=crop' },
   ],
+  // ── AIR REFERENCES ────────────────────────────────────────────
+  // User-curated set of 4 architectural images that cycle through the
+  // Air slot of the Atmosphere References panel. Each one expresses a
+  // distinct Air register (veil / wave / cloud / mirror) so the panel
+  // rotates among genuinely different atmospheres rather than near-
+  // duplicate gallery shots. Images live in /public/references/.
   air: [
-    { title: 'White Gallery Space', style: 'Pure white volumes, natural light, minimal art', desc: 'Double-height white walls, skylights, polished concrete floor, single sculptural piece — ethereal gallery silence', img: 'https://images.unsplash.com/photo-1600607688969-a5bfcd646154?w=600&q=80&fit=crop' },
-    { title: 'Futuristic Silver Lounge', style: 'Metallic silver furniture, neon LED, clean lines', desc: 'Silver metallic armchairs, stainless steel table, neon accent light, indoor plant — futuristic living with organic life', img: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=600&q=80&fit=crop' },
-    { title: 'Glass Pavilion', style: 'Floor-to-ceiling glass, floating roof, garden view', desc: 'Minimal steel frame, full glass walls, cantilevered roof, zen garden view — transparent weightless architecture', img: 'https://images.unsplash.com/photo-1600585153490-76fb20a32601?w=600&q=80&fit=crop' },
-    { title: 'Scandinavian Minimal', style: 'White walls, light wood, clean geometry', desc: 'Ash flooring, white plaster, single pendant, linen curtains, daylight — pure Nordic clarity', img: 'https://images.unsplash.com/photo-1616137466211-f939a420be84?w=600&q=80&fit=crop' },
-    { title: 'Floating Staircase', style: 'Cantilevered treads, glass balustrade, light well', desc: 'White oak floating treads, frameless glass rail, overhead skylight pouring light — ascending weightlessness', img: 'https://images.unsplash.com/photo-1600566753086-00f18f6b0049?w=600&q=80&fit=crop' },
-    { title: 'Sheer Curtain Living', style: 'Billowing sheers, pale tones, diffused daylight', desc: 'Floor-to-ceiling sheer linen, pale oak, white marble, soft diffused light everywhere — breath of open space', img: 'https://images.unsplash.com/photo-1600210491892-03d54c0aaf87?w=600&q=80&fit=crop' },
+    { title: 'Veiled Pavilion Facade', style: 'Sheer white scrim, glass ground level, vertical lightness', desc: 'Translucent white fabric scrim panels rising above a glass-enclosed ground floor — ethereal monumentality, daylight passing through cloth, weightless verticality', img: '/references/air-veiled-pavilion.png' },
+    { title: 'Wave Hall', style: 'Undulating ribbed walls, mirror columns, white concrete', desc: 'Continuously curving white ribbed wall, polished steel column reflections, sculptural rounded furniture in pearl-silver — fluid ceremonial volume in pure white', img: '/references/air-wave-hall.png' },
+    { title: 'Cloud Reception', style: 'Sculptural ceiling cloud, textured travertine desk, blue glass accent', desc: 'Pleated white sculptural ceiling, hand-carved travertine reception block, sheer white seating, translucent blue glass occasional table — silent luminous interior', img: '/references/air-cloud-lobby.png' },
+    { title: 'Mirror Ribbon Lounge', style: 'Chrome curve ceiling, fluted columns, pale blue accents', desc: 'Sculptural chrome ribbon arcing across a white plaster ceiling, fluted column rhythm, pale blue rug, white upholstered dining chairs — iridescent ceremonial lightness', img: '/references/air-mirror-ribbon.png' },
   ],
 };
 
@@ -459,7 +469,7 @@ function evenCircle(idx: number, total: number, orbit: number, startAngle = -Mat
 
 const CoreDiagram: React.FC<CoreDiagramProps> = ({
   distribution, selectedAdjectives, selectedMaterials, lockedElements,
-  onAdjust, onToggleLock, onToggleMaterial, onToggleAtmosphere, isMuted = false,
+  onAdjust, onToggleLock, onToggleMaterial, disabledMaterialIds, onToggleMaterialEnabled, onToggleAtmosphere, isMuted = false,
   onBrilliantChange, isMatrixOpen = false, onRotationSnap, onGenerate,
   onToggleDiagnostic, onToggleGuide, onTutorialComplete, spaceCategory, rooms, domain,
   gathering = false, onGatherComplete,
@@ -1015,6 +1025,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           const isDom = mat.element === dom;
           const tex = MAT_TEX[mat.name];
           const isExp = expMat === mat.name;
+          const matOn = isMaterialEnabled(mat.id, disabledMaterialIds);
           const ringExp = expandedRing === 'mat';
           const baseSz = 54;
           const sz = isExp ? 92 : ringExp ? baseSz + 8 : baseSz;
@@ -1040,7 +1051,14 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           const showLabel = isExp || ringExp;
           return (
             <div key={mat.name} className="absolute group orb-item"
-              style={{ left: cx, top: cy, transform: 'translate(-50%, -50%)', transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)', zIndex: isExp ? 26 : ringExp ? 18 : 15, cursor: 'pointer' }}
+              style={{
+                left: cx, top: cy, transform: 'translate(-50%, -50%)',
+                transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)',
+                zIndex: isExp ? 26 : ringExp ? 18 : 15,
+                cursor: 'pointer',
+                opacity: matOn ? 1 : 0.42,
+                filter: matOn ? 'none' : 'grayscale(0.4)',
+              }}
               onClick={handleMatClick}
               onMouseEnter={e => { if (!isExp) { (e.currentTarget as HTMLElement).style.transform = 'translate(-50%, -50%) scale(1.08)'; (e.currentTarget as HTMLElement).style.zIndex = '25'; } }}
               onMouseLeave={e => { if (!isExp) { (e.currentTarget as HTMLElement).style.transform = 'translate(-50%, -50%)'; (e.currentTarget as HTMLElement).style.zIndex = ringExp ? '18' : '15'; } }}>
@@ -1055,17 +1073,83 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                   : `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)`,
                 boxShadow: isExp
                   ? `0 0 22px ${mc}66, 0 4px 16px rgba(0,0,0,0.14)`
-                  : `0 0 14px ${mc}38, 0 2px 10px rgba(0,0,0,0.10)`,
+                  : matOn
+                    ? `0 0 14px ${mc}38, 0 2px 10px rgba(0,0,0,0.10)`
+                    : `0 0 0 1px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)`,
                 transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)',
+                border: matOn ? 'none' : '1.5px dashed rgba(0,0,0,0.12)',
               }}>
                 <MaterialBeadInner name={mat.name} tex={tex} mc={mc} />
               </div>
-              <span className={`absolute px-2 py-0.5 rounded-full whitespace-nowrap transition-all ${showLabel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-                style={{ fontSize: ringExp ? 10 : 9, fontWeight: 500, color: mc, background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(6px)', boxShadow: `0 1px 4px rgba(0,0,0,0.06), 0 0 0 1px ${mc}14`, pointerEvents: 'none', maxWidth: 132, overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center',
-                  textShadow: '0 1px 0 rgba(255,255,255,0.9)', lineHeight: 1.25,
-                  left: '50%', top: '50%', transform: `translate(calc(-50% + ${labelDx}px), calc(-50% + ${labelDy}px))` }}>
-                {mat.name.split('(')[0].trim()}
-              </span>
+              {onToggleMaterialEnabled && (
+                <div
+                  className={`absolute z-30 transition-opacity duration-200 ${matOn ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}
+                  style={{ right: -2, bottom: -2 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MaterialEnableToggle
+                    enabled={matOn}
+                    color={ELEMENT_COLORS[mat.element]}
+                    onToggle={(e) => onToggleMaterialEnabled(mat.id, e)}
+                    size={12}
+                  />
+                </div>
+              )}
+              {/* Label — name + dominant element + percentage breakdown.
+                  SHRE rule: "every material must display material name,
+                  dominant element, and elemental percentage logic" so the
+                  client sees the diagnostic reason for each pick on the
+                  orbit, not just the name. */}
+              <div
+                className={`absolute rounded-md whitespace-nowrap transition-all ${showLabel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                style={{
+                  background: 'rgba(255,255,255,0.96)',
+                  backdropFilter: 'blur(6px)',
+                  boxShadow: `0 1px 4px rgba(0,0,0,0.08), 0 0 0 1px ${mc}24`,
+                  pointerEvents: 'none',
+                  textAlign: 'center',
+                  lineHeight: 1.3,
+                  padding: ringExp ? '4px 8px' : '3px 7px',
+                  maxWidth: 160,
+                  left: '50%', top: '50%',
+                  transform: `translate(calc(-50% + ${labelDx}px), calc(-50% + ${labelDy}px))`,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: ringExp ? 10 : 9,
+                    fontWeight: 600,
+                    color: mc,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: 152,
+                    textShadow: '0 1px 0 rgba(255,255,255,0.9)',
+                  }}
+                >
+                  {mat.name.split('(')[0].trim()}
+                </div>
+                {mat.elementWeights && (
+                  <div
+                    style={{
+                      fontSize: ringExp ? 8.5 : 7.8,
+                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      fontWeight: 400,
+                      color: '#666',
+                      letterSpacing: '0.01em',
+                      marginTop: 1,
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {(['earth', 'fire', 'water', 'air'] as Element[])
+                      .map((el) => ({ el, p: Math.round((mat.elementWeights[el] || 0) * 100) }))
+                      .filter(({ p }) => p > 0)
+                      .map(({ el, p }) => `${el.charAt(0).toUpperCase()}${el.slice(1)} ${p}%`)
+                      .join(' · ')}
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}
@@ -1460,9 +1544,25 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                             }}>
                               <MaterialBeadInner name={mat.name} tex={tex} mc={mc} />
                             </div>
-                            <span className="px-2 py-0.5 rounded-md text-center" style={{ fontSize: 11, fontWeight: 500, color: '#555', background: 'rgba(255,255,255,0.9)', maxWidth: 100, lineHeight: '1.35', whiteSpace: 'normal', wordBreak: 'break-word' as const }}>
-                              {mat.name.split('(')[0].trim()}
-                            </span>
+                            {/* Name + elemental percentage breakdown. SHRE
+                                MATERIAL SELECTION LOCK: every material on
+                                the board must show its diagnostic reason
+                                (name, dominant element, percentage logic),
+                                not just a thumbnail. */}
+                            <div className="px-2 py-0.5 rounded-md text-center" style={{ background: 'rgba(255,255,255,0.92)', maxWidth: 116, lineHeight: 1.3 }}>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: mc, letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'normal', wordBreak: 'break-word' as const }}>
+                                {mat.name.split('(')[0].trim()}
+                              </div>
+                              {mat.elementWeights && (
+                                <div style={{ fontSize: 8.5, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: 400, color: '#777', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+                                  {(['earth', 'fire', 'water', 'air'] as Element[])
+                                    .map((e2) => ({ e2, p: Math.round((mat.elementWeights[e2] || 0) * 100) }))
+                                    .filter(({ p }) => p > 0)
+                                    .map(({ e2, p }) => `${e2.charAt(0).toUpperCase()}${e2.slice(1)} ${p}%`)
+                                    .join(' · ')}
+                                </div>
+                              )}
+                            </div>
                             {isExp && (
                               <button className="px-3 py-1 rounded-full text-[11px] uppercase tracking-[0.08em] font-medium transition-all hover:bg-red-50"
                                 style={{ color: '#b06060', background: 'rgba(255,255,255,0.95)', border: '1px solid rgba(180,96,96,0.12)', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
@@ -1583,7 +1683,13 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
             style={{ background: showAllMats ? `${dc}10` : 'rgba(252,252,250,0.95)', border: `1px solid ${showAllMats ? `${dc}20` : `${dc}10`}`, color: showAllMats ? dc : '#999' }}
             onClick={e => { e.stopPropagation(); setShowAllMats(!showAllMats); }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>
-            <span className="text-[11px] uppercase tracking-[0.12em] font-medium">{selectedMaterials.length} materials</span>
+            <span className="text-[11px] uppercase tracking-[0.12em] font-medium">
+              {selectedMaterials.filter((m) => isMaterialEnabled(m.id, disabledMaterialIds)).length}
+              {selectedMaterials.length !== selectedMaterials.filter((m) => isMaterialEnabled(m.id, disabledMaterialIds)).length
+                ? ` / ${selectedMaterials.length}`
+                : ''}{' '}
+              materials
+            </span>
           </button>
           {selectedAdjectives.length > 0 && (
             <button className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full transition-all hover:scale-105 touch-target-auto"

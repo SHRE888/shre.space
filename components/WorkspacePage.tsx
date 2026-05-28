@@ -2,10 +2,12 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { whoosh, chime, softThud, calibrate, stopAmbient, isAmbientPlaying } from '../services/soundService';
 import { useBrilliantMode } from '../context/BrilliantModeContext';
-import { UserState, Element, AdjectiveDef, MaterialDef, Domain, SpaceCategory, ImageResolution, RoomType, ColorPalette, BudgetLevel, ArchContext } from '../types';
+import { UserState, Element, AdjectiveDef, MaterialDef, Domain, SpaceCategory, ImageResolution, RoomType, ColorPalette, BudgetLevel, ArchContext, CustomMaterial } from '../types';
+import AddCustomMaterialModal from './AddCustomMaterialModal';
 import { BUDGET_TIERS } from '../lib/brandCatalog';
 import { saveState } from '../services/storageService';
-import { calculateRefinedDistribution, getSelectionFromPercentages, reweightWithLocks } from '../services/refinementLogic';
+import { calculateRefinedDistribution, getSelectionFromPercentages, reweightWithLocks, getEnabledMaterials, isMaterialEnabled } from '../services/refinementLogic';
+import { MaterialEnableToggle } from './MaterialEnableToggle';
 import { buildUniversalPrompt } from '../services/promptEngine';
 import { getHarmonySignal } from '../services/harmonySignal';
 import { interpretTextToRefinement } from '../services/textInterpretationService';
@@ -166,6 +168,14 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
     return () => { clearTimeout(autoFadeTimer); clearTimeout(removeTimer); window.removeEventListener('wheel', onScroll); window.removeEventListener('pointerdown', onScroll); };
   }, [welcomeVisible]);
   const [materialOrbOpen, setMaterialOrbOpen] = useState(false);
+  // Custom-material modal state. `editingCustomMaterial` is the material being
+  // edited (null when adding a fresh one). Open when truthy.
+  const [showCustomMaterialModal, setShowCustomMaterialModal] = useState(false);
+  const [editingCustomMaterial, setEditingCustomMaterial] = useState<CustomMaterial | null>(null);
+  // Which selected material currently has its "where should this go?" inline
+  // editor open. Null = no editor. Only one material edits at a time.
+  const [editingPlacementId, setEditingPlacementId] = useState<string | null>(null);
+  const [editingPlacementDraft, setEditingPlacementDraft] = useState<string>('');
   const [orbSettledDominant, setOrbSettledDominant] = useState<Element>(() =>
     (Object.entries(state.refinement.refinedPercentages) as [Element, number][]).reduce((a, b) => a[1] > b[1] ? a : b)[0]
   );
@@ -307,10 +317,15 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
     return () => document.removeEventListener('mousedown', onDown);
   }, [showDiagnosticPanel]);
 
+  const enabledMaterials = getEnabledMaterials(
+    state.refinement.selectedMaterials,
+    state.refinement.disabledMaterialIds,
+  );
+  const pausedMaterialCount = state.refinement.selectedMaterials.length - enabledMaterials.length;
   const harmonySignal = getHarmonySignal(
     state.refinement.refinedPercentages,
     state.refinement.selectedAdjectives,
-    state.refinement.selectedMaterials
+    enabledMaterials,
   );
   const isBrilliant = harmonySignal.level === 'green';
 
@@ -325,6 +340,18 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
     setState(newState);
     debouncedSave(newState);
   };
+
+  // One render → one primary space; trim legacy multi-room selections from storage.
+  const didTrimRoomsRef = useRef(false);
+  useEffect(() => {
+    if (didTrimRoomsRef.current) return;
+    if (state.params.domain !== 'interior') return;
+    const r = state.params.rooms || [];
+    if (r.length > 1) {
+      didTrimRoomsRef.current = true;
+      handleUpdate({ params: { ...state.params, rooms: [r[0]] } });
+    }
+  }, [state.params.domain, state.params.rooms]);
 
   const handleDistributionChange = useCallback((element: Element, newValue: number) => {
     const currentDist = state.refinement.refinedPercentages;
@@ -347,13 +374,108 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
     setLockedElements(prev => prev.includes(el) ? prev.filter(e => e !== el) : [...prev, el]);
   };
 
+  /**
+   * Set / clear the user's free-form placement note for a specific material
+   * (catalog or custom). Empty string clears the entry; non-empty saves it.
+   * The note is routed into the prompt as the assigned surface for that
+   * specific material id.
+   */
+  const setMaterialPlacement = (materialId: string, note: string) => {
+    const current = state.refinement.materialPlacements ?? {};
+    const trimmed = note.trim();
+    const next = { ...current };
+    if (trimmed) next[materialId] = trimmed;
+    else delete next[materialId];
+    handleUpdate({
+      refinement: {
+        ...state.refinement,
+        materialPlacements: next,
+      },
+    });
+  };
+
+  /**
+   * Save (add or edit) a user-defined custom material.
+   *
+   *   - Persists the material on `state.customMaterials` (creates the slot
+   *     on first use).
+   *   - Auto-selects the material so it lands in
+   *     `state.refinement.selectedMaterials` immediately — no extra click.
+   *   - If editing an existing custom material, replaces it in place.
+   *   - Honours the same MAX_MATERIALS=7 cap as the regular picker:
+   *     when the cap is full, the oldest same-element pick gets swapped
+   *     out (mirrors `toggleMaterial`).
+   */
+  const handleSaveCustomMaterial = (material: CustomMaterial) => {
+    const existing = state.customMaterials ?? [];
+    const replaceIdx = existing.findIndex((m) => m.id === material.id);
+    const nextCustom = replaceIdx >= 0
+      ? existing.map((m, i) => (i === replaceIdx ? material : m))
+      : [...existing, material];
+
+    // Auto-select the saved material into refinement.selectedMaterials.
+    const sel = state.refinement.selectedMaterials;
+    const existingSelIdx = sel.findIndex((m) => m.id === material.id);
+    let nextSelected: MaterialDef[];
+    if (existingSelIdx >= 0) {
+      nextSelected = sel.map((m, i) => (i === existingSelIdx ? material : m));
+    } else {
+      const MAX_MATERIALS = 7;
+      if (sel.length >= MAX_MATERIALS) {
+        const sameElIdx = sel.findIndex((m) => m.element === material.element);
+        const removeIdx = sameElIdx >= 0 ? sameElIdx : sel.length - 1;
+        nextSelected = [...sel];
+        nextSelected.splice(removeIdx, 1);
+        nextSelected.push(material);
+      } else {
+        nextSelected = [...sel, material];
+      }
+    }
+
+    handleUpdate({
+      customMaterials: nextCustom,
+      refinement: {
+        ...state.refinement,
+        hasUserRefined: true,
+        selectedMaterials: nextSelected,
+      },
+    });
+    setShowCustomMaterialModal(false);
+    setEditingCustomMaterial(null);
+  };
+
+  /**
+   * Delete a custom material entirely — removes from both the catalog of
+   * user-defined materials and from the current selection.
+   */
+  const removeCustomMaterial = (id: string) => {
+    const nextCustom = (state.customMaterials ?? []).filter((m) => m.id !== id);
+    const nextSelected = state.refinement.selectedMaterials.filter((m) => m.id !== id);
+    const nextDisabled = (state.refinement.disabledMaterialIds ?? []).filter((mid) => mid !== id);
+    handleUpdate({
+      customMaterials: nextCustom,
+      refinement: {
+        ...state.refinement,
+        hasUserRefined: true,
+        selectedMaterials: nextSelected,
+        disabledMaterialIds: nextDisabled,
+      },
+    });
+  };
+
   const toggleMaterial = (mat: string) => {
-    const matDef = MATERIALS_DB.find(m => m.name === mat);
+    // First try the SHRE canonical catalog, then fall back to the user's
+    // custom materials — both are valid pickable sources.
+    const matDef: MaterialDef | undefined =
+      MATERIALS_DB.find((m) => m.name === mat) ||
+      (state.customMaterials ?? []).find((m) => m.name === mat);
     if (!matDef) return;
     const isSelected = state.refinement.selectedMaterials.some(m => m.name === mat);
     let newMaterials: MaterialDef[];
+    let nextDisabled = state.refinement.disabledMaterialIds ?? [];
     if (isSelected) {
       newMaterials = state.refinement.selectedMaterials.filter(m => m.name !== mat);
+      nextDisabled = nextDisabled.filter((id) => id !== matDef.id);
     } else {
       const MAX_MATERIALS = 7;
       if (state.refinement.selectedMaterials.length >= MAX_MATERIALS) {
@@ -370,10 +492,28 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
 
     const updatedState: UserState = {
       ...state,
-      refinement: { ...state.refinement, hasUserRefined: true, selectedMaterials: newMaterials },
+      refinement: { ...state.refinement, hasUserRefined: true, selectedMaterials: newMaterials, disabledMaterialIds: nextDisabled },
     };
     handleUpdate({
       refinement: { ...updatedState.refinement, refinedPercentages: calculateRefinedDistribution(updatedState) },
+    });
+  };
+
+  const toggleMaterialEnabled = (materialId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const disabled = state.refinement.disabledMaterialIds ?? [];
+    const next = disabled.includes(materialId)
+      ? disabled.filter((id) => id !== materialId)
+      : [...disabled, materialId];
+    const updatedState: UserState = {
+      ...state,
+      refinement: { ...state.refinement, hasUserRefined: true, disabledMaterialIds: next },
+    };
+    handleUpdate({
+      refinement: {
+        ...updatedState.refinement,
+        refinedPercentages: calculateRefinedDistribution(updatedState),
+      },
     });
   };
 
@@ -499,6 +639,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
     window.addEventListener('toggle-deep-dive', openDeepDive);
     return () => window.removeEventListener('toggle-deep-dive', openDeepDive);
   }, []);
+
 
   const handleInterpretText = (text: string) => {
     if (!text.trim()) return;
@@ -1149,17 +1290,24 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                         </div>
                         {mats.map((m, i) => {
                           const imgSrc = MATERIAL_SPHERE_IMAGES[m.name];
+                          const mOn = isMaterialEnabled(m.id, state.refinement.disabledMaterialIds);
                           return (
-                            <button
+                            <div
                               key={m.id}
-                              onClick={() => toggleMaterial(m.name)}
-                              title={`${m.name} — click to remove`}
-                              className="group relative animate-scale-in flex items-center gap-2.5 py-0.5 hover:bg-gray-50 rounded-lg px-1 -mx-1 transition-colors duration-200"
-                              style={{ animationDelay: `${i * 40}ms` }}
+                              className="group relative animate-scale-in flex items-center gap-2 py-0.5 hover:bg-gray-50 rounded-lg px-1 -mx-1 transition-colors duration-200"
+                              style={{ animationDelay: `${i * 40}ms`, opacity: mOn ? 1 : 0.5 }}
                             >
-                              <div
+                              <button
+                                type="button"
+                                onClick={() => toggleMaterial(m.name)}
+                                title={`${m.name} — click to remove`}
                                 className="w-8 h-8 rounded-full overflow-hidden transition-all duration-400 group-hover:scale-110 group-hover:shadow-md shrink-0 relative"
-                                style={{ boxShadow: `0 0 0 1px ${ELEMENT_COLORS[m.element]}55, 0 0 8px ${ELEMENT_COLORS[m.element]}30, 0 2px 6px rgba(0,0,0,0.10)` }}
+                                style={{
+                                  boxShadow: mOn
+                                    ? `0 0 0 1px ${ELEMENT_COLORS[m.element]}55, 0 0 8px ${ELEMENT_COLORS[m.element]}30, 0 2px 6px rgba(0,0,0,0.10)`
+                                    : `0 0 0 1px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06)`,
+                                  filter: mOn ? 'none' : 'grayscale(0.35)',
+                                }}
                               >
                                 {imgSrc ? (
                                   <>
@@ -1178,20 +1326,44 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                                     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
                                   </svg>
                                 </div>
-                              </div>
-                              <span className="text-[13px] uppercase tracking-[0.12em] text-gray-500 font-medium group-hover:text-gray-700 transition-colors whitespace-nowrap">{m.name}</span>
-                            </button>
+                              </button>
+                              <span className="text-[13px] uppercase tracking-[0.12em] font-medium transition-colors whitespace-nowrap flex-1 min-w-0 truncate" style={{ color: mOn ? '#555' : '#aaa' }}>{m.name}</span>
+                              <MaterialEnableToggle
+                                enabled={mOn}
+                                color={ELEMENT_COLORS[m.element]}
+                                onToggle={(e) => toggleMaterialEnabled(m.id, e)}
+                                size={12}
+                              />
+                            </div>
                           );
                         })}
                       </div>
                     ))}
+                    {/* + Add custom material — sits as the last card row so users
+                        can register a non-catalog material directly from the orbit. */}
+                    <button
+                      onClick={() => { setEditingCustomMaterial(null); setShowCustomMaterialModal(true); }}
+                      className="mt-1 w-full flex items-center justify-center gap-2 py-2 rounded-md border border-dashed transition hover:bg-gray-50"
+                      style={{ borderColor: 'rgba(0,0,0,0.18)' }}
+                    >
+                      <span className="w-4 h-4 flex items-center justify-center rounded-full text-white" style={{ background: '#1a1a1a', fontSize: 11, lineHeight: 1 }}>+</span>
+                      <span className="text-[11px] uppercase tracking-[0.18em] font-medium text-neutral-700">Add custom material</span>
+                    </button>
                   </div>
                 ) : (
                   <div className="bg-white/80 backdrop-blur-md rounded-xl shadow-lg border border-gray-100/60 border-dashed p-4 min-w-[180px] text-center">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round" className="mx-auto mb-2 opacity-60">
                       <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" />
                     </svg>
-                    <p className="text-[13px] uppercase tracking-[0.15em] text-gray-400 leading-relaxed">Click elements on the orbit rings<br />to add materials</p>
+                    <p className="text-[13px] uppercase tracking-[0.15em] text-gray-400 leading-relaxed mb-3">Click elements on the orbit rings<br />to add materials</p>
+                    <button
+                      onClick={() => { setEditingCustomMaterial(null); setShowCustomMaterialModal(true); }}
+                      className="w-full flex items-center justify-center gap-2 py-2 rounded-md border border-dashed transition hover:bg-gray-50"
+                      style={{ borderColor: 'rgba(0,0,0,0.22)' }}
+                    >
+                      <span className="w-4 h-4 flex items-center justify-center rounded-full text-white" style={{ background: '#1a1a1a', fontSize: 11, lineHeight: 1 }}>+</span>
+                      <span className="text-[11px] uppercase tracking-[0.18em] font-medium text-neutral-700">Add custom material</span>
+                    </button>
                   </div>
                 )}
               </div>
@@ -1210,6 +1382,8 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
             onAdjust={handleDistributionChange}
             onToggleLock={toggleLock}
             onToggleMaterial={toggleMaterial}
+            disabledMaterialIds={state.refinement.disabledMaterialIds}
+            onToggleMaterialEnabled={toggleMaterialEnabled}
             onToggleAtmosphere={toggleAtmosphere}
             isMuted={isMuted}
             onBrilliantChange={setBrilliantZone}
@@ -1649,15 +1823,16 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
             <>
               <div className="h-px bg-gray-100/70" />
               <div>
-                <span className="text-[11px] uppercase tracking-[0.15em] text-gray-500 font-medium mb-1.5 block">Space</span>
+                <span className="text-[11px] uppercase tracking-[0.15em] text-gray-500 font-medium mb-0.5 block">Space</span>
+                <span className="text-[10px] text-gray-400 mb-1.5 block">ერთი სივრცე ერთ გენერაციაზე · one space per render</span>
                 <div className="flex flex-wrap gap-1">
                   {(ROOMS_BY_CATEGORY[state.params.category] as RoomType[]).map(room => {
                     const isSelected = (state.params.rooms || []).includes(room);
                     return (
                       <button key={room}
                         onClick={() => {
-                          const current = state.params.rooms || [];
-                          const next = isSelected ? current.filter(r => r !== room) : [...current, room];
+                          // Single-select: one render = one primary room (prompt engine uses rooms[0]).
+                          const next = isSelected ? [] : [room];
                           handleUpdate({ params: { ...state.params, rooms: next } });
                         }}
                         className={`text-[12px] tracking-[0.03em] px-2 py-[3px] rounded transition-all duration-200 ${
@@ -2036,23 +2211,82 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
               <div className="flex items-center justify-between mb-2 sm:mb-3">
                 <span className="system-label text-[12px] sm:text-[13px]">
                   Selected ({selectedItems.length}/6)
+                  {activeSidePanel === 'materials' && pausedMaterialCount > 0 && (
+                    <span className="text-gray-400 font-normal"> · {pausedMaterialCount} გათიშული</span>
+                  )}
                 </span>
                 <span className="system-label text-[12px] sm:text-[13px]">
-                  {6 - selectedItems.length} remaining
+                  {activeSidePanel === 'materials' && enabledMaterials.length > 0
+                    ? `${enabledMaterials.length} აქტიური`
+                    : `${6 - selectedItems.length} remaining`}
                 </span>
               </div>
+              {activeSidePanel === 'materials' && (
+                <p className="text-[10px] text-gray-400 tracking-wide mb-2 -mt-1">
+                  ● აქტიური · ○ გათიშული
+                </p>
+              )}
               <div className="flex flex-wrap gap-1.5">
                 {selectedItems.map((item, i) => {
                   const name = activeSidePanel === 'materials' ? (item as MaterialDef).name : (item as AdjectiveDef).label;
                   const el = item.element;
+                  const matId = activeSidePanel === 'materials' ? (item as MaterialDef).id : undefined;
+                  const customMat = item as Partial<CustomMaterial>;
+                  // Existing placement for this material — either the user's
+                  // typed note for catalog materials OR the custom material's
+                  // own placementNote (set on the modal).
+                  const existingNote = activeSidePanel === 'materials' && matId
+                    ? (state.refinement.materialPlacements?.[matId] ?? customMat.placementNote ?? '')
+                    : '';
+                  const hasNote = existingNote.trim().length > 0;
+                  const matEnabled = activeSidePanel !== 'materials' || !matId || isMaterialEnabled(matId, state.refinement.disabledMaterialIds);
                   return (
                     <div
                       key={i}
-                      className="group flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-md border border-black/15 text-[13px] uppercase tracking-[0.12em] text-black font-medium shadow-sm animate-fade-in-up"
-                      style={{ backgroundColor: `${ELEMENT_COLORS[el]}25` }}
+                      className="group flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-md border text-[13px] uppercase tracking-[0.12em] font-medium shadow-sm animate-fade-in-up transition-opacity duration-200"
+                      style={{
+                        backgroundColor: `${ELEMENT_COLORS[el]}${matEnabled ? '25' : '12'}`,
+                        borderColor: matEnabled ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.08)',
+                        borderStyle: matEnabled ? 'solid' : 'dashed',
+                        color: matEnabled ? '#000' : '#888',
+                        opacity: matEnabled ? 1 : 0.55,
+                      }}
                     >
-                      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: ELEMENT_COLORS[el] }} />
+                      <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: ELEMENT_COLORS[el], opacity: matEnabled ? 1 : 0.35 }} />
                       <span>{name}</span>
+                      {/* Placement-note pin — only for materials. Highlights
+                          when a note exists so the user can see at a glance
+                          which selected materials have explicit placement. */}
+                      {activeSidePanel === 'materials' && matId && (
+                        <MaterialEnableToggle
+                          enabled={matEnabled}
+                          color={ELEMENT_COLORS[el]}
+                          onToggle={(e) => toggleMaterialEnabled(matId, e)}
+                        />
+                      )}
+                      {activeSidePanel === 'materials' && matId && (
+                        <button
+                          onClick={() => {
+                            if (editingPlacementId === matId) {
+                              setEditingPlacementId(null);
+                              setEditingPlacementDraft('');
+                            } else {
+                              setEditingPlacementId(matId);
+                              setEditingPlacementDraft(existingNote);
+                            }
+                          }}
+                          className="w-4 h-4 flex items-center justify-center rounded transition-all duration-200"
+                          style={{
+                            color: hasNote ? ELEMENT_COLORS[el] : 'rgba(0,0,0,0.28)',
+                          }}
+                          title={hasNote ? `Placement: ${existingNote}` : 'Where should this material go?'}
+                        >
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill={hasNote ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" />
+                            <circle cx="12" cy="10" r="3" fill={hasNote ? '#fff' : 'none'} />
+                          </svg>
+                        </button>
+                      )}
                       <button
                         onClick={() =>
                           activeSidePanel === 'materials'
@@ -2071,11 +2305,157 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                   );
                 })}
               </div>
+
+              {/* Inline placement editor — appears below the chips when the
+                  user opens the pin on any selected material. */}
+              {activeSidePanel === 'materials' && editingPlacementId && (() => {
+                const targetMat = state.refinement.selectedMaterials.find((m) => m.id === editingPlacementId);
+                if (!targetMat) return null;
+                const ec = ELEMENT_COLORS[targetMat.element];
+                return (
+                  <div className="mt-3 p-2.5 rounded-md border" style={{ background: '#fff', borderColor: `${ec}30` }}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ background: ec }} />
+                      <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-neutral-600">
+                        Where should <span style={{ color: ec }}>{targetMat.name}</span> go?
+                      </span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        autoFocus
+                        value={editingPlacementDraft}
+                        onChange={(e) => setEditingPlacementDraft(e.target.value)}
+                        placeholder="e.g. kitchen island front, feature wall behind sofa…"
+                        className="flex-1 px-2.5 py-1.5 text-[12px] border rounded-md outline-none focus:border-neutral-400 transition"
+                        style={{ borderColor: 'rgba(0,0,0,0.12)' }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            setMaterialPlacement(editingPlacementId, editingPlacementDraft);
+                            setEditingPlacementId(null);
+                            setEditingPlacementDraft('');
+                          } else if (e.key === 'Escape') {
+                            setEditingPlacementId(null);
+                            setEditingPlacementDraft('');
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          setMaterialPlacement(editingPlacementId, editingPlacementDraft);
+                          setEditingPlacementId(null);
+                          setEditingPlacementDraft('');
+                        }}
+                        className="px-3 py-1.5 text-[11px] uppercase tracking-[0.15em] font-medium rounded-md text-white transition"
+                        style={{ background: '#1a1a1a' }}
+                      >
+                        Save
+                      </button>
+                      {(state.refinement.materialPlacements?.[editingPlacementId]) && (
+                        <button
+                          onClick={() => {
+                            setMaterialPlacement(editingPlacementId, '');
+                            setEditingPlacementId(null);
+                            setEditingPlacementDraft('');
+                          }}
+                          className="px-2 py-1.5 text-[11px] uppercase tracking-[0.12em] text-neutral-500 hover:text-red-500 transition"
+                          title="Clear placement note"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-neutral-500 mt-1.5 leading-snug">
+                      The generator reads this and places the material exactly where you describe.
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}
 
         <div className="flex-1 px-4 py-3 overflow-y-auto custom-scroll space-y-4">
+          {/* + Add custom material — only on the materials picker.
+              Sits above the canonical groups so it's discoverable. */}
+          {activeSidePanel === 'materials' && (
+            <div>
+              <button
+                onClick={() => { setEditingCustomMaterial(null); setShowCustomMaterialModal(true); }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-md border border-dashed transition hover:bg-gray-50"
+                style={{ borderColor: 'rgba(0,0,0,0.18)' }}
+              >
+                <span className="w-4 h-4 flex items-center justify-center rounded-full text-white" style={{ background: '#1a1a1a', fontSize: 11, lineHeight: 1 }}>+</span>
+                <span className="text-[11px] uppercase tracking-[0.2em] font-medium text-neutral-700">Add custom material</span>
+              </button>
+              <p className="text-[10px] text-neutral-400 mt-1.5 leading-snug px-1">
+                Define your own material — name, element, optional reference image and where to place it. It joins the generation prompt like any other pick.
+              </p>
+            </div>
+          )}
+
+          {/* User's existing custom materials — appear as a normal group
+              above the canonical earth/fire/water/air sections. */}
+          {activeSidePanel === 'materials' && (state.customMaterials?.length ?? 0) > 0 && (
+            <div>
+              <h4 className="text-[13px] uppercase tracking-[0.5em] text-gray-300 font-medium mb-3 flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full" style={{ background: '#1a1a1a' }} />
+                custom
+              </h4>
+              <div className="flex flex-wrap gap-1.5">
+                {(state.customMaterials ?? []).map((cm) => {
+                  const isSelected = state.refinement.selectedMaterials.some((m) => m.id === cm.id);
+                  const cmOn = isSelected && isMaterialEnabled(cm.id, state.refinement.disabledMaterialIds);
+                  const ec = ELEMENT_COLORS[cm.element];
+                  return (
+                    <div key={cm.id} className="group inline-flex items-center gap-1 rounded-md border transition-all"
+                      style={{
+                        background: isSelected ? `${ec}${cmOn ? '18' : '08'}` : 'transparent',
+                        borderColor: isSelected ? (cmOn ? `${ec}55` : 'rgba(0,0,0,0.12)') : 'rgba(0,0,0,0.06)',
+                        borderStyle: isSelected && !cmOn ? 'dashed' : 'solid',
+                        opacity: isSelected && !cmOn ? 0.55 : 1,
+                      }}>
+                      <button
+                        onClick={() => toggleMaterial(cm.name)}
+                        className="flex items-center gap-1.5 pl-1 pr-1 py-1"
+                        title={cm.placementNote ? `Placement: ${cm.placementNote}` : cm.name}
+                      >
+                        <span className="relative inline-block w-5 h-5 rounded-full overflow-hidden shrink-0" style={{ boxShadow: `0 0 0 1px ${ec}55, 0 0 6px ${ec}40`, background: `radial-gradient(circle at 34% 30%, ${ec}E8, ${ec}A0)` }}>
+                          {cm.referenceImageDataUrl && (
+                            <img src={cm.referenceImageDataUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                          )}
+                        </span>
+                        <span className="text-[13px] uppercase tracking-[0.12em] leading-none py-0.5" style={{ color: isSelected && cmOn ? '#000' : '#666' }}>{cm.name}</span>
+                      </button>
+                      {isSelected && (
+                        <MaterialEnableToggle
+                          enabled={cmOn}
+                          color={ec}
+                          onToggle={(e) => toggleMaterialEnabled(cm.id, e)}
+                          size={12}
+                        />
+                      )}
+                      <button
+                        onClick={() => { setEditingCustomMaterial(cm); setShowCustomMaterialModal(true); }}
+                        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-neutral-400 hover:text-neutral-800 transition"
+                        title="Edit"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4z" /></svg>
+                      </button>
+                      <button
+                        onClick={() => removeCustomMaterial(cm.id)}
+                        className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center text-neutral-400 hover:text-red-500 transition mr-1"
+                        title="Delete"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {activeSidePanel &&
             Object.entries(activeSidePanel === 'materials' ? CANONICAL_MATERIALS : CANONICAL_ATMOSPHERE).map(([groupKey, items]) => {
               const isSharedGroup = groupKey === 'shared';
@@ -2088,9 +2468,13 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
               </h4>
               <div className="flex flex-wrap gap-1.5">
                 {items.map(item => {
+                  const matDefPick = activeSidePanel === 'materials'
+                    ? state.refinement.selectedMaterials.find((m) => m.name === item)
+                    : undefined;
                   const isSelected = activeSidePanel === 'materials'
-                    ? state.refinement.selectedMaterials.some(m => m.name === item)
+                    ? !!matDefPick
                     : state.refinement.selectedAdjectives.some(a => a.label.toLowerCase() === item.toLowerCase());
+                  const matEnabledPick = !matDefPick || isMaterialEnabled(matDefPick.id, state.refinement.disabledMaterialIds);
                   const pastelColor = groupColor;
                   const isAtmoFull = activeSidePanel === 'atmosphere' && state.refinement.selectedAdjectives.length >= 7;
                   const matThumb = activeSidePanel === 'materials' ? MATERIAL_SPHERE_IMAGES[item] : undefined;
@@ -2104,13 +2488,18 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                       }
                       disabled={!isSelected && isAtmoFull}
                       className={`flex items-center gap-1.5 text-[13px] uppercase tracking-[0.12em] pl-1 pr-3 py-1 rounded-md border transition-all duration-300 ${
-                        isSelected
+                        isSelected && matEnabledPick
                           ? 'border-black/30 text-black font-medium shadow-sm'
+                          : isSelected && !matEnabledPick
+                            ? 'border-dashed border-black/15 text-gray-500 font-medium'
                           : isAtmoFull
                             ? 'border-gray-50 text-gray-200 cursor-not-allowed'
                             : 'border-gray-100 text-gray-400 hover:border-gray-300 hover:text-black'
                       }`}
-                      style={{ backgroundColor: isSelected ? `${pastelColor}18` : 'transparent' }}
+                      style={{
+                        backgroundColor: isSelected ? `${pastelColor}${matEnabledPick ? '18' : '08'}` : 'transparent',
+                        opacity: isSelected && !matEnabledPick ? 0.55 : 1,
+                      }}
                     >
                       <span className="relative inline-block w-5 h-5 rounded-full overflow-hidden shrink-0" style={{
                         boxShadow: `0 0 0 1px ${pastelColor}55, 0 0 6px ${pastelColor}40`,
@@ -2152,6 +2541,13 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
         onClose={() => setIsDeepDiveOpen(false)}
         answers={state.deepSurveyAnswers}
         onComplete={handleDeepDiveComplete}
+      />
+
+      <AddCustomMaterialModal
+        open={showCustomMaterialModal}
+        initial={editingCustomMaterial ?? undefined}
+        onCancel={() => { setShowCustomMaterialModal(false); setEditingCustomMaterial(null); }}
+        onSave={handleSaveCustomMaterial}
       />
 
       {/* ═══ Concept Modal — centered compact window ═══ */}
@@ -2241,12 +2637,12 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
                 ) : state.params.category && ROOMS_BY_CATEGORY[state.params.category] ? (
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] uppercase tracking-[0.2em] font-medium shrink-0" style={{ color: '#a0aec0' }}>Space</span>
+                    <span className="text-[10px] italic shrink-0" style={{ color: '#a0aec0' }}>ერთი სივრცე · one per render</span>
                     {(ROOMS_BY_CATEGORY[state.params.category] as RoomType[]).map(room => {
                       const isSelected = (state.params.rooms || []).includes(room);
                       return (
                         <button key={room} onClick={() => {
-                            const current = state.params.rooms || [];
-                            const next = isSelected ? current.filter(r => r !== room) : [...current, room];
+                            const next = isSelected ? [] : [room];
                             handleUpdate({ params: { ...state.params, rooms: next } });
                           }}
                           className={`text-[12px] tracking-[0.02em] px-2.5 py-[4px] rounded-md transition-all ${

@@ -39,40 +39,52 @@ export function getPrimaryElementForAdjective(a: CanonicalAdjective): Element {
   return bestEl;
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// SHRE 4E ADJECTIVE CATALOG — v2.1 (curated)
+// ────────────────────────────────────────────────────────────────────────────
+// Strict per-element budget: EXACTLY 4 atmosphere words per element +
+// 4 shared dual-element adjectives. Total = 20.
+//
+// User mandate: "4 atmosphere words" per element — no near-synonyms,
+// no padding. Each adjective must describe a distinct atmospheric register.
+//
+// Removed in v2.1:
+//   EARTH: 'stable'              (overlaps 'grounded')
+//   FIRE:  'dramatic restraint'  (phrase, not a register)
+//   WATER: 'liquid'              (overlaps 'flowing')
+//   AIR:   'iridescent'          (material attribute, not atmosphere)
+// ════════════════════════════════════════════════════════════════════════════
+
 export const CANONICAL_ADJECTIVES_CATALOG: CanonicalAdjective[] = [
-  // EARTH (5) — refined architectural vocabulary
-  { id: 'grounded', label: 'grounded', isShared: false, elementWeights: { earth: 1, fire: 0, water: 0, air: 0 } },
-  { id: 'tactile', label: 'tactile', isShared: false, elementWeights: { earth: 1, fire: 0, water: 0, air: 0 } },
-  { id: 'mineral', label: 'mineral', isShared: false, elementWeights: { earth: 1, fire: 0, water: 0, air: 0 } },
-  { id: 'stable', label: 'stable', isShared: false, elementWeights: { earth: 1, fire: 0, water: 0, air: 0 } },
+  // EARTH (4) — grounded mass, mineral honesty, tactile warmth
+  { id: 'grounded',  label: 'grounded',  isShared: false, elementWeights: { earth: 1, fire: 0, water: 0, air: 0 } },
+  { id: 'tactile',   label: 'tactile',   isShared: false, elementWeights: { earth: 1, fire: 0, water: 0, air: 0 } },
+  { id: 'mineral',   label: 'mineral',   isShared: false, elementWeights: { earth: 1, fire: 0, water: 0, air: 0 } },
   { id: 'warm-mass', label: 'warm mass', isShared: false, elementWeights: { earth: 1, fire: 0, water: 0, air: 0 } },
 
-  // FIRE (5)
-  { id: 'moody', label: 'moody', isShared: false, elementWeights: { earth: 0, fire: 1, water: 0, air: 0 } },
+  // FIRE (4) — concentrated drama, oxidised warmth, cinematic intensity
+  { id: 'moody',     label: 'moody',     isShared: false, elementWeights: { earth: 0, fire: 1, water: 0, air: 0 } },
   { id: 'cinematic', label: 'cinematic', isShared: false, elementWeights: { earth: 0, fire: 1, water: 0, air: 0 } },
-  { id: 'intense', label: 'intense', isShared: false, elementWeights: { earth: 0, fire: 1, water: 0, air: 0 } },
-  { id: 'oxidized', label: 'oxidized', isShared: false, elementWeights: { earth: 0, fire: 1, water: 0, air: 0 } },
-  { id: 'dramatic-restraint', label: 'dramatic restraint', isShared: false, elementWeights: { earth: 0, fire: 1, water: 0, air: 0 } },
+  { id: 'intense',   label: 'intense',   isShared: false, elementWeights: { earth: 0, fire: 1, water: 0, air: 0 } },
+  { id: 'oxidized',  label: 'oxidized',  isShared: false, elementWeights: { earth: 0, fire: 1, water: 0, air: 0 } },
 
-  // WATER (5)
+  // WATER (4) — fluid serenity, reflective continuity, sculpted depth
   { id: 'reflective', label: 'reflective', isShared: false, elementWeights: { earth: 0, fire: 0, water: 1, air: 0 } },
-  { id: 'flowing', label: 'flowing', isShared: false, elementWeights: { earth: 0, fire: 0, water: 1, air: 0 } },
-  { id: 'liquid', label: 'liquid', isShared: false, elementWeights: { earth: 0, fire: 0, water: 1, air: 0 } },
-  { id: 'immersive', label: 'immersive', isShared: false, elementWeights: { earth: 0, fire: 0, water: 1, air: 0 } },
+  { id: 'flowing',    label: 'flowing',    isShared: false, elementWeights: { earth: 0, fire: 0, water: 1, air: 0 } },
+  { id: 'immersive',  label: 'immersive',  isShared: false, elementWeights: { earth: 0, fire: 0, water: 1, air: 0 } },
   { id: 'sculptural', label: 'sculptural', isShared: false, elementWeights: { earth: 0, fire: 0, water: 1, air: 0 } },
 
-  // AIR (5)
-  { id: 'ethereal', label: 'ethereal', isShared: false, elementWeights: { earth: 0, fire: 0, water: 0, air: 1 } },
+  // AIR (4) — weightless luminance, forward-looking lightness
+  { id: 'ethereal',   label: 'ethereal',   isShared: false, elementWeights: { earth: 0, fire: 0, water: 0, air: 1 } },
   { id: 'weightless', label: 'weightless', isShared: false, elementWeights: { earth: 0, fire: 0, water: 0, air: 1 } },
-  { id: 'luminous', label: 'luminous', isShared: false, elementWeights: { earth: 0, fire: 0, water: 0, air: 1 } },
+  { id: 'luminous',   label: 'luminous',   isShared: false, elementWeights: { earth: 0, fire: 0, water: 0, air: 1 } },
   { id: 'futuristic', label: 'futuristic', isShared: false, elementWeights: { earth: 0, fire: 0, water: 0, air: 1 } },
-  { id: 'iridescent', label: 'iridescent', isShared: false, elementWeights: { earth: 0, fire: 0, water: 0, air: 1 } },
 
-  // SHARED (4) — dual-element only
-  { id: 'anchored', label: 'anchored', isShared: true, elementWeights: { earth: 0.6, fire: 0.4, water: 0, air: 0 } },
-  { id: 'composed', label: 'composed', isShared: true, elementWeights: { earth: 0.5, fire: 0, water: 0, air: 0.5 } },
-  { id: 'refined', label: 'refined', isShared: true, elementWeights: { earth: 0, fire: 0.4, water: 0, air: 0.6 } },
-  { id: 'enveloping', label: 'enveloping', isShared: true, elementWeights: { earth: 0.4, fire: 0, water: 0.6, air: 0 } },
+  // SHARED (4) — dual-element bridges
+  { id: 'anchored',   label: 'anchored',   isShared: true, elementWeights: { earth: 0.6, fire: 0.4, water: 0,   air: 0   } },
+  { id: 'composed',   label: 'composed',   isShared: true, elementWeights: { earth: 0.5, fire: 0,   water: 0,   air: 0.5 } },
+  { id: 'refined',    label: 'refined',    isShared: true, elementWeights: { earth: 0,   fire: 0.4, water: 0,   air: 0.6 } },
+  { id: 'enveloping', label: 'enveloping', isShared: true, elementWeights: { earth: 0.4, fire: 0,   water: 0.6, air: 0   } },
 ];
 
 export const CANONICAL_ADJECTIVE_BY_ID: Record<string, CanonicalAdjective> = Object.fromEntries(
@@ -91,12 +103,14 @@ export const CANONICAL_ADJECTIVE_GROUPS: Record<AdjectiveGroupKey, string[]> = {
 
 export function validateAdjectivesCatalog(catalog: CanonicalAdjective[]): { ok: true } | { ok: false; errors: string[] } {
   const errors: string[] = [];
-  if (catalog.length !== 24) errors.push(`Expected 24 adjectives, got ${catalog.length}.`);
+  // SHRE v2.1: 4 per element (4×4 = 16 pure) + 4 shared = 20 total.
+  if (catalog.length !== 20) errors.push(`Expected 20 adjectives, got ${catalog.length}.`);
 
   const ids = catalog.map((a) => a.id);
   const uniqueIds = new Set(ids);
   if (uniqueIds.size !== ids.length) errors.push('Adjective ids must be unique.');
 
+  const pureCounts: Record<Element, number> = { earth: 0, fire: 0, water: 0, air: 0 };
   const eps = 1e-9;
   for (const a of catalog) {
     const w = a.elementWeights;
@@ -110,8 +124,15 @@ export function validateAdjectivesCatalog(catalog: CanonicalAdjective[]): { ok: 
       if (nonZero.length !== 1) errors.push(`Pure adjective "${a.id}" must have exactly 1 non-zero weight.`);
       const only = nonZero[0];
       if (only && Math.abs((w[only] || 0) - 1) > eps) errors.push(`Pure adjective "${a.id}" must have weight 1.0.`);
+      if (only) pureCounts[only] += 1;
     }
   }
+
+  (['earth', 'fire', 'water', 'air'] as Element[]).forEach((el) => {
+    if (pureCounts[el] !== 4) {
+      errors.push(`Expected 4 pure adjectives for ${el}, got ${pureCounts[el]}.`);
+    }
+  });
 
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
 }

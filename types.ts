@@ -81,10 +81,85 @@ export interface EstimateResult {
   timeline: { low: number; high: number };
 }
 
+/**
+ * Composition mode produced by `detectComposition` in promptEngine.ts.
+ * Captures how the elemental distribution behaves as a SPATIAL IDENTITY,
+ * not just which number is largest — the SHRE dominance rule says a 5-10%
+ * lead still confers atmospheric leadership.
+ *
+ *   - SingleDominant: primary leads by ≥ 10
+ *   - NarrowLead:     primary leads by 5–9 (atmospheric leadership only)
+ *   - DualCore:       top two within 5; joint identity
+ *   - Triadic:        three elements ≥ 15, fourth < 10
+ *   - Minimal:        only two elements with ≥ 5 presence
+ */
+export type CompositionMode = 'SingleDominant' | 'NarrowLead' | 'DualCore' | 'Triadic' | 'Minimal';
+
+export type DominanceStrength = 'clear' | 'narrow' | 'dual';
+
+/** The six SHRE Style Directions — exhaustive list, no synonyms allowed. */
+export type StyleDirection =
+  | 'Grounded Minimalism'
+  | 'Warm Brutal Harmony'
+  | 'Sculptural Flow'
+  | 'Accent Geometry'
+  | 'Silent Light Spaces'
+  | 'Deep Ambient Atmosphere';
+
+/** The four SHRE palette directions — exhaustive list. */
+export type ColorDirection = 'Warm' | 'Cool' | 'Neutral' | 'Deep';
+
+/**
+ * A single material slot in the client-facing diagnosis. The catalog
+ * element-weights are surfaced as percentages so the report can render
+ * "Oak veneer — Earth 70%, Water 20%, Air 10%" verbatim.
+ */
+export interface DiagnosisMaterial {
+  id: string;
+  label: string;
+  primaryElement: Element;
+  /** Element shares as integer percentages — sum to 100 for each material. */
+  percentages: Record<Element, number>;
+  /** Slot role this material fills in the composition. */
+  role: 'primary' | 'secondary' | 'supporting';
+}
+
+/**
+ * The full SHRE 7-section client diagnosis. Produced by `buildDiagnosis`
+ * in services/shreDiagnosis.ts. The renderer reads this; the SHRE image
+ * prompt also consumes `styleDirection`, `palette`, and `materials` so
+ * the report and the rendered image agree.
+ */
+export interface Diagnosis {
+  /** Section 1 — Elemental Distribution (already in AnalysisResult). */
+  percentages: Record<Element, number>;
+  /** Section 2 — Primary Element + behavior/spatial-preference explanation. */
+  primary: { element: Element; explanation: string };
+  /** Section 3 — Secondary Element + supporting-role explanation (null if minimal). */
+  secondary: { element: Element; explanation: string } | null;
+  /** Section 4 — Exactly one Style Direction + reason. */
+  styleDirection: StyleDirection;
+  styleDirectionReason: string;
+  /** Section 5 — Palette direction + reason. */
+  palette: ColorDirection;
+  paletteReason: string;
+  /** Section 6 — 5-7 materials with energetic logic in percentages. */
+  materials: DiagnosisMaterial[];
+  /** Section 7 — Spatial guidance prose (approved vocabulary only). */
+  spatialGuidance: string;
+  /** Composition mode used to derive the report — surfaced for debugging. */
+  composition: CompositionMode;
+}
+
 export interface AnalysisResult {
   percentages: Record<Element, number>;
   primary: Element;
   secondary: Element;
+  /** New: composition mode + dominance strength (added in SHRE v2 refactor). */
+  composition?: CompositionMode;
+  dominanceStrength?: DominanceStrength;
+  /** New: full SHRE 7-section diagnosis (populated after the survey completes). */
+  diagnosis?: Diagnosis;
   estimate: EstimateResult;
 }
 
@@ -103,6 +178,19 @@ export interface RefinementState {
   selectedAdjectives: AdjectiveDef[];
   selectedMaterials: MaterialDef[];
   refinedPercentages: Record<Element, number>;
+  /**
+   * Optional per-material placement notes — keyed by material id.
+   * The user can type "use on kitchen island" for any selected catalog
+   * or custom material; the prompt engine routes the note as the
+   * assigned surface for that specific material. Custom materials with
+   * their own `placementNote` still take priority over this map.
+   */
+  materialPlacements?: Record<string, string>;
+  /**
+   * Material ids temporarily excluded from generation while staying
+   * visible in the orbit / picker (toggle off without removing).
+   */
+  disabledMaterialIds?: string[];
 }
 
 export type ImageResolution = '1:1' | '16:9' | '4:3' | '3:2' | '9:16';
@@ -128,7 +216,29 @@ export interface GenerationHistoryEntry {
   rooms?: string[];
 }
 
+/**
+ * A material defined by the user themselves (not from the canonical
+ * SHRE catalog). Carries everything a built-in MaterialDef carries
+ * plus a `placementNote` describing where the user wants this
+ * material used on the rendered image (e.g. "kitchen island front",
+ * "feature wall behind sofa") and an optional uploaded reference
+ * image. Custom materials flow into the prompt as if they were
+ * regular selected materials.
+ */
+export interface CustomMaterial extends MaterialDef {
+  /** Discriminator — distinguishes custom from catalog materials in UI lists. */
+  isCustom: true;
+  /** Free-form user note describing the intended use / location. */
+  placementNote?: string;
+  /** Data-URL of a reference image (uploaded by the user). */
+  referenceImageDataUrl?: string;
+  /** Creation epoch (ms) — used for deterministic ordering. */
+  createdAt: number;
+}
+
 export interface UserState {
+  /** User-defined materials added on the workspace ("+ ADD CUSTOM MATERIAL"). */
+  customMaterials?: CustomMaterial[];
   params: {
     domain?: Domain;
     category?: SpaceCategory;
@@ -174,7 +284,17 @@ export interface PromptInput {
   primaryElement: Element;
   secondaryElement: Element;
   adjectivesSelected: Array<{ id: string, label: string, vec: Vector4 }>;
-  materialsSelected: Array<{ id: string, name: string, category: string, vec: Vector4, imagePath?: string }>;
+  materialsSelected: Array<{
+    id: string;
+    name: string;
+    category: string;
+    vec: Vector4;
+    imagePath?: string;
+    /** True when this material was authored by the user via "+ Add custom material". */
+    isCustom?: boolean;
+    /** Optional user note describing where this material should go (e.g. "kitchen island front"). */
+    placementNote?: string;
+  }>;
   hasUserRefined: boolean;
   deepSurveyCompleted: boolean;
   reference: {
@@ -207,6 +327,14 @@ export interface PromptInput {
   userNote?: string;
   /** Image aspect ratio from Space Config */
   aspectRatio?: ImageResolution;
+  /**
+   * SHRE diagnostic output (populated after the survey completes).
+   * When present, the image-generation prompt prefers diagnosis-picked
+   * materials, style direction and palette over the SHRE pool defaults
+   * so the rendered image matches what the diagnostic report claims.
+   * User wheel picks still take priority on top — see pickSHREMaterials.
+   */
+  diagnosis?: Diagnosis;
 }
 
 export interface GenerationPackage {

@@ -48,3 +48,6 @@ coverage
 # Temporary working artifacts (PDF extracts, scratch files)
 .tmp_*
 .tmp_pdf_extract
+
+# Large local texture library (do not commit)
+public/survey-textures/

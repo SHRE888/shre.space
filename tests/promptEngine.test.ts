@@ -58,6 +58,27 @@ describe('Prompt Engine', () => {
     expect(pkg.negativePrompt).toContain("fantasy");
     expect(pkg.negativePrompt).toContain("concept art");
     expect(pkg.negativePrompt).toContain("split composition");
+    expect(pkg.negativePrompt).toContain("spa cliché");
+  });
+
+  test('Includes anti-utopian architectural control in image prompt', () => {
+    const pkg = buildGenerationPackage(mockInput);
+    expect(pkg.imagePrompt).toContain('ANTI-UTOPIAN ARCHITECTURAL CONTROL');
+    expect(pkg.imagePrompt).toContain('NOT dreamy');
+  });
+
+  test('Includes bathroom hearth block when room is Bathroom with Fire', () => {
+    const pkg = buildGenerationPackage({
+      ...mockInput,
+      spaceCategory: 'Bathroom',
+      rooms: ['Bathroom'],
+      primaryElement: 'fire',
+      secondaryElement: 'earth',
+      baseDistribution: { earth: 20, fire: 60, water: 10, air: 10 },
+    });
+    expect(pkg.imagePrompt).toContain('BATHROOM ARCHITECTURAL PROGRAM');
+    expect(pkg.imagePrompt).toContain('FIRE HEARTH');
+    expect(pkg.imagePrompt).toContain('NO curtains');
   });
 
   test('Photo upload triggers strict mapping', () => {

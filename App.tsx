@@ -5,9 +5,12 @@ import { Layout } from './components/Layout';
 import { WorkspacePage } from './components/WorkspacePage';
 import { AboutPage } from './components/AboutPage';
 import { SpaceGuide } from './components/SpaceGuide';
-import { UserState, Element, MaterialDef, GenerationHistoryEntry } from './types';
+import { DiagnosisReport } from './components/DiagnosisReport';
+import { UserState, Element, MaterialDef, GenerationHistoryEntry, CustomMaterial } from './types';
+import AddCustomMaterialModal from './components/AddCustomMaterialModal';
 import { loadState, saveState, clearState } from './services/storageService';
 import { calculateAnalysis, buildUniversalPrompt, buildTargetedEditPrompt } from './services/promptEngine';
+import { buildDiagnosis } from './services/shreDiagnosis';
 import { generateImageFromPrompt, dataUrlToFile } from './services/geminiService';
 import { interpretRefinementFeedback } from './services/refinementFeedback';
 import { getInitialSelection, getSelectionFromPercentages } from './services/refinementLogic';
@@ -117,6 +120,12 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
   const [transitioning, setTransitioning] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<number | null>(null);
   const [imagesLoaded, setImagesLoaded] = useState<Record<string, boolean>>({});
+  // Tracks options whose <img> failed to load (404, CORS, network, etc.). When
+  // an image fails we hide the broken <img> tag and reveal an element-tinted
+  // gradient behind it so the tile never gets stuck on the skeleton pulse —
+  // previously a broken Unsplash photo (e.g. the old "Fjord silence" ID, or
+  // any future link-rot) would leave the tile pulsing grey forever.
+  const [imagesFailed, setImagesFailed] = useState<Record<string, boolean>>({});
   const [showResult, setShowResult] = useState(false);
   const [completedState, setCompletedState] = useState<UserState | null>(null);
   const navigate = useNavigate();
@@ -139,8 +148,28 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
       shortSurveyAnswers: surveyAnswers,
       shortSurveySkipped: false,
     };
-    const analysis = calculateAnalysis(updatedState);
-    const proportionalItems = getSelectionFromPercentages(analysis.percentages);
+    const baseAnalysis = calculateAnalysis(updatedState);
+    // Attach the SHRE 7-section diagnosis to the analysis so the report
+    // screen and the image-prompt builder can both read it from the same
+    // place. Wrapped in try/catch: in production the diagnosis builder
+    // logs validation errors and degrades gracefully; we never want a
+    // diagnostic-only failure to break the survey-complete flow.
+    let analysis = baseAnalysis;
+    try {
+      const diagnosis = buildDiagnosis(baseAnalysis);
+      analysis = { ...baseAnalysis, diagnosis };
+    } catch (err) {
+      console.error('SHRE diagnosis build failed; falling back to base analysis', err);
+    }
+    // Pass the diagnosis through so the workspace material orbit mirrors
+    // the report screen's picks exactly — fixes the SHRE MATERIAL
+    // SELECTION LOCK rule "every material shown must have a clear
+    // elemental reason" and the VARIATION RULE "do not show 5 versions
+    // of white marble".
+    const proportionalItems = getSelectionFromPercentages(
+      analysis.percentages,
+      analysis.diagnosis,
+    );
     const finalState: UserState = {
       ...updatedState,
       analysis,
@@ -190,13 +219,59 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
     air: ['Futuristic Ethereal Light', 'Iridescent Forward Vision', 'Cosmic Translucent Clarity'],
   };
 
-  useEffect(() => {
-    if (!showResult) return;
-    const t = setTimeout(() => { whoosh(); navigate('/core'); }, 2800);
-    return () => clearTimeout(t);
-  }, [showResult, navigate]);
+  // SHRE v2.0 — the auto-redirect was removed. The user reads the diagnosis
+  // report and clicks "Enter Workspace" to advance. If the diagnosis fails to
+  // build (caught in finalizeSurvey), we render the legacy ring-only fallback
+  // below as a graceful degradation path.
 
   if (showResult) {
+    const diagnosis = completedState?.analysis?.diagnosis;
+
+    // Happy path — render the SHRE 7-section diagnostic report.
+    if (diagnosis) {
+      return (
+        <DiagnosisReport
+          diagnosis={diagnosis}
+          onEnterWorkspace={() => {
+            whoosh();
+            navigate('/core');
+          }}
+          onGenerateDirectly={() => {
+            // User chose the "Generate" shortcut on the diagnosis report.
+            // Goal: skip the workspace + gather/concept-modal review
+            // steps and land on /generate, which is the only place that
+            // actually calls the image API (generateImageFromPrompt).
+            //
+            // /generate (ResultsView) auto-runs its `run()` effect on
+            // mount because the effect is keyed on `generationKey` (which
+            // starts at 0) — buildUniversalPrompt + the API call fire
+            // without any further user click. We just need to make sure
+            // state.params has enough info for buildUniversalPrompt to
+            // build a coherent brief: after the survey, params is `{}`,
+            // so the workspace's space-config (domain / category /
+            // rooms) would normally fill that in. For the shortcut we
+            // inject sensible interior defaults if and only if those
+            // fields are still empty — anything the user might have set
+            // earlier (returning user from localStorage) is preserved.
+            whoosh();
+            setState((prev) => ({
+              ...prev,
+              params: {
+                ...prev.params,
+                domain: prev.params.domain ?? 'interior',
+                category: prev.params.category ?? 'Living / Residential',
+                rooms: (prev.params.rooms && prev.params.rooms.length)
+                  ? prev.params.rooms
+                  : ['Living Room'],
+              },
+            }));
+            navigate('/generate');
+          }}
+        />
+      );
+    }
+
+    // Fallback — preserved minimal legacy result screen for resilience.
     const dist = completedState?.analysis?.percentages || { earth: 25, fire: 25, water: 25, air: 25 };
     const sorted = (Object.entries(dist) as [Element, number][]).sort((a, b) => b[1] - a[1]);
     const domEl = sorted[0][0];
@@ -212,10 +287,8 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
           @keyframes resultFadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
           @keyframes barGrow{from{width:0}to{width:var(--bar-w)}}
           @keyframes ringPulse{0%,100%{box-shadow:0 0 0 0 var(--ring-c)}50%{box-shadow:0 0 0 12px transparent}}
-          @keyframes dotScale{from{transform:scale(0)}to{transform:scale(1)}}
         `}</style>
         <div className="max-w-sm w-full text-center" style={{ animation: 'resultFadeIn 0.6s ease-out' }}>
-          {/* Dominant element ring */}
           <div className="w-20 h-20 rounded-full mx-auto mb-5 flex items-center justify-center"
             style={{
               background: `conic-gradient(${sorted.map(([el, val], i) => {
@@ -224,8 +297,6 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                 return `${ELEMENT_COLORS[el]} ${start}deg ${end}deg`;
               }).join(', ')})`,
               boxShadow: `0 0 30px ${domColor}30`,
-              animation: 'ringPulse 2s ease-in-out infinite',
-              ['--ring-c' as string]: `${domColor}25`,
             }}>
             <div className="w-14 h-14 rounded-full bg-[#fafafa] flex items-center justify-center">
               <span className="text-[22px] font-light tracking-wide" style={{ color: domColor }}>
@@ -233,46 +304,26 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
               </span>
             </div>
           </div>
-
-          {/* 3-word headline */}
-          <h2 className="text-[20px] font-light tracking-[0.12em] mb-1" style={{ color: domColor, animation: 'resultFadeIn 0.6s ease-out 0.15s both' }}>
-            {headline}
-          </h2>
-          <p className="text-[11px] uppercase tracking-[0.35em] text-gray-400 font-light mb-6" style={{ animation: 'resultFadeIn 0.6s ease-out 0.25s both' }}>
-            Your Energy Profile
-          </p>
-
-          {/* Percentage bars */}
-          <div className="space-y-2.5 mb-6 text-left" style={{ animation: 'resultFadeIn 0.5s ease-out 0.35s both' }}>
-            {sorted.map(([el, val], i) => {
-              const pct = (val / total) * 100;
-              return (
-                <div key={el} className="flex items-center gap-3">
-                  <span className="text-[11px] uppercase tracking-[0.15em] w-12 text-right font-medium" style={{ color: ELEMENT_COLORS[el], opacity: i === 0 ? 1 : 0.6 }}>
-                    {el.slice(0, 5)}
-                  </span>
-                  <div className="flex-1 h-[6px] rounded-full overflow-hidden" style={{ background: `${ELEMENT_COLORS[el]}10` }}>
-                    <div className="h-full rounded-full" style={{
-                      ['--bar-w' as string]: `${pct}%`,
-                      width: `${pct}%`,
-                      background: `linear-gradient(90deg, ${ELEMENT_COLORS[el]}${i === 0 ? 'cc' : '55'}, ${ELEMENT_COLORS[el]}${i === 0 ? '' : '88'})`,
-                      animation: `barGrow 0.8s ease-out ${0.5 + i * 0.12}s both`,
-                    }} />
-                  </div>
-                  <span className="text-[12px] font-mono tabular-nums w-9 text-right" style={{ color: ELEMENT_COLORS[el], fontWeight: i === 0 ? 700 : 400, opacity: i === 0 ? 1 : 0.55 }}>
-                    {Math.round(val)}%
-                  </span>
+          <h2 className="text-[20px] font-light tracking-[0.12em] mb-1" style={{ color: domColor }}>{headline}</h2>
+          <p className="text-[11px] uppercase tracking-[0.35em] text-gray-400 font-light mb-6">Your Energy Profile</p>
+          <div className="space-y-2.5 mb-6 text-left">
+            {sorted.map(([el, val], i) => (
+              <div key={el} className="flex items-center gap-3">
+                <span className="text-[11px] uppercase tracking-[0.15em] w-12 text-right font-medium" style={{ color: ELEMENT_COLORS[el], opacity: i === 0 ? 1 : 0.6 }}>{el.slice(0, 5)}</span>
+                <div className="flex-1 h-[6px] rounded-full overflow-hidden" style={{ background: `${ELEMENT_COLORS[el]}10` }}>
+                  <div className="h-full rounded-full" style={{ width: `${(val / total) * 100}%`, background: ELEMENT_COLORS[el] }} />
                 </div>
-              );
-            })}
+                <span className="text-[12px] font-mono tabular-nums w-9 text-right" style={{ color: ELEMENT_COLORS[el] }}>{Math.round(val)}%</span>
+              </div>
+            ))}
           </div>
-
-          {/* Auto-redirect indicator */}
-          <div className="flex items-center justify-center gap-2" style={{ animation: 'resultFadeIn 0.4s ease-out 0.8s both' }}>
-            <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: domColor }} />
-            <span className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-light">entering workspace</span>
-            <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: domColor, animationDelay: '0.3s' }} />
-          </div>
+          <button
+            type="button"
+            onClick={() => { whoosh(); navigate('/core'); }}
+            className="px-6 py-3 min-h-[44px] uppercase tracking-[0.25em] text-[11px] font-medium border border-[#1a1a1a] text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-[#fafafa] transition-colors duration-300"
+          >
+            Enter Workspace
+          </button>
         </div>
       </div>
     );
@@ -354,6 +405,17 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                 const isHovered = hoveredOption === i;
                 const imgKey = `${q.id}-${i}`;
                 const loaded = imagesLoaded[imgKey];
+                const failed = imagesFailed[imgKey];
+
+                // Resolve the option's dominant element (highest weight) so
+                // a failed image can fall back to an element-tinted gradient
+                // instead of a blank grey skeleton. Tie-break order follows
+                // the SHRE canon: earth > fire > water > air.
+                const tieOrder: Element[] = ['earth', 'fire', 'water', 'air'];
+                const primaryElement: Element = tieOrder.reduce((best, el) =>
+                  (opt.weights[el] || 0) > (opt.weights[best] || 0) ? el : best,
+                tieOrder[0]);
+                const fallbackColor = ELEMENT_COLORS[primaryElement];
 
                 return (
                   <button
@@ -365,6 +427,7 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                     className="group relative w-full min-h-[44px] min-w-0 overflow-hidden rounded-[12px] focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40 focus-visible:ring-offset-2 touch-manipulation"
                     style={{
                       aspectRatio: '1 / 1',
+                      background: '#fff',
                       border: isSelected ? '3px solid #1a1a1a' : '1px solid rgba(0,0,0,0.08)',
                       boxShadow: isSelected
                         ? '0 8px 30px rgba(0,0,0,0.2)'
@@ -379,13 +442,30 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                       transition: 'all 0.35s cubic-bezier(0.22,0.61,0.36,1)',
                     }}
                   >
-                    {/* Skeleton loader */}
-                    {!loaded && (
+                    {/* Skeleton loader — only while the image is genuinely
+                        loading; on failure we switch straight to the
+                        element-tinted fallback below so the tile never
+                        pulses forever. */}
+                    {!loaded && !failed && (
                       <div className="absolute inset-0 bg-gray-100 animate-pulse" />
                     )}
 
-                    {/* Image */}
-                    {opt.image && (
+                    {/* Element-tinted fallback for broken images. Mirrors
+                        the look of the photo tiles (radial highlight + dark
+                        vignette) so a failed option still reads as a
+                        coherent answer card, just coloured by its dominant
+                        element. */}
+                    {failed && (
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          background: `radial-gradient(circle at 30% 25%, ${fallbackColor}cc 0%, ${fallbackColor}88 45%, ${fallbackColor}44 100%)`,
+                        }}
+                      />
+                    )}
+
+                    {/* Image — full-bleed texture / scene photo */}
+                    {opt.image && !failed && (
                       <img
                         src={opt.image}
                         alt={opt.text}
@@ -393,6 +473,10 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                         decoding="async"
                         loading={qIndex === 0 ? 'eager' : 'lazy'}
                         onLoad={() => setImagesLoaded(prev => ({ ...prev, [imgKey]: true }))}
+                        onError={() => {
+                          setImagesFailed(prev => ({ ...prev, [imgKey]: true }));
+                          setImagesLoaded(prev => ({ ...prev, [imgKey]: true }));
+                        }}
                         className="absolute inset-0 w-full h-full object-cover"
                         style={{
                           opacity: loaded ? 1 : 0,
@@ -404,7 +488,7 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
 
                     {/* Gradient overlay */}
                     <div
-                      className="absolute inset-0"
+                      className="absolute inset-0 pointer-events-none"
                       style={{
                         background: isSelected
                           ? 'linear-gradient(180deg, transparent 30%, rgba(0,0,0,0.65) 100%)'
@@ -423,7 +507,7 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                       </div>
                     )}
 
-                    {/* Label — scales with tile; stays inside rounded frame */}
+                    {/* Label */}
                     <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-3 md:p-4 pb-2.5 sm:pb-3">
                       <span
                         className="block text-center text-white font-medium tracking-wide uppercase"
@@ -486,43 +570,63 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
   );
 };
 
-// --- TEXTURE MAP: high-quality Unsplash textures for each material ---
+// --- TEXTURE MAP: high-quality Unsplash textures for the DNA / brand panel.
+// Mirrors the SHRE v2.1 curated 8-per-element catalog. Each visible material
+// in the catalog gets a visually distinct stock photo so the DNA cards never
+// fall back to a generic placeholder.
 const MATERIAL_TEXTURES: Record<string, { url: string; alt: string }> = {
-  'Travertine (honed)':           { url: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400&h=400&fit=crop&q=80', alt: 'Honed travertine stone surface' },
-  'Dark quartzite':               { url: 'https://images.unsplash.com/photo-1474044159687-1ee9f3a51722?w=400&h=400&fit=crop&q=80', alt: 'Dark quartzite stone surface' },
-  'Clay plaster':                 { url: 'https://images.unsplash.com/photo-1615529328331-f8917597711f?w=400&h=400&fit=crop&q=80', alt: 'Clay plaster warm tones' },
-  'Lime plaster (warm mineral)':  { url: 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?auto=format&w=400&h=400&fit=crop&q=85', alt: 'Warm lime-wash interior plaster' },
-  'Dark marble (high contrast)':   { url: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=400&h=400&fit=crop&q=80', alt: 'Dark marble surface' },
-  'Basalt':                       { url: 'https://images.unsplash.com/photo-1545558014-8692077e9b5c?w=400&h=400&fit=crop&q=80', alt: 'Dark basalt stone' },
-  'Blackened steel':               { url: 'https://images.unsplash.com/photo-1533035353720-f1c6a75cd8ab?w=400&h=400&fit=crop&q=80', alt: 'Blackened steel surface' },
-  'Venetian plaster (polished)':   { url: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=400&fit=crop&q=80', alt: 'Polished venetian plaster' },
-  'Bronze accents':                { url: 'https://images.unsplash.com/photo-1618424181497-157f25b6ddd5?w=400&h=400&fit=crop&q=80', alt: 'Bronze metal accents' },
-  'Microcement (continuous)':      { url: 'https://images.unsplash.com/photo-1553356084-58ef4a67b2a7?w=400&h=400&fit=crop&q=80', alt: 'Smooth microcement floor' },
-  'Smooth mineral plaster':       { url: 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=400&h=400&fit=crop&q=80', alt: 'Smooth mineral plaster wall' },
-  'Matte ceramic':                { url: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=400&h=400&fit=crop&q=80', alt: 'Matte ceramic tiles' },
-  'Linen / wool textile surfaces':{ url: 'https://images.unsplash.com/photo-1558171813-4c088753af8f?w=400&h=400&fit=crop&q=80', alt: 'Linen wool textile' },
-  'Diffused glass':                { url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=400&fit=crop&q=80', alt: 'Diffused frosted glass' },
-  'Limewash (bright)':            { url: 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=400&h=400&fit=crop&q=80', alt: 'Bright limewash wall' },
-  'White mineral plaster':        { url: 'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=400&h=400&fit=crop&q=80', alt: 'White mineral plaster' },
-  'Light oak / ash':              { url: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop&q=80', alt: 'Light oak ash wood' },
-  'White marble (Calacatta)':     { url: 'https://images.unsplash.com/photo-1600210491892-03d3c28da189?auto=format&w=400&h=400&fit=crop&q=85', alt: 'White Calacatta marble veining' },
-  'Clear glass (low-iron)':       { url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=400&fit=crop&q=80', alt: 'Clear low-iron glass' },
-  'Bleached birch':               { url: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop&q=80', alt: 'Bleached birch wood' },
-  'White terrazzo':                { url: 'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=400&h=400&fit=crop&q=80', alt: 'White terrazzo surface' },
-  'Pale concrete (smooth)':       { url: 'https://images.unsplash.com/photo-1617791160505-6f00504e3519?w=400&h=400&fit=crop&q=80', alt: 'Pale smooth concrete' },
-  'Textured concrete (matte)':    { url: 'https://images.unsplash.com/photo-1617791160505-6f00504e3519?w=400&h=400&fit=crop&q=80', alt: 'Textured concrete surface' },
-  'Brushed metal':                { url: 'https://images.unsplash.com/photo-1533035353720-f1c6a75cd8ab?w=400&h=400&fit=crop&q=80', alt: 'Brushed metal texture' },
-  'Solid oak':                    { url: 'https://images.unsplash.com/photo-1541123603104-512919d6a96c?w=400&h=400&fit=crop&q=80', alt: 'Solid oak grain' },
-  'Walnut (natural finish)':       { url: 'https://images.unsplash.com/photo-1541123603104-512919d6a96c?w=400&h=400&fit=crop&q=80', alt: 'Natural walnut wood' },
-  'Natural oak (horizontal)':     { url: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop&q=80', alt: 'Natural oak horizontal grain' },
-  'Walnut veneer':                { url: 'https://images.unsplash.com/photo-1541123603104-512919d6a96c?w=400&h=400&fit=crop&q=80', alt: 'Walnut veneer surface' },
-  'Industrial brick':             { url: 'https://images.unsplash.com/photo-1587582345426-bf07f52b4543?w=400&h=400&fit=crop&q=80', alt: 'Industrial red brick wall' },
-  'Natural Oak':                  { url: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop&q=80', alt: 'Natural oak surface' },
-  'Walnut':                       { url: 'https://images.unsplash.com/photo-1541123603104-512919d6a96c?w=400&h=400&fit=crop&q=80', alt: 'Walnut wood' },
-  'Limestone':                    { url: 'https://images.unsplash.com/photo-1618220179428-22790b461013?auto=format&w=400&h=400&fit=crop&q=85', alt: 'Limestone stone surface' },
-  'Travertine':                   { url: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400&h=400&fit=crop&q=80', alt: 'Travertine stone' },
-  'Clay Plaster':                 { url: 'https://images.unsplash.com/photo-1615529328331-f8917597711f?w=400&h=400&fit=crop&q=80', alt: 'Clay plaster texture' },
-  'Microcement':                  { url: 'https://images.unsplash.com/photo-1553356084-58ef4a67b2a7?w=400&h=400&fit=crop&q=80', alt: 'Microcement finish' },
+  // ── EARTH (8) ──────────────────────────────────────────────
+  'Travertine (honed)':                       { url: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400&h=400&fit=crop&q=80', alt: 'Honed travertine stone surface' },
+  'Natural oak (horizontal)':                 { url: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop&q=80', alt: 'Natural oak horizontal grain' },
+  'Clay plaster':                             { url: 'https://images.unsplash.com/photo-1615529328331-f8917597711f?w=400&h=400&fit=crop&q=80', alt: 'Clay plaster warm tones' },
+  'Board-formed concrete':                    { url: 'https://images.unsplash.com/photo-1617791160505-6f00504e3519?w=400&h=400&fit=crop&q=80', alt: 'Board-formed concrete with formwork lines' },
+  'Walnut veneer':                            { url: 'https://images.unsplash.com/photo-1541123603104-512919d6a96c?w=400&h=400&fit=crop&q=80', alt: 'Walnut veneer joinery surface' },
+  'Industrial brick':                         { url: 'https://images.unsplash.com/photo-1587582345426-bf07f52b4543?w=400&h=400&fit=crop&q=80', alt: 'Industrial red brick wall' },
+  'Pietra Serena (Tuscan)':                   { url: 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=400&h=400&fit=crop&q=80', alt: 'Tuscan Pietra Serena grey-green sandstone' },
+  'Tadelakt (warm pigmented Moroccan)':       { url: 'https://images.unsplash.com/photo-1615529328331-f8917597711f?w=400&h=400&fit=crop&q=80', alt: 'Tadelakt warm pigmented Moroccan plaster wall' },
+
+  // ── FIRE (8) ───────────────────────────────────────────────
+  'Dark marble (high contrast)':              { url: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=400&h=400&fit=crop&q=80', alt: 'Dark marble with white veining' },
+  'Burnished antique brass':                  { url: 'https://images.unsplash.com/photo-1618424181497-157f25b6ddd5?w=400&h=400&fit=crop&q=80', alt: 'Burnished antique brass metal' },
+  'Smoked / fumed oak':                       { url: 'https://images.unsplash.com/photo-1541123603104-512919d6a96c?w=400&h=400&fit=crop&q=80', alt: 'Smoked / fumed dark oak floor' },
+  'Venetian plaster (polished)':              { url: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=400&fit=crop&q=80', alt: 'Polished Venetian plaster wall' },
+  'Corten steel (weathering)':                { url: 'https://images.unsplash.com/photo-1533035353720-f1c6a75cd8ab?w=400&h=400&fit=crop&q=80', alt: 'Corten weathering steel with rust patina' },
+  'Patagonia quartzite (smoky burgundy)':     { url: 'https://images.unsplash.com/photo-1474044159687-1ee9f3a51722?w=400&h=400&fit=crop&q=80', alt: 'Smoky burgundy Patagonia quartzite' },
+  'Shou-sugi-ban (charred timber)':           { url: 'https://images.unsplash.com/photo-1545558014-8692077e9b5c?w=400&h=400&fit=crop&q=80', alt: 'Shou-sugi-ban charred timber cladding' },
+  'Oxblood / rust velvet upholstery':         { url: 'https://images.unsplash.com/photo-1558171813-4c088753af8f?w=400&h=400&fit=crop&q=80', alt: 'Oxblood rust velvet upholstery' },
+
+  // ── WATER (8) ──────────────────────────────────────────────
+  'Microcement (continuous)':                 { url: 'https://images.unsplash.com/photo-1553356084-58ef4a67b2a7?w=400&h=400&fit=crop&q=80', alt: 'Continuous microcement floor' },
+  'Smoke quartzite (silver-grey)':            { url: 'https://images.unsplash.com/photo-1474044159687-1ee9f3a51722?w=400&h=400&fit=crop&q=80', alt: 'Silver-grey smoke quartzite' },
+  'Mirror-polished stainless steel':          { url: 'https://images.unsplash.com/photo-1533035353720-f1c6a75cd8ab?w=400&h=400&fit=crop&q=80', alt: 'Mirror-polished stainless steel' },
+  'Reeded / ribbed fluted glass':             { url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=400&fit=crop&q=80', alt: 'Reeded fluted ribbed glass partition' },
+  'Onice Acqua (translucent water-blue onyx)':{ url: 'https://images.unsplash.com/photo-1600210491892-03d3c28da189?w=400&h=400&fit=crop&q=80', alt: 'Translucent water-blue Onice Acqua onyx' },
+  'Curved bent glass':                        { url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=400&fit=crop&q=80', alt: 'Curved bent glass partition' },
+  'Sodalite Blue (deep midnight stone)':      { url: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=400&h=400&fit=crop&q=80', alt: 'Deep midnight Sodalite Blue stone' },
+  'Glass mosaic tile (10–25 mm cool)':        { url: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=400&h=400&fit=crop&q=80', alt: 'Cool glass mosaic tile' },
+
+  // ── AIR (8) ────────────────────────────────────────────────
+  'White marble (Calacatta)':                 { url: 'https://images.unsplash.com/photo-1600210491892-03d3c28da189?w=400&h=400&fit=crop&q=80', alt: 'White Calacatta marble with subtle veining' },
+  'Light oak / ash':                          { url: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop&q=80', alt: 'Light oak / ash pale wood floor' },
+  'Limewash (bright)':                        { url: 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=400&h=400&fit=crop&q=80', alt: 'Bright limewash matte wall' },
+  'Clear glass (low-iron)':                   { url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=400&h=400&fit=crop&q=80', alt: 'Clear low-iron glass' },
+  'Anodized champagne aluminium':             { url: 'https://images.unsplash.com/photo-1533035353720-f1c6a75cd8ab?w=400&h=400&fit=crop&q=80', alt: 'Anodized champagne aluminium thin profile' },
+  'Pale concrete (smooth)':                   { url: 'https://images.unsplash.com/photo-1617791160505-6f00504e3519?w=400&h=400&fit=crop&q=80', alt: 'Pale smooth concrete' },
+  'White Corian (curved seamless)':           { url: 'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=400&h=400&fit=crop&q=80', alt: 'Seamless curved White Corian solid surface' },
+  'Sheer linen voile drapery':                { url: 'https://images.unsplash.com/photo-1558171813-4c088753af8f?w=400&h=400&fit=crop&q=80', alt: 'Sheer linen voile drapery' },
+
+  // ── SHARED (4) ─────────────────────────────────────────────
+  'Textured concrete (matte)':                { url: 'https://images.unsplash.com/photo-1617791160505-6f00504e3519?w=400&h=400&fit=crop&q=80', alt: 'Textured matte concrete' },
+  'Brushed metal':                            { url: 'https://images.unsplash.com/photo-1533035353720-f1c6a75cd8ab?w=400&h=400&fit=crop&q=80', alt: 'Brushed metal directional grain' },
+  'Solid oak':                                { url: 'https://images.unsplash.com/photo-1541123603104-512919d6a96c?w=400&h=400&fit=crop&q=80', alt: 'Solid oak with visible grain' },
+  'Walnut (natural finish)':                  { url: 'https://images.unsplash.com/photo-1541123603104-512919d6a96c?w=400&h=400&fit=crop&q=80', alt: 'Natural walnut wood' },
+
+  // ── ALIASES — legacy / short labels used elsewhere ────────
+  'Natural Oak':                              { url: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop&q=80', alt: 'Natural oak surface' },
+  'Walnut':                                   { url: 'https://images.unsplash.com/photo-1541123603104-512919d6a96c?w=400&h=400&fit=crop&q=80', alt: 'Walnut wood' },
+  'Travertine':                               { url: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400&h=400&fit=crop&q=80', alt: 'Travertine stone' },
+  'Clay Plaster':                             { url: 'https://images.unsplash.com/photo-1615529328331-f8917597711f?w=400&h=400&fit=crop&q=80', alt: 'Clay plaster texture' },
+  'Microcement':                              { url: 'https://images.unsplash.com/photo-1553356084-58ef4a67b2a7?w=400&h=400&fit=crop&q=80', alt: 'Microcement finish' },
 };
 
 // Element descriptors for the DNA sidebar
@@ -546,16 +650,19 @@ type HotspotZone = {
   icon: string;
 };
 
+// SHRE v2.1 — hotspot material-match arrays mirror the curated 8-per-element
+// catalog. Each hotspot lists only materials that are plausibly used on that
+// surface (floor / wall / furniture / etc) — extras are deliberately omitted.
 const IMAGE_HOTSPOTS: HotspotZone[] = [
-  { id: 'floor',     label: 'Floor',      labelGe: 'იატაკი',      category: 'flooring',  x: 25, y: 88, icon: '▭', materialMatch: ['Travertine (honed)', 'White marble (Calacatta)', 'White terrazzo', 'Microcement (continuous)', 'Matte ceramic', 'Solid oak', 'Textured concrete (matte)', 'Board-formed concrete', 'Volcanic stone (basalt rough)', 'Herringbone parquet (warm oak)', 'Dark herringbone parquet', 'Basalt', 'Dark quartzite'] },
-  { id: 'wall',      label: 'Wall',       labelGe: 'კედელი',      category: 'wall',      x: 8,  y: 40, icon: '▯', materialMatch: ['Clay plaster', 'Lime plaster (warm mineral)', 'Smooth mineral plaster', 'White mineral plaster', 'Limewash (bright)', 'Textured concrete (matte)', 'Board-formed concrete', 'Corten steel (weathering)', 'Rammed earth / terracotta plaster', 'Reclaimed weathered timber', 'Fluted white panel', '3D textured white panel', 'Tinted translucent glass'] },
-  { id: 'furniture', label: 'Furniture',  labelGe: 'ავეჯი',       category: 'furniture', x: 38, y: 62, icon: '◫', materialMatch: ['Solid oak', 'Walnut (natural finish)', 'Bronze accents', 'Linen / wool textile surfaces', 'Light oak / ash', 'White Corian (curved seamless)', 'Metallic silver surface'] },
-  { id: 'seating',   label: 'Seating',    labelGe: 'სკამი',       category: 'seating',   x: 55, y: 68, icon: '◰', materialMatch: ['Linen / wool textile surfaces', 'Solid oak', 'Walnut (natural finish)', 'Light oak / ash'] },
-  { id: 'lighting',  label: 'Lighting',   labelGe: 'განათება',     category: 'lighting',  x: 35, y: 10, icon: '◎', materialMatch: ['Bronze accents', 'Brushed metal', 'Diffused glass', 'Curved bent glass', 'Satin chrome'] },
-  { id: 'stone',     label: 'Stone',      labelGe: 'ქვა',         category: 'stone',     x: 72, y: 55, icon: '◆', materialMatch: ['White marble (Calacatta)', 'Travertine (honed)', 'Dark quartzite', 'Dark marble (high contrast)', 'Basalt', 'Textured concrete (matte)', 'Glass blocks (translucent)', 'Green onyx / marble (veined)', 'Volcanic stone (basalt rough)'] },
-  { id: 'textile',   label: 'Textile',    labelGe: 'ტექსტილი',    category: 'textile',   x: 48, y: 52, icon: '◈', materialMatch: ['Linen / wool textile surfaces'] },
-  { id: 'metal',     label: 'Accents',    labelGe: 'აქსესუარი',   category: 'metal',     x: 88, y: 35, icon: '◇', materialMatch: ['Blackened steel', 'Brushed metal', 'Bronze accents', 'Mirror-polished stainless steel', 'Hammered metal (rippled)', 'Satin chrome', 'Corten steel (weathering)', 'Oxidized copper', 'Aged brass (polished)', 'Metallic silver surface'] },
-  { id: 'decor',     label: 'Decor',      labelGe: 'დეკორი',      category: 'decor',     x: 65, y: 38, icon: '✦', materialMatch: ['Dichroic / iridescent glass', 'Tinted translucent glass'] },
+  { id: 'floor',     label: 'Floor',      labelGe: 'იატაკი',      category: 'flooring',  x: 25, y: 88, icon: '▭', materialMatch: ['Travertine (honed)', 'Natural oak (horizontal)', 'Walnut veneer', 'Pietra Serena (Tuscan)', 'Board-formed concrete', 'Smoked / fumed oak', 'Patagonia quartzite (smoky burgundy)', 'Microcement (continuous)', 'Glass mosaic tile (10–25 mm cool)', 'White marble (Calacatta)', 'Light oak / ash', 'Pale concrete (smooth)', 'Solid oak', 'Textured concrete (matte)'] },
+  { id: 'wall',      label: 'Wall',       labelGe: 'კედელი',      category: 'wall',      x: 8,  y: 40, icon: '▯', materialMatch: ['Clay plaster', 'Tadelakt (warm pigmented Moroccan)', 'Board-formed concrete', 'Industrial brick', 'Venetian plaster (polished)', 'Corten steel (weathering)', 'Shou-sugi-ban (charred timber)', 'Microcement (continuous)', 'Limewash (bright)', 'White Corian (curved seamless)', 'Pale concrete (smooth)', 'Textured concrete (matte)'] },
+  { id: 'furniture', label: 'Furniture',  labelGe: 'ავეჯი',       category: 'furniture', x: 38, y: 62, icon: '◫', materialMatch: ['Walnut veneer', 'Natural oak (horizontal)', 'Burnished antique brass', 'Light oak / ash', 'White Corian (curved seamless)', 'Anodized champagne aluminium', 'Solid oak', 'Walnut (natural finish)', 'Brushed metal'] },
+  { id: 'seating',   label: 'Seating',    labelGe: 'სკამი',       category: 'seating',   x: 55, y: 68, icon: '◰', materialMatch: ['Oxblood / rust velvet upholstery', 'Sheer linen voile drapery', 'Solid oak', 'Walnut (natural finish)'] },
+  { id: 'lighting',  label: 'Lighting',   labelGe: 'განათება',     category: 'lighting',  x: 35, y: 10, icon: '◎', materialMatch: ['Burnished antique brass', 'Brushed metal', 'Anodized champagne aluminium', 'Mirror-polished stainless steel', 'Clear glass (low-iron)', 'Reeded / ribbed fluted glass', 'Curved bent glass'] },
+  { id: 'stone',     label: 'Stone',      labelGe: 'ქვა',         category: 'stone',     x: 72, y: 55, icon: '◆', materialMatch: ['White marble (Calacatta)', 'Travertine (honed)', 'Pietra Serena (Tuscan)', 'Dark marble (high contrast)', 'Patagonia quartzite (smoky burgundy)', 'Smoke quartzite (silver-grey)', 'Onice Acqua (translucent water-blue onyx)', 'Sodalite Blue (deep midnight stone)'] },
+  { id: 'textile',   label: 'Textile',    labelGe: 'ტექსტილი',    category: 'textile',   x: 48, y: 52, icon: '◈', materialMatch: ['Oxblood / rust velvet upholstery', 'Sheer linen voile drapery'] },
+  { id: 'metal',     label: 'Accents',    labelGe: 'აქსესუარი',   category: 'metal',     x: 88, y: 35, icon: '◇', materialMatch: ['Burnished antique brass', 'Corten steel (weathering)', 'Mirror-polished stainless steel', 'Anodized champagne aluminium', 'Brushed metal'] },
+  { id: 'decor',     label: 'Decor',      labelGe: 'დეკორი',      category: 'decor',     x: 65, y: 38, icon: '✦', materialMatch: ['Clear glass (low-iron)', 'Reeded / ribbed fluted glass', 'Curved bent glass', 'Glass mosaic tile (10–25 mm cool)', 'Sheer linen voile drapery'] },
 ];
 
 // Brand/company catalog — keyed by category
@@ -618,6 +725,10 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   const [phase, setPhase] = useState<'generating' | 'revealing' | 'complete'>('generating');
   const [loadProgress, setLoadProgress] = useState(0);
   const [imageLoaded, setImageLoaded] = useState(false);
+  /** Natural aspect ratio of the loaded render, used to size the image frame
+      so the render hugs the column without letterbox bands. Keeps hotspot
+      orbs aligned to render pixels and lets the render command the page. */
+  const [renderAspect, setRenderAspect] = useState<string | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
   /** DNA panel open by default on phones too — collapsed 30vh cap hid sliders, orbit, and palette. */
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -650,6 +761,10 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
     if (materialPickerOpen) setSidebarOpen(true);
   }, [materialPickerOpen]);
   const [materialsChanged, setMaterialsChanged] = useState(false);
+  // Custom-material modal — opened from the new "Materials used in this space"
+  // dashboard card on the results view.
+  const [showCustomMatModal, setShowCustomMatModal] = useState(false);
+  const [editingCustomMat, setEditingCustomMat] = useState<CustomMaterial | null>(null);
   const [pctEditOpen, setPctEditOpen] = useState(false);
   const [generationKey, setGenerationKey] = useState(0);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
@@ -695,6 +810,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
   React.useEffect(() => {
     setImageLoaded(false);
+    setRenderAspect(null);
   }, [displayedImageUrl]);
 
   const liveDist = state.refinement.refinedPercentages || state.analysis?.percentages || { earth: 25, fire: 25, water: 25, air: 25 };
@@ -736,6 +852,49 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
       refinement: { ...prev.refinement, selectedMaterials: newMats },
     }));
     setMaterialsChanged(true);
+  };
+
+  /**
+   * Save a user-defined custom material from the results dashboard
+   * (called by `AddCustomMaterialModal`). Persists it on
+   * `state.customMaterials` and auto-selects it into
+   * `state.refinement.selectedMaterials` so it shows up in the
+   * "Materials used in this space" panel immediately.
+   */
+  const addCustomMaterialFromResults = (material: CustomMaterial) => {
+    setSelectedHistoryImage(null);
+    setState(prev => {
+      const existing = prev.customMaterials ?? [];
+      const replaceIdx = existing.findIndex((m) => m.id === material.id);
+      const nextCustom = replaceIdx >= 0
+        ? existing.map((m, i) => (i === replaceIdx ? material : m))
+        : [...existing, material];
+
+      const sel = prev.refinement.selectedMaterials;
+      const existingSelIdx = sel.findIndex((m) => m.id === material.id);
+      let nextSelected: MaterialDef[];
+      if (existingSelIdx >= 0) {
+        nextSelected = sel.map((m, i) => (i === existingSelIdx ? material : m));
+      } else {
+        const MAX = 7;
+        if (sel.length >= MAX) {
+          const sameElIdx = sel.findIndex((m) => m.element === material.element);
+          const removeIdx = sameElIdx >= 0 ? sameElIdx : sel.length - 1;
+          nextSelected = [...sel];
+          nextSelected.splice(removeIdx, 1);
+          nextSelected.push(material);
+        } else {
+          nextSelected = [...sel, material];
+        }
+      }
+      return {
+        ...prev,
+        customMaterials: nextCustom,
+        refinement: { ...prev.refinement, selectedMaterials: nextSelected, hasUserRefined: true },
+      };
+    });
+    setMaterialsChanged(true);
+    setShowCustomMatModal(false);
   };
 
   const similarReferences = React.useMemo(() => {
@@ -810,10 +969,12 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
     const mats = [...selectedMaterials];
     if (mats.length < 3) {
       const MATERIALS_BY_ELEMENT: Record<Element, string[]> = {
-        earth: ['Travertine (honed)', 'Clay plaster', 'Lime plaster (warm mineral)', 'Natural oak (horizontal)', 'Walnut veneer', 'Industrial brick', 'Board-formed concrete', 'Volcanic stone (basalt rough)', 'Green onyx / marble (veined)', 'Rammed earth / terracotta plaster', 'Reclaimed weathered timber', 'Herringbone parquet (warm oak)'],
-        fire: ['Dark quartzite', 'Basalt', 'Blackened steel', 'Venetian plaster (polished)', 'Bronze accents', 'Dark marble (high contrast)', 'Corten steel (weathering)', 'Oxidized copper', 'Aged brass (polished)', 'Dark herringbone parquet'],
-        water: ['Microcement (continuous)', 'Smooth mineral plaster', 'Matte ceramic', 'Linen / wool textile surfaces', 'Diffused glass', 'Mirror-polished stainless steel', 'Hammered metal (rippled)', 'Satin chrome', 'Glass blocks (translucent)', 'Curved bent glass'],
-        air: ['Limewash (bright)', 'White mineral plaster', 'Light oak / ash', 'White marble (Calacatta)', 'Clear glass (low-iron)', 'Dichroic / iridescent glass', 'Tinted translucent glass', 'White terrazzo', 'Metallic silver surface', 'White Corian (curved seamless)', 'Fluted white panel', '3D textured white panel'],
+        // SHRE v2.1 — curated 8-per-element catalog (mirrors materialsCatalog.ts
+        // ordering so the picker reads category-interleaved on every element).
+        earth: ['Travertine (honed)', 'Natural oak (horizontal)', 'Clay plaster', 'Board-formed concrete', 'Walnut veneer', 'Industrial brick', 'Pietra Serena (Tuscan)', 'Tadelakt (warm pigmented Moroccan)'],
+        fire:  ['Dark marble (high contrast)', 'Burnished antique brass', 'Smoked / fumed oak', 'Venetian plaster (polished)', 'Corten steel (weathering)', 'Patagonia quartzite (smoky burgundy)', 'Shou-sugi-ban (charred timber)', 'Oxblood / rust velvet upholstery'],
+        water: ['Microcement (continuous)', 'Smoke quartzite (silver-grey)', 'Mirror-polished stainless steel', 'Reeded / ribbed fluted glass', 'Onice Acqua (translucent water-blue onyx)', 'Curved bent glass', 'Sodalite Blue (deep midnight stone)', 'Glass mosaic tile (10–25 mm cool)'],
+        air:   ['White marble (Calacatta)', 'Light oak / ash', 'Limewash (bright)', 'Clear glass (low-iron)', 'Anodized champagne aluminium', 'Pale concrete (smooth)', 'White Corian (curved seamless)', 'Sheer linen voile drapery'],
       };
       const selectedNames = new Set(mats.map(m => m.name));
       for (const [el] of sortedElements) {
@@ -1206,17 +1367,70 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           } ${isRevealed ? 'opacity-100' : 'opacity-0 scale-[1.02]'}`}
         >
 
-          {/* Image container — bounded on narrow viewports so DNA + sliders + grid are not squeezed off-screen */}
-          <div className={`flex-1 md:flex-1 flex items-center justify-center relative z-10 w-full min-h-0 max-md:max-h-[min(44dvh,420px)] md:max-h-none transition-all duration-500 ${isEditingMaterials ? 'p-2 sm:p-4' : 'p-1.5 sm:p-2.5'}`}>
+          {/* Image container — the render is the hero. Padding is minimal so
+              the image gets the largest possible footprint on every viewport,
+              and `object-contain` keeps the full render in view (never cropped). */}
+          <div className={`flex-1 md:flex-1 flex items-center justify-center relative z-10 w-full min-h-0 max-md:max-h-[min(48dvh,460px)] md:max-h-none transition-all duration-500 ${isEditingMaterials ? 'p-1.5 sm:p-3' : 'p-1 sm:p-2'}`}>
             {displayedImageUrl && (
-              <div className={`relative w-full max-w-full overflow-hidden transition-all duration-700 ease-out max-md:aspect-[16/9] max-md:min-h-[min(180px,28dvh)] max-md:max-h-[min(44dvh,420px)] md:flex md:items-center md:justify-center md:h-full md:min-h-0 md:max-h-none md:aspect-auto ${isRevealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'} ${isEditingMaterials ? 'scale-[0.94]' : 'scale-100'}`}>
-                <div className={`relative w-full h-full min-h-[200px] md:min-h-0 rounded-lg overflow-hidden transition-all duration-500 ${isEditingMaterials ? 'shadow-lg shadow-black/5' : 'shadow-2xl shadow-black/8'}`}>
-                  <div className="absolute inset-0 rounded-lg overflow-hidden border border-white/50 bg-gray-100/80">
+              <div className={`relative w-full max-w-full overflow-hidden transition-all duration-700 ease-out max-md:aspect-[16/9] max-md:min-h-[min(200px,30dvh)] max-md:max-h-[min(48dvh,460px)] md:flex md:items-center md:justify-center md:h-full md:min-h-0 md:max-h-none md:aspect-auto ${isRevealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'} ${isEditingMaterials ? 'scale-[0.95]' : 'scale-100'}`}>
+                {/* Shadow / frame wrapper. On desktop, when the render's
+                    natural aspect ratio is known we apply `aspectRatio` so the
+                    frame hugs the image exactly (no letterbox bands) and the
+                    hotspot orbs land on render pixels. `w-full + max-h-full`
+                    lets the browser pick the larger constraint (the smaller of
+                    width or height) while preserving aspect. */}
+                <div className={`relative max-w-full min-h-[220px] md:min-h-0 rounded-lg overflow-hidden transition-all duration-500 ${isEditingMaterials ? 'shadow-lg shadow-black/5' : 'shadow-2xl shadow-black/10'} ${renderAspect ? 'w-full max-md:h-full md:max-h-full' : 'w-full h-full'}`}
+                     style={renderAspect ? { aspectRatio: renderAspect } : undefined}>
+                  <div className="absolute inset-0 rounded-lg overflow-hidden border border-white/50 bg-gray-100/60">
                     <img src={displayedImageUrl} alt="Architectural visualization"
-                      className={`w-full h-full object-contain md:object-cover transition-all duration-[2s] ease-out cursor-zoom-in ${imageLoaded ? 'opacity-100 scale-100' : 'opacity-40 scale-[1.01]'}`}
-                      onLoad={() => setImageLoaded(true)}
+                      className={`w-full h-full object-contain transition-all duration-[2s] ease-out cursor-zoom-in ${imageLoaded ? 'opacity-100 scale-100' : 'opacity-40 scale-[1.01]'}`}
+                      onLoad={(e) => {
+                        setImageLoaded(true);
+                        const t = e.currentTarget;
+                        if (t.naturalWidth && t.naturalHeight) {
+                          setRenderAspect(`${t.naturalWidth} / ${t.naturalHeight}`);
+                        }
+                      }}
                       onClick={() => setZoomedImage(displayedImageUrl)}
                       key={displayedImageUrl} />
+                    {/* PRIMARY ELEMENT overlay — top-left card matching the
+                        reference (element name + behavioural caption + DETAILS
+                        link to the Diagnosis report). */}
+                    {isComplete && (
+                      <div className="absolute top-4 left-4 z-[15] max-w-[200px] sm:max-w-[240px] animate-fade-in"
+                           style={{ animationDuration: '0.6s' }}>
+                        <p className="text-[9px] uppercase tracking-[0.3em] font-medium mb-1.5"
+                           style={{ color: 'rgba(255,255,255,0.7)', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                          Primary element
+                        </p>
+                        <p className="text-[28px] sm:text-[36px] uppercase tracking-[0.06em] font-semibold leading-none mb-2.5"
+                           style={{ color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.45)' }}>
+                          {dominant}
+                        </p>
+                        <p className="text-[11px] font-light leading-snug mb-3"
+                           style={{ color: 'rgba(255,255,255,0.82)', textShadow: '0 1px 6px rgba(0,0,0,0.45)' }}>
+                          {dominant === 'earth' && 'Structural stability, warmth and grounded presence.'}
+                          {dominant === 'fire' && 'Dramatic warmth, oxidized depth and cinematic energy.'}
+                          {dominant === 'water' && 'Reflective fluidity, cool clarity and sculptural curves.'}
+                          {dominant === 'air' && 'Luminous transparency, lightness and forward-looking openness.'}
+                        </p>
+                        {state.analysis?.diagnosis && (
+                          <button onClick={() => navigate('/diagnosis-report')}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] uppercase tracking-[0.2em] font-semibold transition-all hover:bg-white/15"
+                            style={{
+                              background: 'rgba(255,255,255,0.10)',
+                              border: '1px solid rgba(255,255,255,0.30)',
+                              color: '#fff',
+                              backdropFilter: 'blur(8px)',
+                            }}>
+                            Details
+                            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                              <path d="M3 6 L9 6 M6 3 L9 6 L6 9" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    )}
                     {/* Editing overlay */}
                     {isEditingMaterials && (
                       <div className="absolute inset-0 bg-black/[0.03] pointer-events-none transition-opacity duration-500" />
@@ -1409,7 +1623,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
         {/* ── MATERIAL DNA SIDEBAR ── */}
         <div className={`relative z-10 bg-white border-l md:border-l border-t md:border-t-0 border-gray-100/60 flex flex-col overflow-hidden shrink-0 transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
           sidebarOpen
-            ? 'w-full md:w-[400px] flex-1 min-h-0 max-md:min-h-[min(42dvh,400px)] md:flex-none md:max-h-none'
+            ? 'w-full md:w-[340px] flex-1 min-h-0 max-md:min-h-[min(42dvh,400px)] md:flex-none md:max-h-none'
             : 'w-full md:w-[44px] max-h-[44px] md:max-h-none flex-none'
         } ${isRevealed ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}
           style={{ transitionDelay: isRevealed ? '300ms' : '0ms' }}>
@@ -1453,7 +1667,13 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
               <div className="flex-1 overflow-y-auto custom-scroll min-h-0">
               <div className="px-4 pt-2 pb-2">
 
-                {/* Symmetric circular orbit — materials by element (no sector spokes / no dashed rings) */}
+                {/* Orbit + compact element regulator side-by-side.
+                    Reference layout: orbital diagram on the left, the four
+                    element sliders sit immediately to its right (instead of
+                    stacked below) so the panel is shorter and reads at a
+                    glance. Sliders keep the same applyNewVal handler — only
+                    the visual proportions change. */}
+                <div className="flex flex-col md:flex-row md:items-center gap-3">
                 {(() => {
                   const VB = 200;
                   const CX = 100;
@@ -1468,7 +1688,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   const ringOuterOpacity = orbitHover ? 0.36 : 0.22;
                   const ringInnerOpacity = orbitHover ? 0.26 : 0.14;
                   return (
-                    <div className="mx-auto w-full max-w-[168px] md:max-w-[160px]">
+                    <div className="mx-auto md:mx-0 shrink-0 w-full max-w-[168px] md:w-[160px] md:max-w-[160px]">
                     <div
                       ref={dnaOrbitalRef}
                       aria-label="Material DNA — element shares and selected materials"
@@ -1658,18 +1878,18 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                     setMaterialsChanged(true);
                   };
                   return (
-                    <div className="mt-2 px-1 space-y-[3px]">
+                    <div className="flex-1 min-w-0 md:max-w-[200px] space-y-[2px] md:px-0 px-1">
                       {(['earth', 'fire', 'water', 'air'] as Element[]).map(el => {
                         const val = Math.round(dist[el]);
                         const isDom = el === dominant;
                         const ec = ELEMENT_COLORS[el];
                         return (
-                          <div key={el} className="flex items-center gap-1.5 max-md:gap-2" style={{ opacity: isDom ? 1 : 0.65 }}>
-                            <span className="text-[10px] max-md:text-[11px] uppercase tracking-[0.1em] w-8 max-md:w-9 shrink-0 text-right font-light" style={{ fontWeight: isDom ? 500 : 400, color: ec }}>{el.slice(0, 2)}</span>
-                            <div className="flex-1 relative h-[14px] max-md:h-11 flex items-center cursor-ew-resize group touch-manipulation">
-                              <div className="absolute left-0 right-0 h-[4px] max-md:h-[6px] top-1/2 -translate-y-1/2 rounded-full" style={{ background: 'rgba(0,0,0,0.04)' }} />
-                              <div className="absolute left-0 top-1/2 -translate-y-1/2 h-[4px] max-md:h-[6px] rounded-full transition-all duration-300"
-                                style={{ width: `${val}%`, backgroundColor: ec, opacity: isDom ? 0.8 : 0.45 }} />
+                          <div key={el} className="flex items-center gap-1.5" style={{ opacity: isDom ? 1 : 0.7 }}>
+                            <span className="text-[9px] uppercase tracking-[0.1em] w-6 shrink-0 text-right font-light" style={{ fontWeight: isDom ? 600 : 400, color: ec }}>{el.slice(0, 2)}</span>
+                            <div className="flex-1 relative h-[12px] flex items-center cursor-ew-resize group touch-manipulation">
+                              <div className="absolute left-0 right-0 h-[3px] top-1/2 -translate-y-1/2 rounded-full" style={{ background: 'rgba(0,0,0,0.05)' }} />
+                              <div className="absolute left-0 top-1/2 -translate-y-1/2 h-[3px] rounded-full transition-all duration-300"
+                                style={{ width: `${val}%`, backgroundColor: ec, opacity: isDom ? 0.85 : 0.5 }} />
                               <input
                                 type="range" min="0" max="100" value={val}
                                 className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-ew-resize"
@@ -1683,9 +1903,9 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                               maxLength={3}
                               defaultValue={val}
                               key={`${el}-${val}`}
-                              className="font-mono tabular-nums text-[11px] w-10 text-center shrink-0 rounded px-0.5 py-[2px] outline-none transition-all border font-normal"
+                              className="font-mono tabular-nums text-[10px] w-8 text-center shrink-0 rounded px-0 py-[1px] outline-none transition-all border font-normal"
                               style={{
-                                fontWeight: isDom ? 500 : 450,
+                                fontWeight: isDom ? 600 : 450,
                                 color: isDom ? ec : '#666',
                                 borderColor: `${ec}30`,
                                 background: `${ec}08`,
@@ -1714,13 +1934,14 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                                 if (input.value.length > 0 && parseInt(input.value, 10) > 100) input.value = '100';
                               }}
                             />
-                            <span className="text-[9px] font-medium" style={{ color: `${ec}50` }}>%</span>
+                            <span className="text-[8px] font-medium" style={{ color: `${ec}50` }}>%</span>
                           </div>
                         );
                       })}
                     </div>
                   );
                 })()}
+                </div>{/* /flex orbit-+-sliders */}
 
                 {materialsChanged && (
                   <div className="flex items-center gap-2 mt-1.5 px-2 py-1 rounded-md bg-amber-50/80 border border-amber-200/50 animate-fade-in">
@@ -1730,114 +1951,15 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 )}
               </div>
 
-              {/* Material Grid */}
-              <div className="px-2.5 sm:px-3 pt-2.5 pb-2 max-md:pb-3">
-                <p className="text-[8px] text-center text-gray-400/75 font-light tracking-[0.06em] mb-2 max-md:mb-2.5 px-1 leading-relaxed max-md:text-[9px]">
-                  Materials by element ring above; atmosphere chips summarize mood.
-                </p>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-md:gap-2.5 justify-items-center">
-                  {dnaMaterials.map((mat, idx) => {
-                    const elColor = ELEMENT_COLORS[mat.element];
-                    const sphereImg = MATERIAL_SPHERE_IMAGES[mat.name];
-                    const isLinked = highlightedCategory && IMAGE_HOTSPOTS.find(h => h.category === highlightedCategory)?.materialMatch.includes(mat.name);
-                    const isUserSelected = selectedMaterials.some(m => m.name === mat.name);
-
-                    return (
-                      <div key={`${mat.name}-${mat.element}-${idx}`}
-                        className={`group relative flex flex-col items-center rounded-lg transition-all duration-300 hover:bg-gray-50/80 cursor-default p-1 max-md:p-1.5 w-full max-w-[92px] sm:max-w-none ${isLinked ? 'bg-gray-50 ring-1 ring-gray-200/60' : ''}`}
-                        title={`${mat.name} — ${ELEMENT_DESCRIPTORS[mat.element]} · ${Math.round(dist[mat.element])}%`}>
-                        <div className="relative w-full flex justify-center">
-                          <div className={`relative shrink-0 w-[76px] h-[76px] sm:w-[70px] sm:h-[70px] md:w-16 md:h-16 ${isLinked ? 'scale-105' : ''}`}>
-                          <div
-                            className={`relative rounded-full overflow-hidden transition-all duration-500 bg-white max-md:shadow-sm w-full h-full ${isLinked ? 'shadow-md' : ''}`}
-                            style={{ border: `1.5px solid ${elColor}15` }}
-                          >
-                            {sphereImg && !sphereImg.startsWith('https://placehold') ? (
-                              <>
-                                <img src={sphereImg} alt={mat.name}
-                                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                                  style={{ transform: 'scale(1.14)', filter: MATERIAL_TEXTURE_FILTER[mat.name] || 'saturate(1.04) contrast(1.04)' }}
-                                  loading="lazy" />
-                                {(() => {
-                                  const tint = MATERIAL_TEXTURE_TINT[mat.name];
-                                  if (!tint) return null;
-                                  return <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none', backgroundColor: tint.color, opacity: tint.alpha, mixBlendMode: tint.mode }} />;
-                                })()}
-                              </>
-                            ) : (
-                              <div className="w-full h-full" style={{ background: `radial-gradient(circle at 40% 38%, ${elColor}30, ${elColor}10)` }} />
-                            )}
-                          </div>
-                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-[1.5px] border-white shadow-sm" style={{ backgroundColor: elColor }} />
-                          {isUserSelected && (
-                            <button type="button" onClick={() => removeMaterial(mat.name)}
-                              className="absolute -top-1 -right-1 w-5 h-5 max-md:w-6 max-md:h-6 rounded-full bg-white border border-gray-200 flex items-center justify-center opacity-0 group-hover:opacity-100 max-md:opacity-100 hover:bg-red-50 hover:border-red-200 transition-all duration-200 shadow-sm touch-manipulation"
-                              title="Remove">
-                              <svg width="6" height="6" viewBox="0 0 12 12" fill="none" stroke="#e57373" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="3" x2="9" y2="9" /><line x1="9" y1="3" x2="3" y2="9" /></svg>
-                            </button>
-                          )}
-                          </div>
-                        </div>
-                        <span className="text-center leading-tight mt-1 max-md:mt-1.5 w-full truncate text-[9px] max-md:text-[10px] font-medium px-0.5" style={{ color: '#7a8da6' }}>
-                          {mat.name.split('(')[0].trim()}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                {/* Add material button inside the grid area */}
-                <button onClick={() => setMaterialPickerOpen(!materialPickerOpen)}
-                  className={`touch-target-auto w-full mt-2 max-md:mt-2.5 py-2 max-md:py-2.5 border border-dashed rounded-md text-[10px] uppercase tracking-[0.15em] font-medium transition-all duration-300 flex items-center justify-center gap-1.5 ${
-                    materialPickerOpen ? 'border-gray-400 text-gray-600 bg-gray-50' : 'border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-600'
-                  }`}>
-                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
-                    className={`transition-transform duration-300 ${materialPickerOpen ? 'rotate-45' : ''}`}>
-                    <line x1="6" y1="1" x2="6" y2="11" /><line x1="1" y1="6" x2="11" y2="6" />
-                  </svg>
-                  {materialPickerOpen ? 'Close' : 'Add Material'}
-                </button>
-              </div>
-
-                {/* Material picker dropdown */}
-                {materialPickerOpen && (
-                  <div className="px-3 pt-3 pb-2 border-b border-gray-100 animate-fade-in-up bg-gray-50/40" style={{ animationDuration: '0.2s' }}>
-                    <p className="text-[9px] uppercase tracking-[0.2em] text-gray-400/80 font-light mb-2.5">Add material</p>
-                    {(Object.entries(CANONICAL_MATERIALS) as [string, string[]][])
-                      .filter(([key]) => key !== 'shared')
-                      .map(([elKey, matNames]) => {
-                        const elColor = ELEMENT_COLORS[elKey as Element];
-                        const availableMats = matNames.filter(n => !selectedMaterials.some(m => m.name === n));
-                        if (availableMats.length === 0) return null;
-                        return (
-                          <div key={elKey} className="mb-3">
-                            <div className="flex items-center gap-2 mb-1.5 px-0.5">
-                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: elColor }} />
-                              <span className="text-[10px] uppercase tracking-[0.14em] font-light" style={{ color: elColor }}>{elKey}</span>
-                              <span className="text-[9px] text-gray-300 font-light ml-auto">{availableMats.length}</span>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {availableMats.map(name => {
-                                const sphereImg = MATERIAL_SPHERE_IMAGES[name];
-                                const tint = MATERIAL_TEXTURE_TINT[name];
-                                return (
-                                  <button key={name} onClick={() => addMaterial(name, elKey as Element)}
-                                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] tracking-[0.01em] font-medium border border-gray-150 text-gray-600 hover:border-gray-400 hover:text-gray-900 hover:bg-white hover:shadow-sm transition-all active:scale-95 bg-white/60">
-                                    {sphereImg && !sphereImg.startsWith('https://placehold') && (
-                                      <span className="relative w-4 h-4 rounded-full overflow-hidden flex-shrink-0 inline-block">
-                                        <img src={sphereImg} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ transform: 'scale(1.14)', filter: MATERIAL_TEXTURE_FILTER[name] || 'saturate(1.04) contrast(1.04)' }} loading="lazy" />
-                                        {tint && <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none', backgroundColor: tint.color, opacity: tint.alpha, mixBlendMode: tint.mode }} />}
-                                      </span>
-                                    )}
-                                    {name}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
+              {/* Material Grid + Material picker — REMOVED from the Material
+                  DNA sidebar so materials live in exactly one place: the
+                  bottom-row 3-column dashboard ("Materials used in this space").
+                  Catalog picking is still available via the Workspace
+                  materials picker; custom materials open via the dashboard's
+                  "+ ADD CUSTOM MATERIAL" card. The sidebar now focuses on the
+                  things only it does well: the orbital diagram, the compact
+                  element regulator, and atmosphere + palette + direction
+                  refinement controls. */}
 
                 {/* Atmosphere chips */}
                 {selectedAtmosphere.length > 0 && (
@@ -2069,144 +2191,306 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
         </div>
       </div>
 
-      {/* ═══ HISTORY ROW ═══ */}
-      {isComplete && similarReferences.length > 0 && (
-        <div className="flex-shrink-0 border-t border-gray-100/60 bg-white/95 transition-all duration-1000 ease-out"
-          style={{ transitionDelay: '800ms' }}>
-          <div className="px-3 pt-1 pb-0">
-            <span className="text-[7px] uppercase tracking-[0.25em] text-gray-400 font-medium">History</span>
-          </div>
-          <div className="px-3 pb-1.5 flex items-center gap-1.5 overflow-x-auto custom-scroll">
-            {similarReferences.map((ref) => {
-              const isSelected = displayedImageUrl === ref.imageUrl;
-              const refDist = ref.dist;
-              const refSorted = (Object.entries(refDist) as [Element, number][]).sort((a, b) => b[1] - a[1]);
-              const refDominant = refSorted[0][0];
-              return (
-                <div key={ref.id} className="flex-shrink-0 flex flex-col items-center gap-0.5">
-                  <button onClick={() => setSelectedHistoryImage(isSelected ? null : ref.imageUrl)}
-                    onDoubleClick={() => setZoomedImage(ref.imageUrl)}
-                    className={`w-16 h-11 rounded-md overflow-hidden border transition-all duration-300 group ${
-                      isSelected ? 'border-gray-400 ring-1 ring-gray-300 shadow-md scale-105' : 'border-gray-100 hover:border-gray-300 hover:shadow-sm'
-                    }`}>
-                    <img src={ref.imageUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  </button>
-                  {/* Mini 4-dot orbital showing this render's distribution */}
-                  <div className="relative" style={{ width: '28px', height: '14px' }}>
-                    {([
-                      { el: 'air' as Element, x: 14, y: 1 },
-                      { el: 'fire' as Element, x: 27, y: 7 },
-                      { el: 'earth' as Element, x: 14, y: 13 },
-                      { el: 'water' as Element, x: 1, y: 7 },
-                    ]).map(({ el, x, y }) => {
-                      const v = refDist[el] || 0;
-                      const s = Math.max(3, Math.min(7, v * 0.12 + 2));
-                      const isDom = el === refDominant;
-                      return (
-                        <div key={el} className="absolute rounded-full transition-all duration-500" style={{
-                          width: `${s}px`, height: `${s}px`, left: `${x}px`, top: `${y}px`,
-                          transform: 'translate(-50%, -50%)', backgroundColor: ELEMENT_COLORS[el],
-                          opacity: isDom ? 0.85 : (isSelected ? 0.5 : 0.25),
-                          boxShadow: isDom && isSelected ? `0 0 4px ${ELEMENT_COLORS[el]}50` : 'none',
-                        }} />
-                      );
-                    })}
-                  </div>
+      {/* ═══ RESULTS DASHBOARD — 3-column row: HISTORY · DISTRIBUTION · MATERIALS ═══
+          Mirrors the reference layout — each column is its own card with a
+          clear uppercase title and a vertical hairline divider between them. */}
+      {isComplete && (
+        <div className="flex-shrink-0 border-t border-gray-100/70 bg-white transition-all duration-1000 ease-out"
+             style={{ transitionDelay: '800ms' }}>
+          <div className="flex flex-col md:flex-row md:items-stretch md:divide-x md:divide-gray-100">
+
+            {/* ─── COLUMN 1: RENDER HISTORY ─────────────────────────────── */}
+            {similarReferences.length > 0 && (
+              <div className="flex-1 md:basis-[55%] md:max-w-[55%] px-4 py-2 min-w-0">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] uppercase tracking-[0.3em] text-gray-700 font-semibold">Render History</span>
+                  <span className="text-[9px] uppercase tracking-[0.18em] text-gray-300 font-light">
+                    {similarReferences.length} {similarReferences.length === 1 ? 'render' : 'renders'}
+                  </span>
                 </div>
-              );
-            })}
+                {/* History row scales rather than scrolls — items use `flex-1`
+                    with a sane `max-w` so they distribute the full row width.
+                    More variations → each thumb shrinks (down to a tight
+                    `min-w-0` floor) so the whole sequence stays visible without
+                    a horizontal scrollbar. */}
+                <div className="flex flex-nowrap items-start gap-1.5 sm:gap-2 overflow-hidden pb-0.5">
+                  {similarReferences.map((ref, idx) => {
+                    const isSelected = displayedImageUrl === ref.imageUrl;
+                    const refDist = ref.dist;
+                    const refSorted = (Object.entries(refDist) as [Element, number][]).sort((a, b) => b[1] - a[1]);
+                    const refDominant = refSorted[0][0];
+                    const refDomColor = ELEMENT_COLORS[refDominant];
+                    const label = ref.id === 'current'
+                      ? 'CURRENT'
+                      : `V${String(idx).padStart(2, '0')}`;
+                    // Top-2 elements with % — reference shows "Earth 37% · Fire 28%"
+                    const top2 = refSorted.slice(0, 2);
+                    return (
+                      <div key={ref.id} className="flex-1 min-w-0 max-w-[120px] flex flex-col items-center gap-1">
+                        <button onClick={() => setSelectedHistoryImage(isSelected ? null : ref.imageUrl)}
+                          onDoubleClick={() => setZoomedImage(ref.imageUrl)}
+                          className={`w-full aspect-[13/8] rounded-md overflow-hidden border transition-all duration-300 group ${
+                            isSelected ? 'border-gray-400 ring-1 ring-gray-300 shadow-md' : 'border-gray-100 hover:border-gray-300 hover:shadow-sm'
+                          }`}
+                          style={isSelected ? { transform: 'scale(1.04)' } : undefined}>
+                          <img src={ref.imageUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        </button>
+                        <span className="text-[9px] uppercase tracking-[0.16em] font-semibold w-full text-center truncate"
+                              style={{ color: isSelected ? refDomColor : '#5a6577' }}>
+                          {label}
+                        </span>
+                        {/* Top-2 element percentages — truncates instead of overflowing on tight rows. */}
+                        <span className="text-[8px] tracking-[0.04em] font-light w-full text-center truncate">
+                          {top2.map(([el, v], k) => (
+                            <span key={el}>
+                              <span style={{ color: ELEMENT_COLORS[el], opacity: 0.85 }}>
+                                {el.charAt(0).toUpperCase() + el.slice(1, 2)}&nbsp;{Math.round(v)}%
+                              </span>
+                              {k < top2.length - 1 && <span className="text-gray-300 mx-0.5">·</span>}
+                            </span>
+                          ))}
+                        </span>
+                        {/* Mini 4-dot orbital — kept per user request, fixed size keeps the elemental signature readable */}
+                        <div className="relative mt-0.5 flex-shrink-0" style={{ width: '36px', height: '16px' }}>
+                          {([
+                            { el: 'air' as Element, x: 18, y: 1 },
+                            { el: 'fire' as Element, x: 35, y: 8 },
+                            { el: 'earth' as Element, x: 18, y: 15 },
+                            { el: 'water' as Element, x: 1, y: 8 },
+                          ]).map(({ el, x, y }) => {
+                            const v = refDist[el] || 0;
+                            const s = Math.max(3, Math.min(8, v * 0.12 + 2));
+                            const isDom = el === refDominant;
+                            return (
+                              <div key={el} className="absolute rounded-full transition-all duration-500" style={{
+                                width: `${s}px`, height: `${s}px`, left: `${x}px`, top: `${y}px`,
+                                transform: 'translate(-50%, -50%)', backgroundColor: ELEMENT_COLORS[el],
+                                opacity: isDom ? 0.9 : (isSelected ? 0.55 : 0.3),
+                                boxShadow: isDom && isSelected ? `0 0 4px ${ELEMENT_COLORS[el]}55` : 'none',
+                              }} />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ─── COLUMN 2: MATERIALS USED IN THIS SPACE ───────────────── */}
+            <div className="flex-1 md:basis-[45%] md:max-w-[45%] px-4 py-2 min-w-0 border-t md:border-t-0 border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] uppercase tracking-[0.3em] text-gray-700 font-semibold">Materials Used in this Space</span>
+                <button onClick={() => { setEditingCustomMat(null); setShowCustomMatModal(true); }}
+                  className="text-[9px] uppercase tracking-[0.2em] text-gray-400 hover:text-gray-700 font-medium transition-colors">
+                  Manage
+                </button>
+              </div>
+              {/* Materials row scales with the count — each bead is a `flex-1`
+                  cell with a max width, so 3 selections look generous and
+                  8 selections compress neatly without an overflow scrollbar. */}
+              <div className="flex flex-nowrap items-start gap-1.5 sm:gap-2 overflow-hidden pb-0.5">
+                {liveSelectedMaterials.slice(0, 6).map((m) => {
+                  const ec = ELEMENT_COLORS[m.element];
+                  const sphere = MATERIAL_SPHERE_IMAGES[m.name];
+                  const tint = MATERIAL_TEXTURE_TINT[m.name];
+                  const flt = MATERIAL_TEXTURE_FILTER[m.name];
+                  const pct = Math.round(dist[m.element] || 0);
+                  const isCustom = (m as Partial<CustomMaterial>).isCustom === true;
+                  const refImg = (m as Partial<CustomMaterial>).referenceImageDataUrl;
+                  return (
+                    <div key={m.id} className="group flex-1 min-w-0 max-w-[80px] flex flex-col items-center gap-1">
+                      {/* Circular sphere bead — matches the orbital-material
+                          style. Hover reveals the × delete button so the
+                          user can deselect any picked material directly. */}
+                      <div className="relative w-full aspect-square max-w-[64px] rounded-full overflow-hidden"
+                           style={{
+                             border: `1.5px solid ${ec}30`,
+                             boxShadow: `0 0 0 1px ${ec}18, 0 2px 8px ${ec}25, 0 1px 4px rgba(0,0,0,0.08)`,
+                             background: refImg
+                               ? 'transparent'
+                               : sphere
+                                 ? 'transparent'
+                                 : `radial-gradient(circle at 34% 30%, ${ec}E8, ${ec}A0)`,
+                           }}>
+                        {refImg ? (
+                          <img src={refImg} alt={m.name} className="absolute inset-0 w-full h-full object-cover" />
+                        ) : sphere ? (
+                          <img src={sphere} alt={m.name}
+                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.14)', filter: flt || 'saturate(1.04) contrast(1.04)' }} />
+                        ) : null}
+                        {tint && (
+                          <span style={{ position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none', backgroundColor: tint.color, opacity: tint.alpha, mixBlendMode: tint.mode }} />
+                        )}
+                        {isCustom && (
+                          <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-[6px] uppercase tracking-[0.1em] font-bold px-1 py-[0.5px] rounded-sm bg-black/75 text-white">custom</span>
+                        )}
+                        {/* × delete button — visible on hover (always visible
+                            on mobile via group-hover override below). */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (isCustom) {
+                              // Remove a user-defined material — clear from both
+                              // custom catalog and selection.
+                              setState((prev) => ({
+                                ...prev,
+                                customMaterials: (prev.customMaterials ?? []).filter((cm) => cm.id !== m.id),
+                                refinement: {
+                                  ...prev.refinement,
+                                  hasUserRefined: true,
+                                  selectedMaterials: prev.refinement.selectedMaterials.filter((sm) => sm.id !== m.id),
+                                },
+                              }));
+                              setMaterialsChanged(true);
+                            } else {
+                              removeMaterial(m.name);
+                            }
+                          }}
+                          className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-white border border-gray-200 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:border-red-200 transition-all duration-200 shadow-sm"
+                          title={`Remove ${m.name}`}
+                          aria-label={`Remove ${m.name}`}
+                        >
+                          <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#e57373" strokeWidth="2" strokeLinecap="round">
+                            <line x1="3" y1="3" x2="9" y2="9" /><line x1="9" y1="3" x2="3" y2="9" />
+                          </svg>
+                        </button>
+                        {/* Element-color dot — corner accent like the orbit beads */}
+                        <div className="absolute bottom-0.5 right-0.5 w-2 h-2 rounded-full border border-white shadow-sm" style={{ background: ec }} />
+                      </div>
+                      <span className="text-[9px] font-medium text-center leading-tight w-full truncate" style={{ color: '#3a4a64' }}>
+                        {m.name.split('(')[0].trim()}
+                      </span>
+                      <span className="text-[8px] font-medium uppercase tracking-[0.1em] text-center w-full truncate" style={{ color: ec, opacity: 0.85 }}>
+                        {m.element} {pct}%
+                      </span>
+                    </div>
+                  );
+                })}
+                {/* ADD CUSTOM MATERIAL slot — same flex-1 sizing so it shrinks
+                    with the rest of the row instead of forcing a scrollbar. */}
+                <button onClick={() => { setEditingCustomMat(null); setShowCustomMatModal(true); }}
+                  className="flex-1 min-w-0 max-w-[80px] flex flex-col items-center justify-center gap-1 group">
+                  <div className="w-full aspect-square max-w-[64px] rounded-full border border-dashed flex items-center justify-center transition-colors group-hover:border-gray-500 group-hover:bg-gray-50"
+                       style={{ borderColor: 'rgba(0,0,0,0.22)' }}>
+                    <span className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center text-[14px] leading-none group-hover:scale-110 transition-transform">+</span>
+                  </div>
+                  <span className="text-[8px] uppercase tracking-[0.14em] text-gray-500 group-hover:text-gray-800 font-semibold text-center leading-tight w-full truncate">
+                    Add custom
+                  </span>
+                </button>
+                {liveSelectedMaterials.length === 0 && (
+                  <span className="text-[10px] italic text-gray-400 self-center pl-1">No materials picked yet — add custom or pick from the side picker.</span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ═══ BRANDS + SPACE-AWARE PROFESSIONAL RECS ═══ */}
+      {/* ═══ BRANDS IN THIS SPACE  +  ARCHITECTS & INTERIOR DESIGNERS ═══
+          Reference-style bottom row: two side-by-side panels (split ~60/40)
+          where every brand sits as its own "card" — brand name on top in a
+          slightly heavier weight, category label underneath in lighter type.
+          Mirrors the Polifrom · Boffi · GAGGENAU · FLOS treatment in the
+          design reference. */}
       {isComplete && (
-        <div className="flex-shrink-0 border-t border-gray-50 bg-white transition-all duration-1000 ease-out"
-          style={{ transitionDelay: '1000ms' }}>
-          <div className="px-2 sm:px-3 py-2 sm:py-1.5 flex flex-col gap-2 sm:gap-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]">
-            {/* Product brands — single horizontal scroll on narrow screens */}
-            <div className="flex items-center gap-1 overflow-x-auto custom-scroll -mx-0.5 px-0.5 overscroll-x-contain touch-pan-x">
-              <span className="text-[9px] sm:text-[9px] uppercase tracking-[0.18em] sm:tracking-[0.2em] text-gray-400 font-medium mr-1 flex-shrink-0">Brands</span>
-              {Array.from(new Set(BRAND_CATALOG.map(b => b.category))).map(cat => {
-                const brands = BRAND_CATALOG.filter(b => b.category === cat);
-                const isHighlighted = highlightedCategory === cat;
-                return (
-                  <div key={cat} className="flex items-center gap-0.5 flex-shrink-0">
-                    {brands.map(b => (
-                      <a key={b.id} href={b.url} target="_blank" rel="noopener noreferrer"
-                        className={`px-2 py-1.5 sm:px-1.5 sm:py-1 rounded-md text-[9px] sm:text-[9px] tracking-[0.03em] sm:tracking-[0.04em] font-medium transition-all duration-300 whitespace-nowrap touch-manipulation min-h-[36px] sm:min-h-0 inline-flex items-center ${
-                          isHighlighted ? 'text-gray-700 bg-gray-50 shadow-sm' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+        <div className="flex-shrink-0 border-t border-gray-100/70 bg-white transition-all duration-1000 ease-out"
+             style={{ transitionDelay: '1000ms' }}>
+          <div className="flex flex-col md:flex-row md:items-stretch md:divide-x md:divide-gray-100">
+
+            {/* ─── BRANDS IN THIS SPACE ────────────────────────────────── */}
+            <div className="flex-1 md:basis-[62%] md:max-w-[62%] px-4 py-2 min-w-0">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] uppercase tracking-[0.3em] text-gray-700 font-semibold">Brands in this Space</span>
+                <span className="text-[9px] uppercase tracking-[0.18em] text-gray-300 font-light">curated</span>
+              </div>
+              {/* Brand row scales rather than scrolls — each card is a
+                  flex-1 cell that shrinks gracefully (with truncation on the
+                  category label) so every category stays visible at once. */}
+              <div className="flex flex-nowrap items-start gap-2 sm:gap-3 overflow-hidden pb-1">
+                {/* Pick one representative brand per category so the row reads
+                    like the reference: each brand shown as a separate
+                    name + role card, not a comma-separated list. */}
+                {(() => {
+                  // Order categories by the catalogue's natural appearance.
+                  const seenCats = new Set<string>();
+                  const orderedCats: string[] = [];
+                  BRAND_CATALOG.forEach((b) => {
+                    if (!seenCats.has(b.category)) {
+                      seenCats.add(b.category);
+                      orderedCats.push(b.category);
+                    }
+                  });
+                  const PRETTY_CAT: Record<string, string> = {
+                    flooring: 'Floors',
+                    stone: 'Surfaces',
+                    furniture: 'Sofas & Storage',
+                    seating: 'Chairs',
+                    lighting: 'Lighting',
+                    textile: 'Textiles',
+                    metal: 'Hardware',
+                    decor: 'Decor',
+                    wall: 'Walls & Paint',
+                  };
+                  return orderedCats.map((cat) => {
+                    const brand = BRAND_CATALOG.find((b) => b.category === cat);
+                    if (!brand) return null;
+                    const isHighlighted = highlightedCategory === cat;
+                    return (
+                      <a key={brand.id} href={brand.url} target="_blank" rel="noopener noreferrer"
+                         onMouseEnter={() => setHoveredBrand(brand.id)} onMouseLeave={() => setHoveredBrand(null)}
+                         title={`${brand.name} — ${brand.specialty} (${PRETTY_CAT[cat] || cat})`}
+                         className="flex-1 min-w-0 max-w-[140px] flex flex-col items-start group">
+                        <span className={`text-[13px] sm:text-[15px] font-semibold tracking-[0.01em] leading-tight transition-colors w-full truncate ${
+                          isHighlighted ? 'text-black' : 'text-gray-800 group-hover:text-black'
                         }`}
-                        onMouseEnter={() => setHoveredBrand(b.id)} onMouseLeave={() => setHoveredBrand(null)}
-                        title={`${b.name} — ${b.specialty}`}>
-                        {b.name}
+                              style={{ fontFamily: "'Libre Bodoni', 'Playfair Display', serif", letterSpacing: '0.005em' }}>
+                          {brand.name}
+                        </span>
+                        <span className="text-[9px] uppercase tracking-[0.14em] text-gray-400 group-hover:text-gray-600 font-medium leading-tight mt-1 w-full truncate transition-colors">
+                          {PRETTY_CAT[cat] || cat}
+                        </span>
                       </a>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-
-            <p className="text-[8px] sm:text-[8px] text-gray-500 leading-snug px-0.5 border-t border-gray-100/80 pt-1.5 sm:pt-1 mt-0.5 tabular-nums">
-              <span className="uppercase tracking-[0.12em] text-gray-400 font-medium">Suggested</span>
-              <span className="text-gray-300 mx-1">·</span>
-              {state.params.category || 'Space type'}
-              <span className="text-gray-300 mx-1">·</span>
-              {state.params.squareMeters ?? 120} m²
-              <span className="text-gray-300 mx-1">·</span>
-              {state.params.domain === 'architecture' ? 'Architecture' : 'Interior'}
-            </p>
-
-            <div className="flex flex-col gap-1 text-left">
-              <div className="min-w-0 rounded-md bg-gray-50/80 border border-gray-100/85 px-1.5 py-0.5 sm:px-2 sm:py-1">
-                <div className="text-[7px] sm:text-[8px] font-semibold uppercase tracking-[0.14em] text-gray-500 mb-0.5 leading-none">
-                  Build & renovation
-                </div>
-                <div className="flex flex-wrap gap-1 sm:gap-0.5">
-                  {professionalRecs.contractor.map(p => (
-                    <a
-                      key={p.id}
-                      href={p.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center max-w-full min-h-[40px] sm:min-h-0 px-2 py-1.5 sm:px-1 sm:py-0 rounded-md sm:rounded text-[10px] sm:text-[8px] font-medium text-gray-600 sm:text-gray-500 hover:text-gray-800 hover:bg-white/95 border border-transparent hover:border-gray-200/90 transition-colors touch-manipulation active:bg-gray-100/80"
-                      title={p.specialty}
-                    >
-                      <span className="truncate">{p.name}</span>
-                    </a>
-                  ))}
-                </div>
-              </div>
-              <div className="min-w-0 rounded-md bg-gray-50/80 border border-gray-100/85 px-1.5 py-0.5 sm:px-2 sm:py-1">
-                <div className="text-[8px] sm:text-[8px] font-semibold uppercase tracking-[0.1em] sm:tracking-[0.12em] text-gray-500 mb-1 sm:mb-0.5 leading-tight">
-                  Architects & interior designers
-                </div>
-                <div className="flex flex-wrap gap-1 sm:gap-0.5">
-                  {architectsAndDesigners.map(p => (
-                    <a
-                      key={p.id}
-                      href={p.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`inline-flex items-center gap-1 max-w-full min-h-[40px] sm:min-h-0 px-2 py-1.5 sm:px-1 sm:py-0 rounded-md sm:rounded text-[10px] sm:text-[8px] font-semibold sm:font-medium border transition-colors touch-manipulation active:bg-gray-100/80 ${
-                        p.id === 'shre-studio'
-                          ? 'text-gray-900 bg-white border-gray-200/90 shadow-sm hover:border-gray-300'
-                          : 'text-gray-600 sm:text-gray-500 border-transparent hover:text-gray-800 hover:bg-white/95 hover:border-gray-200/90'
-                      }`}
-                      title={`${p.specialty} · ${p.role === 'architect' ? 'Architecture' : 'Interior'}`}
-                    >
-                      <span className="truncate">{p.name}</span>
-                      <span className="flex-shrink-0 text-[7px] sm:text-[6px] uppercase tracking-wide text-gray-400 font-semibold">
-                        {p.role === 'architect' ? 'arch' : 'int'}
-                      </span>
-                    </a>
-                  ))}
-                </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
-            <p className="text-[8px] sm:text-[7px] text-gray-400 leading-snug px-0.5 text-center sm:text-left">
-              Informational links — verify scope and fit with each firm before engaging.
-            </p>
+
+            {/* ─── ARCHITECTS & INTERIOR DESIGNERS ──────────────────────── */}
+            <div className="flex-1 md:basis-[38%] md:max-w-[38%] px-4 py-2 min-w-0 border-t md:border-t-0 border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] uppercase tracking-[0.3em] text-gray-700 font-semibold">Architects &amp; Interior Designers</span>
+                <span className="text-[9px] uppercase tracking-[0.18em] text-gray-300 font-light">{architectsAndDesigners.length}</span>
+              </div>
+              {/* Architect row also fits-to-row instead of overflowing —
+                  longer studio names truncate with ellipsis so every firm
+                  stays visible without horizontal scrolling. */}
+              <div className="flex flex-nowrap items-start gap-2 sm:gap-3 overflow-hidden pb-1">
+                {architectsAndDesigners.slice(0, 6).map((p) => (
+                  <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer"
+                     title={`${p.name} — ${p.specialty} · ${p.role === 'architect' ? 'Architecture' : 'Interior'}`}
+                     className="flex-1 min-w-0 max-w-[140px] flex flex-col items-start group">
+                    <span className={`text-[11px] sm:text-[13px] font-semibold tracking-[0.01em] leading-tight transition-colors w-full truncate ${
+                      p.id === 'shre-studio' ? 'text-black' : 'text-gray-800 group-hover:text-black'
+                    }`}
+                          style={{ fontFamily: "'Libre Bodoni', 'Playfair Display', serif" }}>
+                      {p.name}
+                    </span>
+                    <span className="text-[9px] uppercase tracking-[0.16em] text-gray-400 group-hover:text-gray-600 font-medium leading-tight mt-1 w-full truncate transition-colors">
+                      {p.role === 'architect' ? 'Arch' : 'Int'}
+                    </span>
+                  </a>
+                ))}
+              </div>
+              <p className="text-[8px] text-gray-400 leading-snug pt-1.5 border-t border-gray-100/70 mt-1.5">
+                Informational links — verify scope and fit with each firm before engaging.
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -2288,6 +2572,14 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           </div>
         );
       })()}
+
+      {/* ═══ ADD CUSTOM MATERIAL MODAL — dashboard "+ Add custom material" CTA ═══ */}
+      <AddCustomMaterialModal
+        open={showCustomMatModal}
+        initial={editingCustomMat ?? undefined}
+        onCancel={() => { setShowCustomMatModal(false); setEditingCustomMat(null); }}
+        onSave={addCustomMaterialFromResults}
+      />
 
       {/* ═══ BUDGET ESTIMATE OVERLAY ═══ */}
       {budgetOpen && (() => {
