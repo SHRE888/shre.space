@@ -459,6 +459,35 @@ ${fireHearth}
 ANTI-SPA: No wine, bath caddy, candle clusters, large indoor trees, or hotel-resort staging. Photographed calm — architecturally believable, not Pinterest fantasy.`;
 };
 
+/**
+ * FUNCTIONAL PLACEMENT LOGIC — every fixture, opening, and focal element must
+ * answer "why is this here?". Targets two real failure modes flagged by the
+ * user: pendant lights floating in random air, and windows placed without
+ * façade logic. Injected globally on every render.
+ */
+export const FUNCTIONAL_PLACEMENT_LOGIC = `FUNCTIONAL PLACEMENT LOGIC (mandatory — every light, opening, and focal element must justify its position):
+
+LIGHTING ANCHOR RULE:
+- Pendant / chandelier lights are ANCHORED to a functional surface below them: a dining table, a kitchen island, a coffee-table cluster, a bedside, a bar counter, a reception desk, or a service counter. NEVER floating mid-room with empty floor underneath. NEVER centered on a room when there is no functional surface beneath the drop point.
+- Wall sconces appear ONLY in functional contexts: flanking a bed, beside a mirror, framing a door or archway, on an art wall (one sconce per artwork), beside a fireplace, in a hallway rhythm, beside a vanity. NEVER on random blank walls with no door, no art, no mirror, and no architectural feature beside them.
+- Recessed downlights / spots align to functional zones (work surface, dining table, art wall, circulation) on an orthogonal grid — not scattered randomly across the ceiling.
+- Floor and table lamps sit beside seating, at a reading nook, or next to a console — never alone in an empty corner with no chair, no console, and no use case.
+- Total visible fixture count must be RESTRAINED for the room size: a small lounge gets 1 pendant + 1 floor lamp + 1 sconce family — not 4+ pendants competing for attention.
+
+WINDOW & OPENING LOGIC:
+- Every window has believable façade logic: rhythm, alignment, sill height, head height, and proportion consistent across the visible elevation. Windows in the same wall share head height and sill height unless a real architectural reason breaks the line.
+- Window placement responds to FUNCTION inside the room: above kitchen sinks, beside seating for views, behind a desk only when sun angle won't cause screen glare, above bath vanity only when it makes structural sense. Never random punched openings centered on blank walls.
+- No openings behind bathtubs, behind beds, or behind sofas without a real architectural justification (corner detail, picture window with framed view). No window where a TV or media wall is the focal point on the same wall.
+- Frame, mullion, and glazing system stays consistent across the room — never mix domestic sash with curtain wall in the same shot.
+
+FOCAL POINT LOGIC:
+- Every primary seating arrangement (Living Room, Lounge, Lobby, Reception, VIP, Hotel Suite) faces ONE clear focal point: wall-mounted TV with media console, fireplace, curated art-wall composition, a feature window framing a real view, or a sculptural feature. Sofa never faces a blank wall with nothing on it.
+- Living Rooms specifically: sofa MUST face one of (a) wall-mounted TV with media console, (b) fireplace, (c) art wall, (d) feature window with view. The focal-point wall is the hero surface of the frame.
+- Bedrooms: bed faces a TV wall, a fireplace, or a window — not a blank wall.
+- Bars, restaurants, cafés: focal point = back-bar / barista station / open kitchen / wine wall. Stools/seats orient toward it.
+
+EVERY OBJECT JUSTIFIES ITSELF: chandeliers, sconces, pendants, lamps, mirrors, art, plants, windows, doors — each must answer "what function or sightline does this serve here?". If no answer, the object is removed rather than scattered as decoration.`;
+
 export const buildAntiUtopianControlBlock = (roomKey?: string | null): string => {
   const addendum = roomKey ? ANTI_UTOPIAN_ROOM_ADDENDA[roomKey] : undefined;
   return addendum

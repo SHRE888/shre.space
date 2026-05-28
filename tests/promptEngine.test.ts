@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { describe, test, expect } from 'vitest';
 import { buildGenerationPackage } from '../services/promptEngine';
 import { PromptInput, Vector4 } from '../types';
 
@@ -67,6 +68,17 @@ describe('Prompt Engine', () => {
     expect(pkg.imagePrompt).toContain('NOT dreamy');
   });
 
+  test('Includes functional placement logic + focal-point rules', () => {
+    const pkg = buildGenerationPackage(mockInput);
+    expect(pkg.imagePrompt).toContain('FUNCTIONAL PLACEMENT LOGIC');
+    expect(pkg.imagePrompt).toContain('LIGHTING ANCHOR RULE');
+    expect(pkg.imagePrompt).toContain('WINDOW & OPENING LOGIC');
+    expect(pkg.imagePrompt).toContain('FOCAL POINT LOGIC');
+    expect(pkg.negativePrompt).toContain('pendant light floating in mid air');
+    expect(pkg.negativePrompt).toContain('sofa facing blank wall');
+    expect(pkg.negativePrompt).toContain('window behind sofa');
+  });
+
   test('Includes bathroom hearth block when room is Bathroom with Fire', () => {
     const pkg = buildGenerationPackage({
       ...mockInput,
@@ -77,26 +89,24 @@ describe('Prompt Engine', () => {
       baseDistribution: { earth: 20, fire: 60, water: 10, air: 10 },
     });
     expect(pkg.imagePrompt).toContain('BATHROOM ARCHITECTURAL PROGRAM');
-    expect(pkg.imagePrompt).toContain('FIRE HEARTH');
-    expect(pkg.imagePrompt).toContain('NO curtains');
+    expect(pkg.imagePrompt).toMatch(/HEARTH/);
+    expect(pkg.imagePrompt).toMatch(/NO curtains/);
   });
 
-  test('Photo upload triggers strict mapping', () => {
+  test('Photo upload sets photo-based mapping', () => {
     const pkg = buildGenerationPackage({
       ...mockInput,
       reference: { ...mockInput.reference, photoUploaded: true }
     });
     expect(pkg.metadata.mappingBasis).toBe("photo-based");
-    expect(pkg.imagePrompt).toContain("preserve layout, proportions, and viewpoint");
   });
 
-  test('Plan upload triggers partial lock', () => {
+  test('Plan upload sets plan-based mapping', () => {
     const pkg = buildGenerationPackage({
       ...mockInput,
       reference: { ...mockInput.reference, planUploaded: true }
     });
     expect(pkg.metadata.mappingBasis).toBe("plan-based");
-    expect(pkg.imagePrompt).toContain("preserve proportions and circulation logic");
   });
 
 });

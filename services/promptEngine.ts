@@ -12,6 +12,7 @@ import {
   buildAntiUtopianControlBlock,
   buildBathroomArchitecturalBlock,
   BATHROOM_ACCENT_DECOR,
+  FUNCTIONAL_PLACEMENT_LOGIC,
   readElements,
   ELEMENT_DAYLIGHT_QUALITY,
   ELEMENT_ACCENT_DECOR,
@@ -1360,12 +1361,19 @@ const ROOM_PROGRAMS: Record<string, {
   layoutLogic: string;
 }> = {
   'Living Room': {
-    requiredElements: ['sofa or sectional seating', 'coffee table or side table', 'area rug defining the seating zone', 'floor lamp or table lamp'],
-    forbiddenItems: ['kitchen island', 'bed', 'office desk', 'toilet', 'shower', 'commercial counter', 'bar stools'],
+    requiredElements: [
+      'sofa or sectional seating ANCHORED on a rug',
+      'coffee table within arm reach of the sofa',
+      'area rug defining the seating zone',
+      'floor lamp or table lamp at human-eye height beside seating',
+      'one clear FOCAL POINT directly opposite the sofa: a wall-mounted TV / media wall, a fireplace, a substantial curated artwork composition, or a large window framing a real view — the sofa MUST face this focal point',
+      'media console / low credenza beneath the TV or artwork (when TV / media wall is the focal point)',
+    ],
+    forbiddenItems: ['kitchen island', 'bed', 'office desk', 'toilet', 'shower', 'commercial counter', 'bar stools', 'sofa facing a blank wall with nothing on it', 'pendant light floating in mid-air over nothing', 'pendant centered on the room with no functional surface below', 'wall sconce on a random blank wall with no function (no door, no art, no mirror, no bed, no fireplace)'],
     materialPriority: 'warm textiles on seating, hardwood or stone flooring, plaster or paint walls',
-    cameraHint: 'eye-level from corner showing seating arrangement and window wall, 28-32mm',
-    spatialRules: 'Seating faces a focal point (window, fireplace wall, or art wall). Coffee table within arm reach of sofa. Min 90cm circulation around furniture grouping. Rug anchors the seating zone.',
-    layoutLogic: 'Conversation-oriented arrangement. Primary seating faces secondary. Side tables flank sofa. Lighting at multiple heights (floor, table, pendant).',
+    cameraHint: 'eye-level from corner showing the seating arrangement AND the focal-point wall (TV / fireplace / art / view) the sofa faces, 28-32mm',
+    spatialRules: 'Sofa MUST face one of: (a) wall-mounted TV with media console, (b) fireplace, (c) curated art wall, (d) feature window with view. Never a blank wall. Coffee table within arm reach of sofa. Min 90cm circulation around furniture grouping. Rug anchors the seating zone. Pendants ONLY over the coffee-table cluster or dining adjacency — never floating between zones with nothing below. Wall sconces only beside doors, art walls, or media walls — never on empty blank walls.',
+    layoutLogic: 'Conversation-oriented arrangement with a clear focal point opposite the sofa (TV / fireplace / art / view). Primary seating faces this focal point; secondary seating (armchair) is 90-110° angled to it. Side tables flank sofa. Lighting layered at three heights: floor lamp beside sofa, table lamp on side table or console, optional pendant strictly anchored over the coffee-table cluster (not floating randomly mid-room).',
   },
   'Bedroom': {
     requiredElements: ['bed with headboard against a wall', 'nightstand(s)', 'bedside lighting', 'textile layering (sheets, throw, pillows)'],
@@ -2186,6 +2194,7 @@ These are SMALL decor and lighting accents distributed in the room — they do N
   );
 
   P.push(buildAntiUtopianControlBlock(roomKey));
+  P.push(FUNCTIONAL_PLACEMENT_LOGIC);
 
   if (roomKey === 'Bathroom' || roomKey === 'Restroom') {
     P.push(buildBathroomArchitecturalBlock(shrePrimary, firePct));
@@ -2603,7 +2612,7 @@ The generated interior must feel like a direct 3D realization of this exact floo
   const rawPrompt = P.join('\n\n');
   const finalPrompt = scrubBannedTokens(rawPrompt);
 
-  const negativePrompt = "3D render, CGI, concept art, Unreal Engine, V-Ray render, artificial perfection, plastic-looking surfaces, fisheye distortion, barrel distortion, tilted verticals, leaning walls, cropped furniture, cut-off edges, floating objects, furniture embedded in walls, impossible geometry, wrong proportions, oversized furniture, undersized furniture, blocked doorways, literal element symbols, actual flames, actual water waves, actual wind effects, soil or dirt piles, elemental symbols, cartoon, illustration, text overlay, watermarks, people, human figures, HDR tonemapping, Instagram filter, oversaturation, IKEA catalog look, Pinterest cliché, developer showroom, beige sofa repetition, symmetrical staged catalog, empty room, bare walls without texture, flat uniform surfaces without grain or variation, video game aesthetic, low resolution, blurry, noisy, compression artifacts, AI face artifacts, extra fingers, deformed objects, impossible shadows, multiple light source directions, clinical fluorescent lighting, random decorative objects with no purpose, meaningless accent lights, fake luxury gold trim, non-buildable fantasy forms, clutter, objects that serve no function, wrong room typology, residential sofa in coffee shop, living room posing as restaurant, generic showroom instead of named room type, bar without back-bar, kitchen without work surfaces, bedroom without bed, night scene without request, marble ceiling, marble box interior, sofa fused to kitchen island, film grain, speckle noise, fireflies, render noise, dust motes, airborne particles, floating white dots, salt and pepper noise, sparkle overlay, bokeh dots, grainy texture, noisy plaster, noisy marble, cinematic fantasy interior, spa cliché, utopian luxury scene, theatrical haze, volumetric god rays, dramatic orange glow, bathroom curtains, curtains in mirror, voile drapery, sheer curtains, indoor tree in bathroom, spa resort staging, wine glass on bath caddy, overdesigned spa bathroom, AI luxury fantasy, dreamy atmosphere, fake light leaks, decorative curtains without window, split composition";
+  const negativePrompt = "3D render, CGI, concept art, Unreal Engine, V-Ray render, artificial perfection, plastic-looking surfaces, fisheye distortion, barrel distortion, tilted verticals, leaning walls, cropped furniture, cut-off edges, floating objects, furniture embedded in walls, impossible geometry, wrong proportions, oversized furniture, undersized furniture, blocked doorways, literal element symbols, actual flames, actual water waves, actual wind effects, soil or dirt piles, elemental symbols, cartoon, illustration, text overlay, watermarks, people, human figures, HDR tonemapping, Instagram filter, oversaturation, IKEA catalog look, Pinterest cliché, developer showroom, beige sofa repetition, symmetrical staged catalog, empty room, bare walls without texture, flat uniform surfaces without grain or variation, video game aesthetic, low resolution, blurry, noisy, compression artifacts, AI face artifacts, extra fingers, deformed objects, impossible shadows, multiple light source directions, clinical fluorescent lighting, random decorative objects with no purpose, meaningless accent lights, fake luxury gold trim, non-buildable fantasy forms, clutter, objects that serve no function, wrong room typology, residential sofa in coffee shop, living room posing as restaurant, generic showroom instead of named room type, bar without back-bar, kitchen without work surfaces, bedroom without bed, night scene without request, marble ceiling, marble box interior, sofa fused to kitchen island, film grain, speckle noise, fireflies, render noise, dust motes, airborne particles, floating white dots, salt and pepper noise, sparkle overlay, bokeh dots, grainy texture, noisy plaster, noisy marble, cinematic fantasy interior, spa cliché, utopian luxury scene, theatrical haze, volumetric god rays, dramatic orange glow, bathroom curtains, curtains in mirror, voile drapery, sheer curtains, indoor tree in bathroom, spa resort staging, wine glass on bath caddy, overdesigned spa bathroom, AI luxury fantasy, dreamy atmosphere, fake light leaks, decorative curtains without window, split composition, pendant light floating in mid air, chandelier centered on empty floor, pendant over nothing, wall sconce on blank wall, sconce with no function beside it, sofa facing blank wall, living room with no focal point, bedroom with no headboard wall, random window on blank wall, window behind sofa, window behind TV wall, window behind bathtub, mismatched window heads, scattered ceiling fixtures, too many pendants, lights without anchor surface";
 
   const designSummary = buildDesignSummary(input, activeDist);
   
