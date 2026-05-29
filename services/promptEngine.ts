@@ -2105,6 +2105,23 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
     P.push(`SPACE CONFIG SUMMARY (active one-line brief from workspace or user edit — treat as authoritative for project type, rooms/context, scale, and atmosphere cues; keep the image consistent with it): ${spaceConfigLine}`);
   }
 
+  // Early plan-mode notice — pushed near the top so the model registers
+  // "follow the attached plan" before it commits to a generic layout.
+  // The full PLAN INTERPRETATION CHECKLIST follows lower in the prompt.
+  if (input.reference.planUploaded) {
+    P.push(
+      `PLAN MODE — FLOOR PLAN ATTACHED (read this NOW, before considering any default layout below): The first image attached to this request is the user's 2D architectural floor plan of THIS exact room. Treat the plan's room shape, wall positions, window placements, door swings, dimension annotations, and furniture symbols as binding ground truth for the spatial layout. The styling, materials, lighting, atmosphere, ceiling, and furniture details described later in this prompt apply ON TOP of the plan's geometry — never replace it. Output a photographic interior view (not the plan drawing itself).`,
+    );
+  } else if (input.reference.photoUploaded) {
+    P.push(
+      `REFERENCE PHOTO MODE — the first attached image is a reference photo. Preserve its layout, camera angle, and visible architecture; apply only material / lighting / atmosphere changes from this prompt.`,
+    );
+  } else if (input.reference.spacePhotoUploaded) {
+    P.push(
+      `SPACE PHOTO MODE — the first attached image is a photograph of the user's existing space. Preserve its room geometry, window and door positions, ceiling height, and camera viewpoint; apply only the material / lighting / atmosphere transformation described in this prompt.`,
+    );
+  }
+
   // ─────────────────────────────────────────────────────────────
   // INPUT FIDELITY LOCK — the user's wheel/survey/space-config picks
   // must reach the image, not get lost behind generic SHRE poetry.
@@ -2664,22 +2681,23 @@ ${contextOverride ? `- ROOM CHARACTER (overrides generic styling): ${contextOver
 
   // [12] MAPPING
   if (mappingBasis === "photo-based") {
-    P.push("Preserve layout and viewpoint of the reference photo. Apply material/lighting/atmosphere changes only.");
+    P.push("REFERENCE PHOTO ATTACHED — preserve the layout, viewpoint, and visible architecture of that photograph. Apply only the material / lighting / atmosphere changes described above.");
   } else if (mappingBasis === "plan-based") {
-    P.push(`FLOOR PLAN UPLOADED (MANDATORY — highest spatial priority): The user has uploaded an architectural floor plan drawing. You MUST interpret and follow the plan precisely:
+    P.push(`FLOOR PLAN ATTACHED — READ IT AS GROUND TRUTH (mandatory; overrides any generic layout default below).
 
-SPATIAL ANALYSIS REQUIREMENTS:
-- WALLS: Identify all thick black lines as load-bearing and partition walls. Respect exact wall positions, thicknesses, and openings. Do NOT add or remove walls.
-- WINDOWS: Identify window symbols (thin parallel lines in walls, or glass markings). Place windows at the exact positions shown. Windows determine natural light direction and view orientation.
-- DOORS: Identify door swing arcs and opening directions. Door positions define circulation flow and room access.
-- ROOM DIMENSIONS: Read any dimension annotations (numbers in meters or centimeters, e.g. 270, 480, 600 = cm). Use these for accurate spatial proportions. Read m² annotations for room areas.
-- FURNITURE LAYOUT: If furniture outlines are visible (sofas, tables, kitchen islands, beds), follow their approximate position, scale, and orientation. The user placed them intentionally.
-- CIRCULATION: Respect clear paths between furniture groups and doorways. Maintain walkable corridors shown in the plan.
-- KITCHEN/BATHROOM FIXTURES: If counters, sinks, toilets, or bathtubs are shown, place them at the indicated positions.
-- PROPORTIONS: The plan defines the room's aspect ratio (rectangular, L-shaped, open-plan, etc.). The 3D visualization must match this geometry exactly.
-- CAMERA ANGLE: Choose a perspective that best reveals the spatial layout shown in the plan — typically from a corner looking diagonally across the longest dimension.
+The attached image is a 2D architectural floor plan of THIS exact room. You are NOT designing a generic room of the same program — you are generating a 3D realization of the specific plan attached. Do NOT output the plan drawing itself; output a photographic interior view of the room shown on the plan.
 
-The generated interior must feel like a direct 3D realization of this exact floor plan — as if you walked into the space drawn on paper.`);
+PLAN INTERPRETATION CHECKLIST (every item is binding):
+- ROOM SHAPE: read the outer wall outline and match the room's footprint exactly — rectangular vs L-shaped vs irregular. The proportions of the visible interior must match the plan's footprint ratio. If the plan shows a 6.5 m × 5.3 m rectangle, do not render a square or a long corridor.
+- WALLS: thick lines are walls. Respect their positions and thicknesses. Do NOT invent extra walls, do NOT delete walls.
+- WINDOWS: identify window symbols (thin parallel lines breaking a wall, glass hatching) and place them at exactly those positions and sizes. Window placement determines daylight direction in the render.
+- DOORS: identify door swings (quarter-circle arcs) and place doors at exactly those positions, swinging the way the arc shows. Door positions define circulation.
+- DIMENSIONS: read every dimension annotation on the plan (numbers in m or cm, m² labels). These are exact and binding. Furniture and fixtures must scale to these numbers, not to a generic guess.
+- FURNITURE & FIXTURES: every furniture symbol on the plan (sofas, sectionals, dining tables with chair count, beds, kitchen counters with sink + stove symbols, bathroom fixtures, wardrobes, shelving) appears in the render at the SAME position, SAME orientation, and SAME approximate scale. Do not move them, do not omit them, do not add extras that are not on the plan.
+- CIRCULATION: walkable corridors shown between furniture groups stay clear and the same width.
+- CAMERA: choose an eye-level interior viewpoint that maximises the legibility of the plan's layout — typically from one of the longer-side corners looking diagonally toward the opposite corner, so most of the planned furniture is visible in one frame.
+
+Apply the SHRE elemental palette, material picks, ceiling treatment, lighting, and atmosphere described in the rest of this prompt — but the plan's geometry, openings, and furniture layout are non-negotiable. If a styling default conflicts with the plan, the plan wins.`);
   }
 
   // [12b] REALISM ENFORCEMENT (final quality gate)

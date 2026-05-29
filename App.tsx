@@ -1321,7 +1321,36 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
             refinementFeedback: feedback || undefined,
           });
           setStory(result.promptStory);
-          const imgUrl = await generateImageFromPrompt(result.imagePrompt, directionPhoto || undefined, result.aspectRatio);
+
+          // Choose the most informative reference image to feed Gemini.
+          // The floor plan, when uploaded, MUST be sent — otherwise the
+          // model has no way to follow the spatial layout the user drew.
+          const planFile = (state.params as any).architecturalPlan as File | undefined;
+          const spacePhotoFile = (state.params as any).spacePhoto as File | undefined;
+          const generalReferenceFile = (state.params as any).referenceImage as File | undefined;
+          let refFile: File | undefined;
+          let refKind: 'plan' | 'space-photo' | 'reference' | undefined;
+          if (planFile) {
+            refFile = planFile;
+            refKind = 'plan';
+          } else if (spacePhotoFile) {
+            refFile = spacePhotoFile;
+            refKind = 'space-photo';
+          } else if (generalReferenceFile) {
+            refFile = generalReferenceFile;
+            refKind = 'reference';
+          } else if (directionPhoto) {
+            refFile = directionPhoto;
+            refKind = 'reference';
+          }
+
+          const imgUrl = await generateImageFromPrompt(
+            result.imagePrompt,
+            refFile,
+            result.aspectRatio,
+            undefined,
+            refKind,
+          );
           if (!cancelled) finishGeneration(imgUrl, scaleSnap);
         }
       } catch (err: any) {

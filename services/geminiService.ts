@@ -168,11 +168,14 @@ const getClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
+export type ReferenceImageKind = 'plan' | 'space-photo' | 'reference';
+
 export const generateImageFromPrompt = async (
   prompt: string,
   referenceImage?: File,
   aspectRatio?: string,
   targetedEditInstruction?: string,
+  referenceImageKind?: ReferenceImageKind,
 ): Promise<string> => {
   const ai = getClient();
   
@@ -220,11 +223,17 @@ export const generateImageFromPrompt = async (
             config,
         });
     } else if (imagePart) {
+        const kindPreface =
+          referenceImageKind === 'plan'
+            ? 'THE ATTACHED IMAGE IS A 2D ARCHITECTURAL FLOOR PLAN — TREAT IT AS GROUND TRUTH FOR THE ROOM GEOMETRY. Do NOT render the plan itself or any 2D drawing. Generate a photorealistic INTERIOR PHOTOGRAPH of the room shown in this plan, faithfully preserving: (1) the room outline / floor shape and proportions; (2) every wall position and thickness; (3) every door (with its swing direction) and every window (with its position and size on the wall); (4) the location, scale, and orientation of furniture symbols visible on the plan (sofas, dining tables, kitchen counters, beds, bathroom fixtures, etc.); (5) the labelled dimensions (e.g. 6.458 m, 5.293 m, 3.477 m, 39.076 m²) — they are exact and binding. Choose a camera angle that best reveals the spatial layout drawn on the plan — typically eye-level from a corner looking diagonally across the longest dimension. The result must read as a 3D realization of THIS exact plan, as if a photographer walked into the built space.'
+            : referenceImageKind === 'space-photo'
+              ? "THE ATTACHED IMAGE IS A PHOTOGRAPH OF THE USER'S ACTUAL EXISTING SPACE — treat it as the primary spatial reference. Preserve the room geometry, ceiling height, window positions, door positions, floor plan, and camera viewpoint shown in the photo. Apply only the material, lighting, and atmosphere transformation described below — keep the room itself recognisable as a renovation of THIS specific space, not a generic re-imagining."
+              : 'Use the attached image as a reference for spatial layout, room proportions, and camera angle. Preserve those qualities and apply the material, lighting, and atmosphere changes described below.';
         response = await ai.models.generateContent({
             model: IMAGE_MODEL,
             contents: [
                 imagePart,
-                { text: prompt + "\n\nTransform this reference image into the described architectural style. Preserve the spatial layout, room proportions, and camera angle. Apply all material, lighting, and atmosphere changes as specified." }
+                { text: prompt + '\n\n' + kindPreface }
             ],
             config,
         });
