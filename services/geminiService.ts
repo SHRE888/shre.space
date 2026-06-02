@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { ANTI_UTOPIAN_ARCHITECTURAL_CONTROL } from './shrePrompt';
 
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
+const TEXT_ANALYSIS_MODEL = 'gemini-2.5-flash';
 
 // ════════════════════════════════════════════════════════════════════════════
 // SHRE · 4E SPATIAL INTELLIGENCE ENGINE — Image-model system instruction
@@ -225,7 +226,7 @@ export const generateImageFromPrompt = async (
     } else if (imagePart) {
         const kindPreface =
           referenceImageKind === 'plan'
-            ? 'THE ATTACHED IMAGE IS A 2D ARCHITECTURAL FLOOR PLAN — TREAT IT AS GROUND TRUTH FOR THE ROOM GEOMETRY. Do NOT render the plan itself or any 2D drawing. Generate a photorealistic INTERIOR PHOTOGRAPH of the room shown in this plan, faithfully preserving: (1) the room outline / floor shape and proportions; (2) every wall position and thickness; (3) every door (with its swing direction) and every window (with its position and size on the wall); (4) the location, scale, and orientation of furniture symbols visible on the plan (sofas, dining tables, kitchen counters, beds, bathroom fixtures, etc.); (5) the labelled dimensions (e.g. 6.458 m, 5.293 m, 3.477 m, 39.076 m²) — they are exact and binding. Choose a camera angle that best reveals the spatial layout drawn on the plan — typically eye-level from a corner looking diagonally across the longest dimension. The result must read as a 3D realization of THIS exact plan, as if a photographer walked into the built space.'
+            ? 'THE ATTACHED IMAGE IS A 2D ARCHITECTURAL FLOOR PLAN — TREAT IT AS GROUND TRUTH FOR THE ROOM GEOMETRY. Do NOT render the plan itself or any 2D drawing. Generate a photorealistic INTERIOR PHOTOGRAPH of the room shown in this plan, faithfully preserving: (1) the room outline / floor shape and proportions; (2) every wall position and thickness; (3) every door (with its swing direction) and every window (with its position and size on the wall); (4) the location, scale, and orientation of furniture symbols visible on the plan (sofas, dining tables, kitchen counters, beds, bathroom fixtures, etc.); (5) the labelled dimensions (e.g. 6.458 m, 5.293 m, 3.477 m, 39.076 m²) — they are exact and binding. CAMERA: STRICTLY FRONTAL ONE-POINT PERSPECTIVE. The camera stands at the entry-side short wall, lens parallel to the long walls, looking straight down the room toward the opposite short wall. Both side walls are visible symmetrically; the back wall reads flat across the rear of the frame. Verticals are absolutely plumb. No diagonal three-quarter view, no rotated angle, no tilted horizon, no fisheye, no Dutch tilt. The result must read as a 3D realization of THIS exact plan, photographed by a professional architectural photographer (Iwan Baan / Hélène Binet caliber) on tripod with tilt-shift correction.'
             : referenceImageKind === 'space-photo'
               ? "THE ATTACHED IMAGE IS A PHOTOGRAPH OF THE USER'S ACTUAL EXISTING SPACE — treat it as the primary spatial reference. Preserve the room geometry, ceiling height, window positions, door positions, floor plan, and camera viewpoint shown in the photo. Apply only the material, lighting, and atmosphere transformation described below — keep the room itself recognisable as a renovation of THIS specific space, not a generic re-imagining."
               : 'Use the attached image as a reference for spatial layout, room proportions, and camera angle. Preserve those qualities and apply the material, lighting, and atmosphere changes described below.';
@@ -322,6 +323,63 @@ export const generateImageFromPrompt = async (
     // Generic fallback — strip any stray API key fragments before bubbling up.
     const safe = raw.replace(/AIza[0-9A-Za-z_\-]{10,}/g, '[redacted]');
     throw new Error(safe);
+  }
+};
+
+/**
+ * Pre-flight floor-plan analysis. Sends the plan image to a TEXT model
+ * (gemini-2.5-flash) and asks for a structured architectural read-out:
+ * room outline, dimensions, walls, doors, windows, furniture symbols, m².
+ *
+ * The image-generation model historically failed to honour the attached plan
+ * because it had to do plan-reading and image-painting in a single pass.
+ * Pulling the plan analysis into a separate text turn gives the image model
+ * a clean, written description it can follow alongside the visual.
+ *
+ * Returns a multi-line string ready to drop into the image prompt under a
+ * "PLAN ANALYSIS" header, or null when the analysis fails / no plan exists.
+ */
+export const analyzeFloorPlan = async (planFile: File): Promise<string | null> => {
+  try {
+    const ai = getClient();
+    const base64Data = await fileToGenerativePart(planFile);
+    const imagePart = {
+      inlineData: { data: base64Data, mimeType: planFile.type || 'image/png' },
+    };
+
+    const analysisPrompt = `You are an architect reading a 2D floor plan drawing. Look at the attached image and write a STRUCTURED, FACTUAL description of what is drawn. Do NOT invent details that are not visible. Do NOT design or improve. Use this exact template, filling in only what you can see:
+
+ROOM OUTLINE: <rectangular / L-shaped / irregular — and which side is the longest>.
+OVERALL DIMENSIONS: <list every dimension annotation visible on the plan, in metres, e.g. "6.458 m × 5.293 m"; include m² labels e.g. "39.076 m²" exactly as written>.
+WALLS: <which walls are thick / load-bearing vs partition; note any visible openings>.
+DOORS: <list each door, where on the wall it sits, and which way it swings>.
+WINDOWS: <list each window: which wall, approximate width, approximate position along the wall>.
+FURNITURE SYMBOLS (in their plan positions, left-to-right, top-to-bottom):
+  - <e.g. "Sofa / sectional against the upper-left wall, facing south">
+  - <e.g. "Dining table with 6 chairs in the right half, near the window">
+  - <e.g. "Kitchen counter along the bottom wall, with sink and stove circles">
+  - <e.g. "Lounge chair in the lower-left corner, facing the sofa">
+KITCHEN / BATHROOM FIXTURES: <if present: sink, stove, fridge, toilet, basin, shower, bath — with positions>.
+CIRCULATION: <main walkable path from the door to the seating / dining / kitchen zones>.
+NOTES: <anything else visibly drawn — columns, niches, level changes, balcony / terrace, planters, dimensions of single rooms>.
+
+Reply ONLY with the filled template. No preface, no closing, no markdown headers other than the template's own labels. Keep it concise.`;
+
+    const response = await ai.models.generateContent({
+      model: TEXT_ANALYSIS_MODEL,
+      contents: [imagePart, { text: analysisPrompt }],
+    });
+
+    const text = response.candidates?.[0]?.content?.parts
+      ?.map((p: any) => (typeof p?.text === 'string' ? p.text : ''))
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+
+    return text && text.length > 30 ? text : null;
+  } catch (err) {
+    console.warn('[Gemini] Floor-plan analysis failed; proceeding without it:', err);
+    return null;
   }
 };
 

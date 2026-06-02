@@ -519,6 +519,63 @@ export const buildAntiUtopianControlBlock = (roomKey?: string | null): string =>
     : ANTI_UTOPIAN_ARCHITECTURAL_CONTROL;
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// EDITORIAL DESIGN DEPTH — Dezeen / ArchDaily / AD / Wallpaper* caliber rules.
+// The model defaults to "modern interior, clean, sunny" and produces flat,
+// dry, showroom-grade output. This block injects the ingredients that make
+// a published architectural photograph feel ALIVE: a hero moment, decisive
+// curation, real architectural detailing, patina, light drama, and styled
+// imperfection. It is mandatory for every interior render.
+// ════════════════════════════════════════════════════════════════════════════
+export const EDITORIAL_DESIGN_DEPTH = `EDITORIAL DESIGN DEPTH (mandatory — every render must read as a published architectural feature, not a generic 3D modern interior):
+
+1. HERO MOMENT — every frame contains ONE undeniable focal lyric. Examples (pick what fits the room and element, never invent a kitsch attention-grabber):
+   - a single sculptural pendant or floor lamp by a real maker (Apparatus Cloud / Halo, Flos Aim / Taccia, Allied Maker Echo, Vibia Wireflow, Akari noguchi 35N, Davide Groppi Moon, Michael Anastassiades Mobile Chandelier 5);
+   - a piece of art with real proportions on a real wall (large monochrome canvas, a Hiroshi Sugimoto seascape, a Cy Twombly-style scribble, a Joseph Beuys felt piece, a Pierre Soulages outrenoir — NOT generic abstract gradients);
+   - a singular furniture statement (Pierre Jeanneret PJ-010104 chair, Jean Royère Polar Bear sofa, Tadao Ando Dream Chair, B&B Italia Le Bambole, Cassina LC4, USM Haller credenza, a vintage Roland Rainer or Charlotte Perriand piece);
+   - or a hand-built architectural feature (a board-formed concrete wall, a 4 m-long monolithic stone bench, a hand-troweled lime plaster fireplace surround, a fluted oak millwork wall, a deep window reveal looking onto a courtyard).
+   The hero moment occupies ≈25% of the visual weight of the frame and the rest of the composition supports it. Never two hero pieces fighting each other.
+
+2. CURATION DISCIPLINE — fewer, better. The frame holds AT MOST 4-7 styled vignettes (a coffee table grouping, a bookshelf moment, a counter still-life, a corner lounge moment). Surfaces are intentionally 60-70% empty volume. NEVER cover every surface with decor. NEVER scatter generic candles, pampas grass, dried branches, identical vases, identical books, identical bowls of stones. If an object is in the frame, it has a reason — a Vola tap (specific model), a single Aesop bottle, an open Phaidon monograph, a hand-thrown Mizen Atelier ceramic, a Cassina coffee table book, a tarnished brass kettle, a half-cup of espresso, a worn linen napkin.
+
+3. ARCHITECTURAL DETAILING — bespoke, not catalog. Show at least 3 of the following per frame:
+   - a flush-set reveal / shadow gap where wall meets floor or ceiling (3-10 mm recess);
+   - a custom millwork wall (full-height fluted, ribbed, slatted, or flat-panel oak / walnut joinery WITH visible hardware-free push-to-open joints);
+   - integrated linear lighting (LED in a plaster reveal, in a fluted-oak channel, behind a stone-clad fireplace, under a floating vanity, recessed into the ceiling cove — NEVER a generic strip stuck on);
+   - a deep window reveal (≥200 mm thick wall showing the depth) or a flush full-height steel frame window;
+   - hand-applied wall finishes (lime wash, Venetian plaster, board-formed concrete) with visible trowel marks, mineral mottling, or formwork lines;
+   - a custom-cut stone slab with the book-matched veining intentional (not random AI marble swirl) — match the cut at a clear seam;
+   - a real material edge condition (waterfall stone, mitred 45° wood corner, blackened steel reveal between two materials).
+
+4. PATINA & HONEST AGE — every surface looks made, not rendered. Visible, plausible imperfections:
+   - real wood grain with knots and slight tone variation (NOT identical CGI veneer);
+   - brass and bronze fixtures that have warmed / tarnished slightly;
+   - linen / wool textiles with creases, slight slubs, hand-stitched edges;
+   - lime plaster with cloudy mineral marks;
+   - leather with use-mark sheen on armrests;
+   - oxidised black steel with brushed-grain direction.
+   Forbid the over-clean "CGI showroom out of the box" look.
+
+5. LIGHT DRAMA — one dominant light source, supported by 1-2 quieter sources. Strong but believable falloff:
+   - a clear hero light moment — a raking shaft from a window across a wall, a single warm pendant pool of light, a courtyard glow bouncing through a deep reveal, a clerestory wash;
+   - measurable shadow depth on at least one wall (chiaroscuro, not flat);
+   - keep one quadrant of the frame in deeper shadow so the bright zones read;
+   - daylight is directional (specific time of day — late afternoon, golden hour, overcast Nordic noon, dawn) — never "uniform diffuse studio light".
+   No flat overhead glare. No equal exposure across every surface.
+
+6. STYLED IMPERFECTION — a few intentional "human just left the room" cues, max 3-4 per frame, none of which feel staged:
+   - an open hardcover book, page-side down, on a coffee table;
+   - a slightly off-axis throw blanket (Society Limonta, Society of Wanderers, Tekla) on a sofa arm;
+   - a half-drunk coffee or wine glass, one — not a styled tray of glasses;
+   - a folded newspaper, an unfinished sketch, a worn pair of slippers near a sofa, a pair of reading glasses on a side table.
+   These read as MOMENTS, not props arranged in a row.
+
+7. NEGATIVE SPACE — at least 10-15% of the frame is unstyled empty volume (a quiet stretch of wall, an empty floor expanse, a long shadow zone). Editorial photography breathes; it never crowds.
+
+8. REFERENCE BAR — calibrate to Vincent Van Duysen "Townhouse Antwerp", John Pawson "Tetsuka House", Studio MK27 "Casa Cobogó", Pierre Yovanovitch "Château de Fabrègues", Norm Architects "Archipelago House", Axel Vervoordt "Wabi Kanaal", Joseph Dirand "Place du Palais Bourbon", Studio KO "Villa K", Studio Tahar Tahar. Photographer reference: Hélène Binet, Iwan Baan, François Halard, James Silverman, Mikkel Mortensen, Stephan Julliard.
+
+EXPLICITLY FORBID: generic AI showroom, IKEA catalogue staging, sanitized Airbnb modern, builder-grade contemporary, "luxury rental" hotel-suite blandness, equal-exposure CGI sunlight, every-surface-decorated styling, pampas grass, dried branches in a vase as filler, identical scented candles in a row, stacks of unread coffee-table books used as props only, perfectly fluffed throw pillows, perfectly symmetrical decor pairs, flat overhead ambient light, lifeless catalogue render, dry / sterile / soulless / un-lived look.`;
+
 // ════════════════════════════════════════════════════════════
 // Builder — user-wins material selection + SHRE 5-step assembly
 // ════════════════════════════════════════════════════════════

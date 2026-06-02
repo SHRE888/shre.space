@@ -304,6 +304,11 @@ export interface PromptInput {
     photoUrl?: string;
     planUrl?: string;
     spacePhotoUrl?: string;
+    /** Structured text read-out of the uploaded floor plan, produced by the
+     *  text-vision pre-flight call (services/geminiService → analyzeFloorPlan).
+     *  When present, the prompt embeds it verbatim so the image model has a
+     *  written description of the plan alongside the attached drawing. */
+    planAnalysis?: string;
   };
   /** User's description of their specific space (context for generation) */
   spaceNote?: string;

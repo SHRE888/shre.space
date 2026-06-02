@@ -13,6 +13,7 @@ import {
   buildBathroomArchitecturalBlock,
   BATHROOM_ACCENT_DECOR,
   FUNCTIONAL_PLACEMENT_LOGIC,
+  EDITORIAL_DESIGN_DEPTH,
   readElements,
   ELEMENT_DAYLIGHT_QUALITY,
   ELEMENT_ACCENT_DECOR,
@@ -2056,7 +2057,9 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   // unique configurations before the model adds its own micro-variation,
   // so back-to-back generations of the same brief read as the same project
   // shot at different moments rather than as identical re-renders.
-  const cameraVantage = CAMERA_VANTAGES[(input.generationIndex ?? 0) % CAMERA_VANTAGES.length];
+  const cameraVantage = input.reference.planUploaded
+    ? 'Camera at eye-level (1.50-1.60 m), tripod-mounted, FRONTAL ONE-POINT PERSPECTIVE looking straight down the long axis of the room shown on the attached plan — the camera is parallel to one of the room\'s long walls, both side walls visible symmetrically on either side of the frame, the back wall reading flat across the rear of the image. Verticals are absolutely plumb (tilt-shift corrected); horizon level. NO diagonal three-quarter view, NO rotated angle, NO corner-to-corner sweep — this is a clean architectural frontal shot that reads the plan\'s layout the way a contractor would on site. Position the camera at the entry-side short wall so the maximum amount of planned furniture, openings, and the focal-point wall is captured in one straight-on frame. Do NOT rotate based on generation index when a plan is attached.'
+    : CAMERA_VANTAGES[(input.generationIndex ?? 0) % CAMERA_VANTAGES.length];
 
   // Lighting — rotates between four DAYTIME scenarios for anti-repetition.
   // We no longer rotate into an "evening / blue hour" variant by default —
@@ -2110,8 +2113,26 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   // The full PLAN INTERPRETATION CHECKLIST follows lower in the prompt.
   if (input.reference.planUploaded) {
     P.push(
-      `PLAN MODE — FLOOR PLAN ATTACHED (read this NOW, before considering any default layout below): The first image attached to this request is the user's 2D architectural floor plan of THIS exact room. Treat the plan's room shape, wall positions, window placements, door swings, dimension annotations, and furniture symbols as binding ground truth for the spatial layout. The styling, materials, lighting, atmosphere, ceiling, and furniture details described later in this prompt apply ON TOP of the plan's geometry — never replace it. Output a photographic interior view (not the plan drawing itself).`,
+      `PLAN MODE — FLOOR PLAN ATTACHED (READ THIS NOW, BEFORE ANY STYLING DEFAULT BELOW. Plan geometry overrides every other layout instruction in this prompt.):
+- The first image attached to this request is the user's 2D architectural floor plan of THIS exact room. Look at it carefully BEFORE generating anything.
+- STEP 1 — READ THE PLAN. Trace the outer wall outline; note whether it is rectangular, L-shaped, or irregular. Identify every door (the quarter-circle swing arcs) and every window (parallel-line breaks in walls). Read every dimension annotation (numbers in metres / centimetres / m²). Identify every furniture symbol drawn on the plan (sofa rectangles, dining table with chair count, kitchen counters with sink + stove circles, beds, bathroom fixtures, shelving, wardrobes).
+- STEP 2 — LOCK THE GEOMETRY. The footprint shape, wall positions, opening positions, dimensions, and labelled m² are NON-NEGOTIABLE GROUND TRUTH. Do not invent extra walls. Do not delete walls. Do not move openings.
+- STEP 3 — LOCK THE FURNITURE LAYOUT. Every furniture symbol on the plan appears in the render at the SAME position, the SAME orientation (facing the same direction), and the SAME approximate scale. If the plan shows a sectional along the left wall and a dining table by the right window, render exactly that — not a sofa facing the dining table.
+- STEP 4 — CHOOSE A CAMERA THAT REVEALS THE LAYOUT. STRICTLY FRONTAL ONE-POINT PERSPECTIVE. Eye-level (1.50-1.60 m), tripod-mounted, plumb verticals, the camera stands at the entry-side short wall with the lens parallel to the long walls, looking straight down the room toward the opposite short wall. Both side walls appear symmetrically on either side of the frame; the back wall reads flat across the rear. NO diagonal three-quarter view, NO rotated corner-to-corner angle, NO Dutch tilt, NO leaning verticals — this is a clean, contractor-readable architectural frontal photograph.
+- The SHRE elemental palette, material picks, ceiling treatment, lighting, atmosphere, and decor described in the rest of this prompt apply ON TOP of the plan's geometry — they style the room shown on the plan; they never reshape it.
+- Output a PHOTOGRAPHIC interior view — never the plan drawing itself, never a top-down floor plan, never an axonometric, never a CAD-looking diagram.`,
     );
+    // Vision-model pre-flight: structured text read-out of the plan, produced
+    // by analyzeFloorPlan() before this image call. Front-loading the written
+    // analysis dramatically improves layout adherence because the image model
+    // no longer has to do plan-reading + image-painting in a single pass.
+    if (input.reference.planAnalysis && input.reference.planAnalysis.trim().length > 30) {
+      P.push(
+        `PLAN ANALYSIS (PRE-READ BY VISION MODEL — TREAT THIS TEXT AS THE WRITTEN DESCRIPTION OF THE ATTACHED PLAN; THE RENDER MUST MATCH IT EXACTLY):
+${input.reference.planAnalysis.trim()}
+END OF PLAN ANALYSIS.`,
+      );
+    }
   } else if (input.reference.photoUploaded) {
     P.push(
       `REFERENCE PHOTO MODE — the first attached image is a reference photo. Preserve its layout, camera angle, and visible architecture; apply only material / lighting / atmosphere changes from this prompt.`,
@@ -2271,6 +2292,7 @@ These are SMALL decor and lighting accents distributed in the room — they do N
 
   P.push(buildAntiUtopianControlBlock(roomKey));
   P.push(FUNCTIONAL_PLACEMENT_LOGIC);
+  P.push(EDITORIAL_DESIGN_DEPTH);
   P.push(CAMERA_FRAMING_DISCIPLINE);
 
   if (roomKey === 'Bathroom' || roomKey === 'Restroom') {
@@ -2654,13 +2676,24 @@ ${contextOverride ? `- ROOM CHARACTER (overrides generic styling): ${contextOver
     `- Color science: neutral with mild warm bias, daylight white-balance calibrated to ~5200 K, mixed-light correction subtle. NO HDR halos, NO Instagram filter, NO saturation boost, NO orange-and-teal grade, NO Lightroom "architecture" preset, NO fake bloom or chromatic aberration. Skin-tone-safe palette.\n` +
     `- Light behaves physically: soft shadow gradients from windows; warm amber pools from concealed cove and downlights; material-accurate reflections (mirror polish shows the room cleanly, matte fabric absorbs light); contact shadows under every floor object.\n` +
     `- Composition: foreground element with crisp edge (table corner, plant leaf, book stack) → sharp mid-ground hero (the primary furniture group) → softer atmospheric background (focal-point wall, distant window). Rule of thirds with the hero group at the golden-section intersection. Generous 15-20 % breathing margin around the frame — NOTHING cropped at the edge.\n` +
-    `- Output target: the image must look indistinguishable from a Dezeen / ArchDaily / Wallpaper* / Frame project photograph — not a 3D visualisation, not an AI render, not a real-estate listing photo.`,
+    `- Output target: the image must look indistinguishable from a Dezeen / ArchDaily / Wallpaper* / Frame / AD / Pin-Up / El Croquis project photograph — not a 3D visualisation, not an AI render, not a real-estate listing photo.\n` +
+    `- EDITORIAL CALIBRATION: the photograph must read as an editorial feature, not a 3D modelling exercise. Apply the EDITORIAL DESIGN DEPTH block above as the photographic subject — a single hero moment, curated 4-7 vignettes max, real architectural detailing (reveals, custom millwork, integrated linear light, deep window reveals), patina and honest age on materials, decisive light drama with a single dominant source and quiet supporting sources, 10-15% negative space, styled "human just left" cues. The room must feel inhabited, intentional, and authored — not staged, not sanitized, not generic.\n` +
+    `- If the result starts to drift toward "generic modern interior", "luxury rental aesthetic", "IKEA showroom", "Pinterest moodboard", "AI clean staging", or "lifeless catalogue page" — pull back immediately and re-anchor to the EDITORIAL DESIGN DEPTH block.`,
   );
 
   // [9] FRAMING + CAMERA VANTAGE (rotates per generation so back-to-back
   // renders read as different shots of the same project)
   P.push(`Camera vantage (this pass): ${cameraVantage}`);
-  P.push(`Composition strategy (this pass — ${composition.name}): ${composition.desc} Full-frame with 15% breathing margin. All furniture fully visible — NOTHING cropped at frame edge. Clear foreground-midground-background depth layering. A curated vignette element in the near foreground (plant leaf edge, book corner, ceramic edge) creates editorial depth. The composition follows the rule of thirds with the primary furniture group at the golden ratio intersection.`);
+  P.push(
+    `Composition strategy (this pass — ${composition.name}): ${composition.desc}\n` +
+    `FRAMING DISCIPLINE (mandatory):\n` +
+    `- Full-frame architectural photograph with 15-20% breathing margin around the perimeter. The hero furniture group sits comfortably inside the frame — NEVER pressed against the edges.\n` +
+    `- NO CROPPING of furniture: every visible sofa, chair, table, lamp, console, bed, kitchen island, bar, shelf, vase, plant pot reads in full — no sofa cut in half by the frame edge, no half-table at the bottom, no half-lamp at the top, no half-window guillotined by the corner.\n` +
+    `- Plant pots, side tables, and small foreground objects either sit fully inside the frame OR are excluded entirely — no half-pots clinging to the bottom edge as fake "depth".\n` +
+    `- Verticals are absolutely plumb. Horizons are level. No Dutch tilt. No fisheye. No barrel distortion. No keystoning. Tilt-shift correction applied as a real architectural photographer would.\n` +
+    `- Clear foreground-midground-background depth layering. A SINGLE curated vignette element in the near foreground (one plant leaf edge, one book corner, one ceramic vessel rim) gives editorial depth — never a chaotic foreground clutter.\n` +
+    `- The primary furniture group sits at a rule-of-thirds / golden-section intersection. The focal-point wall reads clearly across the back third of the frame.`,
+  );
 
   // [9b] Pin-aligned zones (interior only — matches UI hotspot percentages)
   if (input.domain !== 'architecture') {
@@ -2737,7 +2770,30 @@ Apply the SHRE elemental palette, material picks, ceiling treatment, lighting, a
   const rawPrompt = P.join('\n\n');
   const finalPrompt = scrubBannedTokens(rawPrompt);
 
-  const negativePrompt = "3D render, CGI, concept art, Unreal Engine, V-Ray render, artificial perfection, plastic-looking surfaces, fisheye distortion, barrel distortion, tilted verticals, leaning walls, cropped furniture, cut-off edges, floating objects, furniture embedded in walls, impossible geometry, wrong proportions, oversized furniture, undersized furniture, blocked doorways, literal element symbols, actual flames, actual water waves, actual wind effects, soil or dirt piles, elemental symbols, cartoon, illustration, text overlay, watermarks, people, human figures, HDR tonemapping, Instagram filter, oversaturation, IKEA catalog look, Pinterest cliché, developer showroom, beige sofa repetition, symmetrical staged catalog, empty room, bare walls without texture, flat uniform surfaces without grain or variation, video game aesthetic, low resolution, blurry, noisy, compression artifacts, AI face artifacts, extra fingers, deformed objects, impossible shadows, multiple light source directions, clinical fluorescent lighting, random decorative objects with no purpose, meaningless accent lights, fake luxury gold trim, non-buildable fantasy forms, clutter, objects that serve no function, wrong room typology, residential sofa in coffee shop, living room posing as restaurant, generic showroom instead of named room type, bar without back-bar, kitchen without work surfaces, bedroom without bed, night scene without request, marble ceiling, marble box interior, sofa fused to kitchen island, film grain, speckle noise, fireflies, render noise, dust motes, airborne particles, floating white dots, salt and pepper noise, sparkle overlay, bokeh dots, grainy texture, noisy plaster, noisy marble, cinematic fantasy interior, spa cliché, utopian luxury scene, theatrical haze, volumetric god rays, dramatic orange glow, bathroom curtains, curtains in mirror, voile drapery, sheer curtains, indoor tree in bathroom, spa resort staging, wine glass on bath caddy, overdesigned spa bathroom, AI luxury fantasy, dreamy atmosphere, fake light leaks, decorative curtains without window, split composition, pendant light floating in mid air, chandelier centered on empty floor, pendant over nothing, wall sconce on blank wall, sconce with no function beside it, sofa facing blank wall, living room with no focal point, bedroom with no headboard wall, random window on blank wall, window behind sofa, window behind TV wall, window behind bathtub, mismatched window heads, scattered ceiling fixtures, too many pendants, lights without anchor surface, floating candles, candles suspended in air, glowing dots in mid air without holder, candles without wax body, candles without visible holder, wall candle holder without bracket, decor objects floating, vases floating, books floating, persian rug, oriental rug, kilim rug, turkish rug, anatolian rug, tribal pattern rug, ornate medallion rug, fringed domestic rug, persian rug in modern bar, oriental rug in contemporary lounge, kilim rug in minimalist room, tribal pattern rug in editorial hospitality, mismatched rug style, ornate domestic rug in commercial bar, clashing rug pattern, red persian rug, burgundy oriental rug, residential sofa inside bar, sectional fused to bar, lounge sofa wedged into bar working zone, sofa pushed against bar face, living room collaged into bar, two programs in one shot, bar with bedroom in the back, bar with reading nook in working zone, fragmented composition, half bright half pitch black room, dark void wall eating half the frame, incoherent lighting between zones, sunny bar plus dark cave lounge collision";
+  const negativePromptParts = [
+    "3D render, CGI, concept art, Unreal Engine, V-Ray render, artificial perfection, plastic-looking surfaces",
+    "fisheye distortion, barrel distortion, tilted verticals, leaning walls, Dutch tilt, keystoning",
+    "cropped furniture, cut-off edges, floating objects, furniture embedded in walls, impossible geometry, wrong proportions, oversized furniture, undersized furniture, blocked doorways",
+    "literal element symbols, actual flames, actual water waves, actual wind effects, soil or dirt piles, elemental symbols, cartoon, illustration, text overlay, watermarks, people, human figures",
+    "HDR tonemapping, Instagram filter, oversaturation, neon vibrancy, candy colors",
+    // ── DRY / SHOWROOM / GENERIC bans (new — addresses "მშრალი და უღიმღამო")
+    "IKEA catalog look, Pinterest cliché, developer showroom, beige sofa repetition, symmetrical staged catalog, generic AI modern interior, sanitized Airbnb modern, builder-grade contemporary, luxury rental hotel-suite blandness, lifeless catalogue render, dry interior, sterile interior, soulless interior, un-lived look, dead room, empty showroom feel, every-surface-decorated, equal-exposure CGI sunlight, flat ambient overhead glow, no shadow contrast, no hero piece, no focal lyric, no curatorial intent, anonymous modern minimalism, hotel lobby blandness, generic glass-and-marble luxury, generic Calacatta-everywhere look",
+    // ── DECOR FILLER bans
+    "pampas grass, dried branches as filler, identical scented candles in a row, stacks of unread coffee-table books as props only, perfectly fluffed throw pillows, perfectly symmetrical decor pairs, generic vase with twigs, twiggy filler, eucalyptus filler, monstera as filler",
+    "empty room, bare walls without texture, flat uniform surfaces without grain or variation, video game aesthetic, low resolution, blurry, noisy, compression artifacts, AI face artifacts, extra fingers, deformed objects, impossible shadows, multiple light source directions, clinical fluorescent lighting, random decorative objects with no purpose, meaningless accent lights, fake luxury gold trim, non-buildable fantasy forms, clutter, objects that serve no function",
+    "wrong room typology, residential sofa in coffee shop, living room posing as restaurant, generic showroom instead of named room type, bar without back-bar, kitchen without work surfaces, bedroom without bed, night scene without request, marble ceiling, marble box interior, sofa fused to kitchen island",
+    "film grain, speckle noise, fireflies, render noise, dust motes, airborne particles, floating white dots, salt and pepper noise, sparkle overlay, bokeh dots, grainy texture, noisy plaster, noisy marble",
+    "cinematic fantasy interior, spa cliché, utopian luxury scene, theatrical haze, volumetric god rays, dramatic orange glow",
+    "bathroom curtains, curtains in mirror, voile drapery, sheer curtains, indoor tree in bathroom, spa resort staging, wine glass on bath caddy, overdesigned spa bathroom, AI luxury fantasy, dreamy atmosphere, fake light leaks, decorative curtains without window, split composition",
+    "pendant light floating in mid air, chandelier centered on empty floor, pendant over nothing, wall sconce on blank wall, sconce with no function beside it, sofa facing blank wall, living room with no focal point, bedroom with no headboard wall, random window on blank wall, window behind sofa, window behind TV wall, window behind bathtub, mismatched window heads, scattered ceiling fixtures, too many pendants, lights without anchor surface",
+    "floating candles, candles suspended in air, glowing dots in mid air without holder, candles without wax body, candles without visible holder, wall candle holder without bracket, decor objects floating, vases floating, books floating",
+    "persian rug, oriental rug, kilim rug, turkish rug, anatolian rug, tribal pattern rug, ornate medallion rug, fringed domestic rug, persian rug in modern bar, oriental rug in contemporary lounge, kilim rug in minimalist room, tribal pattern rug in editorial hospitality, mismatched rug style, ornate domestic rug in commercial bar, clashing rug pattern, red persian rug, burgundy oriental rug",
+    "residential sofa inside bar, sectional fused to bar, lounge sofa wedged into bar working zone, sofa pushed against bar face, living room collaged into bar, two programs in one shot, bar with bedroom in the back, bar with reading nook in working zone",
+    "fragmented composition, half bright half pitch black room, dark void wall eating half the frame, incoherent lighting between zones, sunny bar plus dark cave lounge collision",
+    "furniture cropped at frame edge, sofa cut in half by edge, half table at frame bottom, half lamp at frame top, half window guillotined, half pot at frame edge, chaotic foreground clutter",
+    "plan drawing rendered as image, 2D floor plan as final image, top-down floor plan view, axonometric view, isometric view, CAD-looking diagram, blueprint look, technical drawing aesthetic, plan layout ignored, walls added that were not on the plan, walls deleted from the plan, furniture moved off the plan position, kitchen island added when plan has none, sofa added when plan has only chairs, dining table rotated 90 degrees from plan, dimensions ignored, scale ignored, oversized furniture for the m², undersized furniture for the m²",
+  ];
+  const negativePrompt = negativePromptParts.join(', ');
 
   const designSummary = buildDesignSummary(input, activeDist);
   
@@ -2918,6 +2974,8 @@ export interface PromptOptions {
   userNote?: string;
   /** Override session ordinal; default = state.generationHistory.length */
   sessionGenerationOrdinal?: number;
+  /** Structured text analysis of the uploaded floor plan (from analyzeFloorPlan). */
+  planAnalysis?: string;
 }
 
 // --- LEGACY WRAPPER FOR APP.TSX ---
@@ -2995,6 +3053,7 @@ export const buildUniversalPrompt = (state: UserState, options?: PromptOptions):
       photoUploaded: !!state.params.referenceImage,
       planUploaded: !!state.params.architecturalPlan,
       spacePhotoUploaded: !!state.params.spacePhoto,
+      planAnalysis: options?.planAnalysis,
     },
     spaceNote: state.params.spaceNote,
     spaceSummaryLine: state.params.spaceSummaryLine?.trim() || formatSpaceConfigOneLiner(state.params),

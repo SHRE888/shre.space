@@ -11,7 +11,7 @@ import AddCustomMaterialModal from './components/AddCustomMaterialModal';
 import { loadState, saveState, clearState } from './services/storageService';
 import { calculateAnalysis, buildUniversalPrompt, buildTargetedEditPrompt } from './services/promptEngine';
 import { buildDiagnosis } from './services/shreDiagnosis';
-import { generateImageFromPrompt, dataUrlToFile, setUserApiKey, hasUserApiKey } from './services/geminiService';
+import { generateImageFromPrompt, dataUrlToFile, setUserApiKey, hasUserApiKey, analyzeFloorPlan } from './services/geminiService';
 import { interpretRefinementFeedback } from './services/refinementFeedback';
 import { getInitialSelection, getSelectionFromPercentages } from './services/refinementLogic';
 import { SHORT_QUESTIONS, ELEMENT_COLORS, CANONICAL_MATERIALS, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER, MATERIAL_TEXTURE_TINT, generateSurveyQuestions } from './constants';
@@ -887,6 +887,10 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   const refinementFeedbackRef = React.useRef<string | null>(null);
   /** Prior targeted-edit instructions keyed by the image URL they were applied from (follow-up edits stay on-topic). */
   const editThreadsByImageUrlRef = React.useRef<Record<string, string[]>>({});
+  // Cache the result of the floor-plan pre-flight analysis so we only pay the
+  // text-model round-trip once per uploaded plan file (subsequent regenerations
+  // reuse the analysis until the user uploads a different plan).
+  const planAnalysisCacheRef = React.useRef<{ fileKey: string; text: string } | null>(null);
 
   const [scaleAreaDraft, setScaleAreaDraft] = useState(() => String(state.params.squareMeters ?? 120));
   const [scaleCeilingDraft, setScaleCeilingDraft] = useState(() => String(state.params.ceilingHeight ?? 2.8));
@@ -1312,6 +1316,36 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           if (!cancelled) finishGeneration(imgUrl, scaleSnap, editSnapshot);
         } else {
           editThreadsByImageUrlRef.current = {};
+
+          // ── Floor-plan pre-flight ────────────────────────────────────────
+          // When the user uploaded a plan, run a separate text-vision call to
+          // extract a structured architectural read-out (outline, dimensions,
+          // walls, doors, windows, furniture symbols, m²). Embedding that
+          // written description in the image prompt dramatically improves
+          // layout adherence, because the image model no longer has to read
+          // the plan AND paint the room in a single pass.
+          //
+          // Cached per-plan-file (size+name+lastModified) so subsequent
+          // regenerations of the same plan don't re-spend the analysis call.
+          let planAnalysisText: string | undefined;
+          const planForPreflight = (state.params as any).architecturalPlan as File | undefined;
+          if (planForPreflight) {
+            const fileKey = `${planForPreflight.name}|${planForPreflight.size}|${planForPreflight.lastModified}`;
+            if (planAnalysisCacheRef.current?.fileKey === fileKey) {
+              planAnalysisText = planAnalysisCacheRef.current.text;
+            } else {
+              try {
+                const analysis = await analyzeFloorPlan(planForPreflight);
+                if (analysis) {
+                  planAnalysisCacheRef.current = { fileKey, text: analysis };
+                  planAnalysisText = analysis;
+                }
+              } catch (planErr) {
+                console.warn('[App] Floor-plan pre-flight failed; falling back to image-only:', planErr);
+              }
+            }
+          }
+
           const stateForPrompt = {
             ...state,
             params: { ...state.params, squareMeters: scaleSnap.area, ceilingHeight: scaleSnap.ceil },
@@ -1319,6 +1353,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           const result = buildUniversalPrompt(stateForPrompt, {
             generationIndex: generationKey,
             refinementFeedback: feedback || undefined,
+            planAnalysis: planAnalysisText,
           });
           setStory(result.promptStory);
 
