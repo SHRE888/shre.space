@@ -24,9 +24,15 @@ import { getRecommendedProfessionalPartners, type ProfessionalPartner } from './
 // hatch that breaks the "build-key gets suspended → site dies" cycle.
 const ApiKeyEntryPanel = ({
   isSuspended,
+  isQuota,
   onSaved,
 }: {
   isSuspended: boolean;
+  /** True when the underlying error was RESOURCE_EXHAUSTED / rate-limit /
+   *  quota — the deployed key still works but has hit its daily ceiling.
+   *  The copy switches to "the shared key is throttled" framing so the
+   *  user understands their own key is the practical fix. */
+  isQuota?: boolean;
   onSaved: () => void;
 }) => {
   const [keyInput, setKeyInput] = React.useState('');
@@ -59,12 +65,27 @@ const ApiKeyEntryPanel = ({
   return (
     <div className="mt-4 mb-2 w-full rounded-xl border border-gray-200 bg-white p-5 text-left">
       <p className="text-[12px] uppercase tracking-[0.25em] font-semibold text-gray-700 mb-2">
-        {isSuspended ? 'ააამოქმედე ერთი წუთში' : 'API key გესაჭიროება'}
+        {isQuota
+          ? 'Quota ამოწურულია — ჩასვი შენი key'
+          : isSuspended
+            ? 'ააამოქმედე ერთი წუთში'
+            : 'API key გესაჭიროება'}
       </p>
       <p className="text-[12.5px] text-gray-600 leading-[1.6] mb-4">
-        Google-ის key {isSuspended ? '„suspended"-ად მონიშნა' : 'არ მუშაობს'}. შენი პირადი key
-        ჩასვი ქვემოთ — ის ჩაიწერება მხოლოდ <span className="font-medium">ამ ბრაუზერში</span>, არსად არ
-        გადაიგზავნება, არც gitში, არც deploy-ში. შენი key ვერავინ ნახავს.
+        {isQuota ? (
+          <>
+            ამ საიტს დღევანდელი ლიმიტი ამოეწურა Google-ის უფასო quota-ზე. შენი პირადი key
+            ჩასვი ქვემოთ — გენერაცია მაშინ შენი key-ით წავა. Key ჩაიწერება მხოლოდ{' '}
+            <span className="font-medium">ამ ბრაუზერში</span>, არსად არ გადაიგზავნება, არც git-ში, არც
+            deploy-ში. შენი key ვერავინ ნახავს.
+          </>
+        ) : (
+          <>
+            Google-ის key {isSuspended ? '„suspended"-ად მონიშნა' : 'არ მუშაობს'}. შენი პირადი key
+            ჩასვი ქვემოთ — ის ჩაიწერება მხოლოდ <span className="font-medium">ამ ბრაუზერში</span>, არსად არ
+            გადაიგზავნება, არც git-ში, არც deploy-ში. შენი key ვერავინ ნახავს.
+          </>
+        )}
       </p>
 
       <ol className="text-[12px] text-gray-500 leading-[1.7] space-y-1 list-decimal pl-5 mb-4">
@@ -1440,9 +1461,16 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
   // --- ERROR STATE ---
   if (genError) {
-    const isKeyProblem =
-      /GEMINI_KEY_SUSPENDED|GEMINI_KEY_INVALID|suspend|consumer_suspended|api key/i.test(genError);
+    // Quota / rate-limit errors are technically not "wrong key" issues, but
+    // the only practical fix from the browser is for the user to plug in
+    // their own (un-throttled) Gemini key. So we route quota errors into
+    // the same key-entry panel — labelled as "quota exceeded" so the copy
+    // is honest. Without this branch the user is stuck on a dead-end
+    // "გენერაცია ვერ შესრულდა" message with no recovery path.
     const isSuspended = /GEMINI_KEY_SUSPENDED|suspend/i.test(genError);
+    const isInvalid = /GEMINI_KEY_INVALID|api key not valid|invalid api key/i.test(genError);
+    const isQuota = /quota|resource_exhausted|rate limit|429/i.test(genError);
+    const isKeyProblem = isSuspended || isInvalid || isQuota || /api key/i.test(genError);
     return (
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-[#fafafa] relative overflow-hidden px-4 py-8 overflow-y-auto">
         <div className="relative z-10 flex flex-col items-center max-w-lg px-6 w-full">
@@ -1450,7 +1478,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={domColor} strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           </div>
           <h2 className="text-[14px] uppercase tracking-[0.4em] font-semibold text-gray-600 mb-3 text-center">
-            {isKeyProblem ? 'API Key გესაჭიროება' : 'გენერაცია ვერ შესრულდა'}
+            {isQuota ? 'API Quota ამოწურულია' : isKeyProblem ? 'API Key გესაჭიროება' : 'გენერაცია ვერ შესრულდა'}
           </h2>
           {!isKeyProblem && (
             <p className="text-[13px] text-gray-500 text-center leading-relaxed mb-2">{genError}</p>
@@ -1459,6 +1487,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           {isKeyProblem && (
             <ApiKeyEntryPanel
               isSuspended={isSuspended}
+              isQuota={isQuota}
               onSaved={() => {
                 setGenError(null);
                 setLoading(true);
