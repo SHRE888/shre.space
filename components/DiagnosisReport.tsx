@@ -121,7 +121,7 @@ export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onE
             Ring left, bars right, vertically centred so the row feels
             visually balanced. Bars sit inside a fixed-column grid so
             every row is mirror-symmetric to the others. */}
-        <section className="mb-5 flex items-center justify-center gap-5 sm:gap-7">
+        <section className="mb-5 flex items-center justify-center gap-6 sm:gap-8 max-w-[520px] mx-auto">
           {/* Ring */}
           <div
             className="w-[96px] h-[96px] rounded-full flex items-center justify-center shrink-0"
@@ -147,7 +147,7 @@ export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onE
           </div>
 
           {/* Bars */}
-          <div className="flex-1 max-w-[300px] space-y-2">
+          <div className="flex-1 min-w-0 space-y-2">
             {sorted.map(([el, val], i) => (
               <div key={el} className="grid grid-cols-[52px_1fr_34px] items-center gap-3">
                 <span
@@ -213,9 +213,15 @@ export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onE
             >
               Material Palette
             </p>
-            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 max-w-[440px] mx-auto">
+            {/* Materials grid spans the SAME width as the bars + pills band
+                above (560 px) so the right column reaches the same x-axis
+                as the bar percentages. Both columns are equal halves of the
+                container, gap-x sized so the two columns sit symmetrically
+                inside the band — same distance to the left edge of the
+                card as to the right edge. */}
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 sm:gap-x-14 gap-y-1.5 w-full max-w-[520px] mx-auto px-2">
               {diagnosis.materials.map((m) => (
-                <li key={m.id} className="flex items-center gap-2.5">
+                <li key={m.id} className="flex items-center gap-2.5 min-w-0">
                   <span
                     className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
                     style={{ backgroundColor: ELEMENT_COLORS[m.primaryElement] }}
