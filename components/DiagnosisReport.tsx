@@ -1,25 +1,30 @@
 /**
- * SHRE Diagnosis Report — client-facing 7-section view.
+ * SHRE Diagnosis Report — concise, single-render client-facing view.
  *
- * Renders the full Diagnosis object produced by services/shreDiagnosis.ts.
- * Sections appear in the spec order:
+ * Lay-out brief (rebuilt per user request "ლაკონური, მკაფიო, ერთხელ
+ * დაიწეროს"):
+ *   ┌ Header ───────────────────────────────────────────────┐
+ *   │ DIAGNOSTIC REPORT · SHRE · Composition: <…>          │
+ *   ├ HERO ─────────────────────────────────────────────────┤
+ *   │ Ring (primary %)   ◯  Distribution bars (4 stacked)  │
+ *   │                       Primary · Secondary metadata    │
+ *   ├ ESSENCE ──────────────────────────────────────────────┤
+ *   │ Style · Palette · Composition pills                   │
+ *   │ Short 2-3-sentence summary (primary + spatial guide)  │
+ *   ├ MATERIALS ────────────────────────────────────────────┤
+ *   │ Compact pill list — coloured dot + label              │
+ *   └ ACTIONS ──────────────────────────────────────────────┘
  *
- *   1. Elemental Distribution (ring + bars)
- *   2. Primary Element (behaviour + spatial preference)
- *   3. Secondary Element (or "Minimal composition" note when absent)
- *   4. Style Direction (one of 6)
- *   5. Color Logic (one of 4)
- *   6. Material Mapping (5–7 materials with elemental % per material)
- *   7. Spatial Guidance (prose, approved vocabulary only)
+ * Animation: ONE coordinated fade-in for the entire report (0.6 s ease-out).
+ * No per-section cascade. That removes the perceived "multiple loads" the
+ * staggered version produced.
  *
- * Visual language reuses tokens already in the app (no new design system):
- *   - background  #fafafa
- *   - section dividers are 1px hairlines
- *   - typography:  uppercase tracking labels + light body weight
- *   - element colours come from ELEMENT_COLORS in constants.tsx
- *
- * The user advances to the workspace by clicking "Enter Workspace" — there
- * is no auto-redirect; the report is a real read.
+ * The 7-section diagnosis object is still consumed — we just present it
+ * tightly. All seven pieces of information are still on the page:
+ *   • primary + secondary collapsed into one metadata row;
+ *   • style direction + palette collapsed into one pills row;
+ *   • primary explanation + spatial guidance collapsed into ONE paragraph;
+ *   • materials shown as compact rows without the role-register sub-label.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -29,22 +34,30 @@ import { ELEMENT_COLORS } from '../constants';
 interface DiagnosisReportProps {
   diagnosis: Diagnosis;
   onEnterWorkspace: () => void;
-  /**
-   * Optional shortcut: skip the workspace and start the generation flow
-   * immediately. When present, the report footer renders a second primary
-   * action ("Generate") next to "Enter Workspace" — the user can either
-   * customise their materials/atmosphere first (workspace) or generate the
-   * default brief produced by this diagnosis right now.
-   */
+  /** When present, shows a second primary action ("Generate") that skips
+   *  the workspace and runs generation with the diagnosis defaults. */
   onGenerateDirectly?: () => void;
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+/** Take a multi-sentence string and return the first N sentences joined,
+ *  trimmed. Used to keep the long Spatial Guidance paragraph short on the
+ *  results page — the full text is still available on the workspace. */
+const firstSentences = (text: string | undefined, n: number): string => {
+  if (!text) return '';
+  const sentences = text
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(/(?<=[.!?])\s+/)
+    .filter(Boolean);
+  return sentences.slice(0, n).join(' ').trim();
+};
+
 export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onEnterWorkspace, onGenerateDirectly }) => {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 60);
+    const t = setTimeout(() => setMounted(true), 40);
     return () => clearTimeout(t);
   }, []);
 
@@ -53,6 +66,17 @@ export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onE
   const total = sorted.reduce((s, [, v]) => s + v, 0);
   const primaryEl = diagnosis.primary.element;
   const primaryColor = ELEMENT_COLORS[primaryEl];
+  const secondaryEl = diagnosis.secondary?.element;
+
+  // Build a tight 2-3 sentence summary: first sentence of the primary
+  // explanation + first sentence of the spatial guidance. Keeps the read
+  // sharp without losing the most actionable content from each section.
+  const summary = [
+    firstSentences(diagnosis.primary.explanation, 1),
+    firstSentences(diagnosis.spatialGuidance, 1),
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div
@@ -65,213 +89,140 @@ export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onE
       }}
     >
       <style>{`
-        @keyframes reportFadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes reportBarGrow{from{width:0}to{width:var(--bar-w)}}
-        .report-section{animation: reportFadeIn 0.55s ease-out both;}
+        @keyframes reportFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes reportBarGrow { from { width: 0; } to { width: var(--bar-w); } }
       `}</style>
 
       <div
-        className={`max-w-2xl w-full mx-auto transition-opacity duration-700 ${mounted ? 'opacity-100' : 'opacity-0'}`}
+        className="max-w-xl w-full mx-auto"
+        style={{
+          animation: mounted ? 'reportFadeIn 0.55s ease-out both' : undefined,
+          opacity: mounted ? 1 : 0,
+        }}
       >
-        {/* Header — SHRE branding + report kicker. Tightened from
-            mb-10/12 → mb-6/8 to remove the long blank ribbon before the
-            ring; the SHRE kicker line is merged into the composition
-            line below the title to save another row. */}
-        <header className="text-center mb-6 sm:mb-8 report-section" style={{ animationDelay: '0ms' }}>
-          <h1 className="text-[20px] sm:text-[24px] font-light tracking-[0.18em] uppercase text-[#1a1a1a]">
+        {/* ────────── HEADER ────────── */}
+        <header className="text-center mb-7 sm:mb-9">
+          <h1 className="text-[18px] sm:text-[22px] font-light tracking-[0.22em] uppercase text-[#1a1a1a]">
             Diagnostic Report
           </h1>
           <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.3em] font-light text-gray-400 mt-1.5">
-            SHRE · Composition: {diagnosis.composition}
+            SHRE · {diagnosis.composition}
           </p>
         </header>
 
-        {/* ───── SECTION 1 — ELEMENTAL DISTRIBUTION ───── */}
-        <section className="mb-6 sm:mb-8 report-section" style={{ animationDelay: '80ms' }}>
-          <SectionLabel index={1} title="Elemental Distribution" />
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-10">
-            {/* Ring */}
-            <div
-              className="w-24 h-24 rounded-full flex items-center justify-center shrink-0"
-              style={{
-                background: `conic-gradient(${sorted
-                  .map(([el, val], i) => {
-                    const start = sorted.slice(0, i).reduce((s, [, v]) => s + (v / Math.max(total, 1)) * 360, 0);
-                    const end = start + (val / Math.max(total, 1)) * 360;
-                    return `${ELEMENT_COLORS[el]} ${start}deg ${end}deg`;
-                  })
-                  .join(', ')})`,
-                boxShadow: `0 0 30px ${primaryColor}25`,
-              }}
-            >
-              <div className="w-[68px] h-[68px] rounded-full bg-[#fafafa] flex items-center justify-center">
-                <span className="text-[20px] font-light tabular-nums" style={{ color: primaryColor }}>
-                  {pct[primaryEl]}%
+        {/* ────────── HERO — RING + DISTRIBUTION ──────────
+            One row on desktop (ring left, bars right), stacked on mobile.
+            No per-section label here — the visual itself IS the section. */}
+        <section className="mb-7 sm:mb-9 flex flex-col sm:flex-row items-center sm:items-center gap-6 sm:gap-9">
+          {/* Ring */}
+          <div
+            className="w-[104px] h-[104px] rounded-full flex items-center justify-center shrink-0"
+            style={{
+              background: `conic-gradient(${sorted
+                .map(([el, val], i) => {
+                  const start = sorted.slice(0, i).reduce((s, [, v]) => s + (v / Math.max(total, 1)) * 360, 0);
+                  const end = start + (val / Math.max(total, 1)) * 360;
+                  return `${ELEMENT_COLORS[el]} ${start}deg ${end}deg`;
+                })
+                .join(', ')})`,
+              boxShadow: `0 0 36px ${primaryColor}25`,
+            }}
+          >
+            <div className="w-[78px] h-[78px] rounded-full bg-[#fafafa] flex flex-col items-center justify-center">
+              <span className="text-[22px] font-light tabular-nums leading-none" style={{ color: primaryColor }}>
+                {pct[primaryEl]}%
+              </span>
+              <span className="text-[9px] uppercase tracking-[0.22em] text-gray-400 mt-1">
+                {cap(primaryEl)}
+              </span>
+            </div>
+          </div>
+
+          {/* Bars */}
+          <div className="flex-1 w-full space-y-2.5">
+            {sorted.map(([el, val], i) => (
+              <div key={el} className="flex items-center gap-3">
+                <span
+                  className="text-[10px] uppercase tracking-[0.18em] w-12 text-right font-medium"
+                  style={{ color: ELEMENT_COLORS[el], opacity: i === 0 ? 1 : 0.6 }}
+                >
+                  {cap(el)}
+                </span>
+                <div
+                  className="flex-1 h-[5px] rounded-full overflow-hidden"
+                  style={{ background: `${ELEMENT_COLORS[el]}12` }}
+                >
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      ['--bar-w' as string]: `${val}%`,
+                      width: `${val}%`,
+                      background: `linear-gradient(90deg, ${ELEMENT_COLORS[el]}cc, ${ELEMENT_COLORS[el]})`,
+                      animation: mounted ? `reportBarGrow 0.6s ease-out ${0.1 + i * 0.06}s both` : undefined,
+                    }}
+                  />
+                </div>
+                <span
+                  className="text-[12px] font-mono tabular-nums w-9 text-right"
+                  style={{
+                    color: ELEMENT_COLORS[el],
+                    fontWeight: i === 0 ? 600 : 400,
+                    opacity: i === 0 ? 1 : 0.55,
+                  }}
+                >
+                  {val}%
                 </span>
               </div>
-            </div>
-            {/* Bars */}
-            <div className="flex-1 w-full space-y-2.5">
-              {sorted.map(([el, val], i) => (
-                <div key={el} className="flex items-center gap-3">
-                  <span
-                    className="text-[10px] uppercase tracking-[0.18em] w-14 text-right font-medium tabular-nums"
-                    style={{ color: ELEMENT_COLORS[el], opacity: i === 0 ? 1 : 0.65 }}
-                  >
-                    {cap(el)}
-                  </span>
-                  <div
-                    className="flex-1 h-[6px] rounded-full overflow-hidden"
-                    style={{ background: `${ELEMENT_COLORS[el]}10` }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        ['--bar-w' as string]: `${val}%`,
-                        width: `${val}%`,
-                        background: `linear-gradient(90deg, ${ELEMENT_COLORS[el]}cc, ${ELEMENT_COLORS[el]})`,
-                        animation: `reportBarGrow 0.7s ease-out ${0.2 + i * 0.1}s both`,
-                      }}
-                    />
-                  </div>
-                  <span
-                    className="text-[12px] font-mono tabular-nums w-10 text-right"
-                    style={{
-                      color: ELEMENT_COLORS[el],
-                      fontWeight: i === 0 ? 600 : 400,
-                      opacity: i === 0 ? 1 : 0.6,
-                    }}
-                  >
-                    {val}%
-                  </span>
-                </div>
-              ))}
-            </div>
+            ))}
           </div>
         </section>
 
-        {/* ───── SECTION 2 — PRIMARY ELEMENT ───── */}
-        <section className="mb-6 sm:mb-8 report-section" style={{ animationDelay: '160ms' }}>
-          <SectionLabel index={2} title="Primary Element" />
-          <div className="flex items-center gap-3 mb-3">
-            <span
-              className="inline-block w-2 h-2 rounded-full"
-              style={{ backgroundColor: ELEMENT_COLORS[diagnosis.primary.element] }}
-            />
-            <p
-              className="text-[14px] sm:text-[15px] uppercase tracking-[0.22em] font-medium"
-              style={{ color: ELEMENT_COLORS[diagnosis.primary.element] }}
-            >
-              {cap(diagnosis.primary.element)} · {pct[diagnosis.primary.element]}%
-            </p>
+        {/* ────────── ESSENCE — META PILLS + SHORT SUMMARY ────────── */}
+        <section className="mb-7 sm:mb-9">
+          {/* Meta pills row: secondary element + style + palette. */}
+          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2 mb-5">
+            {secondaryEl && (
+              <Pill
+                accent={ELEMENT_COLORS[secondaryEl]}
+                label={`+ ${cap(secondaryEl)} · ${pct[secondaryEl]}%`}
+              />
+            )}
+            <Pill label={diagnosis.styleDirection} />
+            <Pill label={diagnosis.palette} />
           </div>
-          <p className="text-[13px] sm:text-[14px] leading-[1.7] font-light text-[#2a2a2a]">
-            {diagnosis.primary.explanation}
-          </p>
-        </section>
 
-        {/* ───── SECTION 3 — SECONDARY ELEMENT ───── */}
-        <section className="mb-6 sm:mb-8 report-section" style={{ animationDelay: '240ms' }}>
-          <SectionLabel index={3} title="Secondary Element" />
-          {diagnosis.secondary ? (
-            <>
-              <div className="flex items-center gap-3 mb-3">
-                <span
-                  className="inline-block w-2 h-2 rounded-full"
-                  style={{ backgroundColor: ELEMENT_COLORS[diagnosis.secondary.element] }}
-                />
-                <p
-                  className="text-[14px] sm:text-[15px] uppercase tracking-[0.22em] font-medium"
-                  style={{ color: ELEMENT_COLORS[diagnosis.secondary.element] }}
-                >
-                  {cap(diagnosis.secondary.element)} · {pct[diagnosis.secondary.element]}%
-                </p>
-              </div>
-              <p className="text-[13px] sm:text-[14px] leading-[1.7] font-light text-[#2a2a2a]">
-                {diagnosis.secondary.explanation}
-              </p>
-            </>
-          ) : (
-            <p className="text-[13px] sm:text-[14px] leading-[1.7] font-light text-[#666] italic">
-              Minimal composition — only one element carries meaningful presence at this distribution. The primary register operates alone; supporting elements enter only as small accents.
+          {/* Short summary — one tight paragraph instead of three. */}
+          {summary && (
+            <p className="text-[13px] sm:text-[14px] leading-[1.7] font-light text-[#2a2a2a] text-center max-w-[44ch] mx-auto">
+              {summary}
             </p>
           )}
         </section>
 
-        {/* ───── SECTION 4 — STYLE DIRECTION ───── */}
-        <section className="mb-6 sm:mb-8 report-section" style={{ animationDelay: '320ms' }}>
-          <SectionLabel index={4} title="Style Direction" />
-          <p className="text-[14px] sm:text-[15px] uppercase tracking-[0.22em] font-medium text-[#1a1a1a] mb-3">
-            {diagnosis.styleDirection}
-          </p>
-          <p className="text-[13px] sm:text-[14px] leading-[1.7] font-light text-[#2a2a2a]">
-            {diagnosis.styleDirectionReason}
-          </p>
-        </section>
+        {/* ────────── MATERIALS — COMPACT LIST ────────── */}
+        {diagnosis.materials && diagnosis.materials.length > 0 && (
+          <section className="mb-8 sm:mb-10">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-medium text-center mb-3">
+              Material Palette
+            </p>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+              {diagnosis.materials.map((m) => (
+                <li key={m.id} className="flex items-center gap-2.5">
+                  <span
+                    className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ backgroundColor: ELEMENT_COLORS[m.primaryElement] }}
+                  />
+                  <span className="text-[12px] sm:text-[13px] font-light text-[#1a1a1a] truncate">
+                    {m.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-        {/* ───── SECTION 5 — COLOR LOGIC ───── */}
-        <section className="mb-6 sm:mb-8 report-section" style={{ animationDelay: '400ms' }}>
-          <SectionLabel index={5} title="Color Logic" />
-          <p className="text-[14px] sm:text-[15px] uppercase tracking-[0.22em] font-medium text-[#1a1a1a] mb-3">
-            {diagnosis.palette}
-          </p>
-          <p className="text-[13px] sm:text-[14px] leading-[1.7] font-light text-[#2a2a2a]">
-            {diagnosis.paletteReason}
-          </p>
-        </section>
-
-        {/* ───── SECTION 6 — MATERIAL MAPPING ───── */}
-        <section className="mb-6 sm:mb-8 report-section" style={{ animationDelay: '480ms' }}>
-          <SectionLabel index={6} title="Material Mapping" />
-          <ul className="space-y-2.5">
-            {diagnosis.materials.map((m) => (
-              <li key={m.id} className="flex items-baseline gap-3">
-                <span
-                  className="inline-block w-1.5 h-1.5 rounded-full shrink-0 translate-y-[1px]"
-                  style={{ backgroundColor: ELEMENT_COLORS[m.primaryElement] }}
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] sm:text-[14px] font-light text-[#1a1a1a]">
-                    <span className="font-medium">{m.label}</span>
-                    <span className="text-gray-400 mx-2">—</span>
-                    <span className="text-[12px] sm:text-[13px] font-mono tabular-nums text-[#444]">
-                      {(['earth', 'fire', 'water', 'air'] as Element[])
-                        .filter((el) => m.percentages[el] > 0)
-                        .map((el) => `${cap(el)} ${m.percentages[el]}%`)
-                        .join(' · ')}
-                    </span>
-                  </p>
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-gray-400 font-light mt-0.5">
-                    {m.role} register
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* ───── SECTION 7 — SPATIAL GUIDANCE ───── */}
-        <section className="mb-6 sm:mb-8 report-section" style={{ animationDelay: '560ms' }}>
-          <SectionLabel index={7} title="Spatial Guidance" />
-          <p className="text-[13px] sm:text-[14px] leading-[1.7] font-light text-[#2a2a2a] whitespace-pre-line">
-            {diagnosis.spatialGuidance}
-          </p>
-        </section>
-
-        {/* ───── FOOTER — TWO PATHS ─────
-            The user explicitly asked for both a customise-first path and a
-            generate-now path on this screen:
-              • "Enter Workspace" → the existing flow: refine materials /
-                atmosphere first, then generate from the workspace.
-              • "Generate" → shortcut: run the generation pipeline straight
-                away using the diagnosis defaults. The actual auto-start is
-                wired in App.tsx (sets a sessionStorage flag that the
-                WorkspacePage picks up on mount). Only rendered when the
-                parent provides the `onGenerateDirectly` callback. */}
-        <footer
-          className="pt-5 border-t border-[#e5e5e5] report-section"
-          style={{ animationDelay: '640ms' }}
-        >
+        {/* ────────── ACTIONS ────────── */}
+        <footer className="pt-5 border-t border-[#e5e5e5]">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2.5 sm:gap-3">
             <button
               type="button"
@@ -291,9 +242,7 @@ export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onE
             )}
           </div>
           <p className="text-[10px] uppercase tracking-[0.3em] font-light text-gray-400 text-center mt-3">
-            {onGenerateDirectly
-              ? 'Refine first · or render now'
-              : 'Refine materials and atmosphere · render the space'}
+            {onGenerateDirectly ? 'Refine first · or render now' : 'Refine materials and atmosphere'}
           </p>
         </footer>
       </div>
@@ -301,14 +250,15 @@ export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onE
   );
 };
 
-const SectionLabel: React.FC<{ index: number; title: string }> = ({ index, title }) => (
-  // mb-4 → mb-3 to bring the section content closer to its label, part of
-  // the overall report-shortening pass requested by the user.
-  <div className="flex items-center gap-3 mb-3">
-    <span className="text-[10px] uppercase tracking-[0.3em] font-mono tabular-nums text-gray-400">
-      {String(index).padStart(2, '0')}
+/** Compact uppercase pill used in the Essence meta row. Optional accent
+ *  colour tints a small leading dot — used for the secondary-element pill. */
+const Pill: React.FC<{ label: string; accent?: string }> = ({ label, accent }) => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-[#e0e0e0] rounded-full bg-white/60">
+    {accent && (
+      <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
+    )}
+    <span className="text-[10px] sm:text-[11px] uppercase tracking-[0.22em] font-medium text-[#1a1a1a]">
+      {label}
     </span>
-    <span className="h-px flex-1 bg-[#e5e5e5]" />
-    <span className="text-[10px] uppercase tracking-[0.3em] font-medium text-[#1a1a1a]">{title}</span>
-  </div>
+  </span>
 );
