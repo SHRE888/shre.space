@@ -335,6 +335,13 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
 
     // Happy path — render the SHRE 7-section diagnostic report.
     if (diagnosis) {
+      // Suppress the WorkspacePage welcome overlay — the diagnostic report
+      // already shows the dominant-energy reveal, the vertical bar chart,
+      // and the secondary-influence line in the same visual language. The
+      // overlay re-presenting the same info felt redundant ("ორჯერ არარის
+      // საჭირო"). Setting the sessionStorage flag here so WorkspacePage's
+      // `surveyJustDone` predicate evaluates to false on mount.
+      try { sessionStorage.setItem('shre_welcome_shown', '1'); } catch {}
       return (
         <DiagnosisReport
           diagnosis={diagnosis}
