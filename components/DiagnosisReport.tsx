@@ -1,34 +1,33 @@
 /**
- * SHRE Diagnosis Report — concise, single-render client-facing view.
+ * SHRE Diagnosis Report — concise, single-render, symmetrically centred.
  *
- * Lay-out brief (rebuilt per user request "ლაკონური, მკაფიო, ერთხელ
- * დაიწეროს"):
+ * Visual hierarchy (top → bottom, every block centre-aligned):
  *   ┌ Header ───────────────────────────────────────────────┐
- *   │ DIAGNOSTIC REPORT · SHRE · Composition: <…>          │
+ *   │ DIAGNOSTIC REPORT · SHRE · <Composition Mode>        │
  *   ├ HERO ─────────────────────────────────────────────────┤
- *   │ Ring (primary %)   ◯  Distribution bars (4 stacked)  │
- *   │                       Primary · Secondary metadata    │
+ *   │            ◉  Ring (primary % + element)              │
+ *   ├ DISTRIBUTION ─────────────────────────────────────────┤
+ *   │            ▤  4 bars, centred column                  │
  *   ├ ESSENCE ──────────────────────────────────────────────┤
- *   │ Style · Palette · Composition pills                   │
- *   │ Short 2-3-sentence summary (primary + spatial guide)  │
+ *   │       ( +SECONDARY )( STYLE )( PALETTE ) pills        │
+ *   │       short 2-sentence summary                        │
  *   ├ MATERIALS ────────────────────────────────────────────┤
- *   │ Compact pill list — coloured dot + label              │
- *   └ ACTIONS ──────────────────────────────────────────────┘
+ *   │       MATERIAL PALETTE                                │
+ *   │       •  one centred column of pills                  │
+ *   ├ ACTIONS ──────────────────────────────────────────────┤
+ *   │       [ Enter Workspace ] [ Generate ]                │
+ *   └───────────────────────────────────────────────────────┘
  *
- * Animation: ONE coordinated fade-in for the entire report (0.6 s ease-out).
- * No per-section cascade. That removes the perceived "multiple loads" the
- * staggered version produced.
+ * Animation: ONE coordinated fade-in for the entire report (0.55 s
+ * ease-out). Bars animate widths inside the same fade. No per-section
+ * staggered cascade — that was the "loads multiple times" perception.
  *
- * The 7-section diagnosis object is still consumed — we just present it
- * tightly. All seven pieces of information are still on the page:
- *   • primary + secondary collapsed into one metadata row;
- *   • style direction + palette collapsed into one pills row;
- *   • primary explanation + spatial guidance collapsed into ONE paragraph;
- *   • materials shown as compact rows without the role-register sub-label.
+ * All seven pieces of the Diagnosis object are still on the page —
+ * presented tightly so the read is a single sharp moment.
  */
 
 import React, { useEffect, useState } from 'react';
-import type { Element, Diagnosis } from '../types';
+import type { Element, Diagnosis, CompositionMode } from '../types';
 import { ELEMENT_COLORS } from '../constants';
 
 interface DiagnosisReportProps {
@@ -41,17 +40,26 @@ interface DiagnosisReportProps {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** Take a multi-sentence string and return the first N sentences joined,
- *  trimmed. Used to keep the long Spatial Guidance paragraph short on the
- *  results page — the full text is still available on the workspace. */
+/** Pretty-print a PascalCase CompositionMode enum value:
+ *  "SingleDominant" → "Single Dominant", "NarrowLead" → "Narrow Lead",
+ *  "DualCore" → "Dual Core", "Triadic" → "Triadic", "Minimal" → "Minimal".
+ *  Without this the header reads "SHRE · SINGLEDOMINANT" — ugly. */
+const prettyComposition = (mode: CompositionMode): string =>
+  mode.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+/** First N sentences of a paragraph, joined and trimmed. Used to keep the
+ *  diagnosis summary tight (2 sentences max) — full prose lives in the
+ *  workspace if the user wants the deep read. */
 const firstSentences = (text: string | undefined, n: number): string => {
   if (!text) return '';
-  const sentences = text
+  return text
     .replace(/\s+/g, ' ')
     .trim()
     .split(/(?<=[.!?])\s+/)
-    .filter(Boolean);
-  return sentences.slice(0, n).join(' ').trim();
+    .filter(Boolean)
+    .slice(0, n)
+    .join(' ')
+    .trim();
 };
 
 export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onEnterWorkspace, onGenerateDirectly }) => {
@@ -68,9 +76,9 @@ export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onE
   const primaryColor = ELEMENT_COLORS[primaryEl];
   const secondaryEl = diagnosis.secondary?.element;
 
-  // Build a tight 2-3 sentence summary: first sentence of the primary
-  // explanation + first sentence of the spatial guidance. Keeps the read
-  // sharp without losing the most actionable content from each section.
+  // Tight 2-sentence summary: primary-element insight + spatial-guidance
+  // opener. The full prose for each section is still accessible from the
+  // workspace; this page is a sharp single-glance read.
   const summary = [
     firstSentences(diagnosis.primary.explanation, 1),
     firstSentences(diagnosis.spatialGuidance, 1),
@@ -94,29 +102,26 @@ export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onE
       `}</style>
 
       <div
-        className="max-w-xl w-full mx-auto"
+        className="max-w-[520px] w-full mx-auto text-center"
         style={{
           animation: mounted ? 'reportFadeIn 0.55s ease-out both' : undefined,
           opacity: mounted ? 1 : 0,
         }}
       >
         {/* ────────── HEADER ────────── */}
-        <header className="text-center mb-7 sm:mb-9">
+        <header className="mb-8 sm:mb-10">
           <h1 className="text-[18px] sm:text-[22px] font-light tracking-[0.22em] uppercase text-[#1a1a1a]">
             Diagnostic Report
           </h1>
-          <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.3em] font-light text-gray-400 mt-1.5">
-            SHRE · {diagnosis.composition}
+          <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.3em] font-light text-gray-400 mt-2">
+            SHRE · {prettyComposition(diagnosis.composition)}
           </p>
         </header>
 
-        {/* ────────── HERO — RING + DISTRIBUTION ──────────
-            One row on desktop (ring left, bars right), stacked on mobile.
-            No per-section label here — the visual itself IS the section. */}
-        <section className="mb-7 sm:mb-9 flex flex-col sm:flex-row items-center sm:items-center gap-6 sm:gap-9">
-          {/* Ring */}
+        {/* ────────── HERO RING (centred, alone) ────────── */}
+        <section className="mb-8 sm:mb-10 flex justify-center">
           <div
-            className="w-[104px] h-[104px] rounded-full flex items-center justify-center shrink-0"
+            className="w-[124px] h-[124px] rounded-full flex items-center justify-center"
             style={{
               background: `conic-gradient(${sorted
                 .map(([el, val], i) => {
@@ -125,94 +130,99 @@ export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onE
                   return `${ELEMENT_COLORS[el]} ${start}deg ${end}deg`;
                 })
                 .join(', ')})`,
-              boxShadow: `0 0 36px ${primaryColor}25`,
+              boxShadow: `0 0 48px ${primaryColor}1f`,
             }}
           >
-            <div className="w-[78px] h-[78px] rounded-full bg-[#fafafa] flex flex-col items-center justify-center">
-              <span className="text-[22px] font-light tabular-nums leading-none" style={{ color: primaryColor }}>
+            <div className="w-[96px] h-[96px] rounded-full bg-[#fafafa] flex flex-col items-center justify-center">
+              <span
+                className="text-[26px] sm:text-[28px] font-light tabular-nums leading-none"
+                style={{ color: primaryColor }}
+              >
                 {pct[primaryEl]}%
               </span>
-              <span className="text-[9px] uppercase tracking-[0.22em] text-gray-400 mt-1">
+              <span className="text-[9px] uppercase tracking-[0.3em] text-gray-400 mt-1.5">
                 {cap(primaryEl)}
               </span>
             </div>
           </div>
+        </section>
 
-          {/* Bars */}
-          <div className="flex-1 w-full space-y-2.5">
-            {sorted.map(([el, val], i) => (
-              <div key={el} className="flex items-center gap-3">
-                <span
-                  className="text-[10px] uppercase tracking-[0.18em] w-12 text-right font-medium"
-                  style={{ color: ELEMENT_COLORS[el], opacity: i === 0 ? 1 : 0.6 }}
-                >
-                  {cap(el)}
-                </span>
+        {/* ────────── DISTRIBUTION BARS (centred column) ──────────
+            Each row is a 3-cell grid (label · bar · %) with fixed column
+            widths so every row reads as a perfectly symmetric mirror of
+            the others. Bars sit inside a max-width band so the block
+            stays visually centred regardless of viewport. */}
+        <section className="mb-9 sm:mb-11 max-w-[360px] mx-auto space-y-2.5">
+          {sorted.map(([el, val], i) => (
+            <div key={el} className="grid grid-cols-[56px_1fr_38px] items-center gap-3">
+              <span
+                className="text-[10px] uppercase tracking-[0.2em] text-right font-medium"
+                style={{ color: ELEMENT_COLORS[el], opacity: i === 0 ? 1 : 0.55 }}
+              >
+                {cap(el)}
+              </span>
+              <div
+                className="h-[5px] rounded-full overflow-hidden"
+                style={{ background: `${ELEMENT_COLORS[el]}14` }}
+              >
                 <div
-                  className="flex-1 h-[5px] rounded-full overflow-hidden"
-                  style={{ background: `${ELEMENT_COLORS[el]}12` }}
-                >
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      ['--bar-w' as string]: `${val}%`,
-                      width: `${val}%`,
-                      background: `linear-gradient(90deg, ${ELEMENT_COLORS[el]}cc, ${ELEMENT_COLORS[el]})`,
-                      animation: mounted ? `reportBarGrow 0.6s ease-out ${0.1 + i * 0.06}s both` : undefined,
-                    }}
-                  />
-                </div>
-                <span
-                  className="text-[12px] font-mono tabular-nums w-9 text-right"
+                  className="h-full rounded-full"
                   style={{
-                    color: ELEMENT_COLORS[el],
-                    fontWeight: i === 0 ? 600 : 400,
-                    opacity: i === 0 ? 1 : 0.55,
+                    ['--bar-w' as string]: `${val}%`,
+                    width: `${val}%`,
+                    background: `linear-gradient(90deg, ${ELEMENT_COLORS[el]}b3, ${ELEMENT_COLORS[el]})`,
+                    animation: mounted ? `reportBarGrow 0.6s ease-out ${0.12 + i * 0.06}s both` : undefined,
                   }}
-                >
-                  {val}%
-                </span>
+                />
               </div>
-            ))}
-          </div>
+              <span
+                className="text-[12px] font-mono tabular-nums text-right"
+                style={{
+                  color: ELEMENT_COLORS[el],
+                  fontWeight: i === 0 ? 600 : 400,
+                  opacity: i === 0 ? 1 : 0.55,
+                }}
+              >
+                {val}%
+              </span>
+            </div>
+          ))}
         </section>
 
         {/* ────────── ESSENCE — META PILLS + SHORT SUMMARY ────────── */}
-        <section className="mb-7 sm:mb-9">
-          {/* Meta pills row: secondary element + style + palette. */}
-          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2 mb-5">
+        <section className="mb-9 sm:mb-11">
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-5">
             {secondaryEl && (
-              <Pill
-                accent={ELEMENT_COLORS[secondaryEl]}
-                label={`+ ${cap(secondaryEl)} · ${pct[secondaryEl]}%`}
-              />
+              <Pill accent={ELEMENT_COLORS[secondaryEl]} label={`+ ${cap(secondaryEl)} · ${pct[secondaryEl]}%`} />
             )}
             <Pill label={diagnosis.styleDirection} />
             <Pill label={diagnosis.palette} />
           </div>
 
-          {/* Short summary — one tight paragraph instead of three. */}
           {summary && (
-            <p className="text-[13px] sm:text-[14px] leading-[1.7] font-light text-[#2a2a2a] text-center max-w-[44ch] mx-auto">
+            <p className="text-[13px] sm:text-[14px] leading-[1.7] font-light text-[#2a2a2a] max-w-[44ch] mx-auto">
               {summary}
             </p>
           )}
         </section>
 
-        {/* ────────── MATERIALS — COMPACT LIST ────────── */}
+        {/* ────────── MATERIALS — CENTRED SINGLE COLUMN ──────────
+            A symmetric centred list reads cleaner than a 2-column grid
+            with uneven-length labels. With 5-7 materials this stays
+            short; the visual rhythm of "dot + label" repeats neatly. */}
         {diagnosis.materials && diagnosis.materials.length > 0 && (
-          <section className="mb-8 sm:mb-10">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-medium text-center mb-3">
+          <section className="mb-10 sm:mb-12">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-medium mb-4">
               Material Palette
             </p>
-            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+            <ul className="inline-flex flex-col items-start gap-y-2 mx-auto text-left">
               {diagnosis.materials.map((m) => (
-                <li key={m.id} className="flex items-center gap-2.5">
+                <li key={m.id} className="flex items-center gap-3">
                   <span
                     className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
                     style={{ backgroundColor: ELEMENT_COLORS[m.primaryElement] }}
                   />
-                  <span className="text-[12px] sm:text-[13px] font-light text-[#1a1a1a] truncate">
+                  <span className="text-[12.5px] sm:text-[13.5px] font-light text-[#1a1a1a]">
                     {m.label}
                   </span>
                 </li>
@@ -222,12 +232,12 @@ export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onE
         )}
 
         {/* ────────── ACTIONS ────────── */}
-        <footer className="pt-5 border-t border-[#e5e5e5]">
+        <footer className="pt-6 border-t border-[#e8e8e8]">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2.5 sm:gap-3">
             <button
               type="button"
               onClick={onEnterWorkspace}
-              className="px-6 py-3 min-h-[44px] uppercase tracking-[0.25em] text-[11px] sm:text-[12px] font-medium border border-[#1a1a1a] text-[#1a1a1a] bg-[#fafafa] hover:bg-[#f0f0f0] active:bg-[#e5e5e5] transition-colors duration-300 touch-manipulation"
+              className="px-7 py-3 min-h-[44px] uppercase tracking-[0.25em] text-[11px] sm:text-[12px] font-medium border border-[#1a1a1a] text-[#1a1a1a] bg-[#fafafa] hover:bg-[#f0f0f0] active:bg-[#e5e5e5] transition-colors duration-300 touch-manipulation"
             >
               Enter Workspace
             </button>
@@ -235,13 +245,13 @@ export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onE
               <button
                 type="button"
                 onClick={onGenerateDirectly}
-                className="px-6 py-3 min-h-[44px] uppercase tracking-[0.25em] text-[11px] sm:text-[12px] font-medium border border-[#1a1a1a] bg-[#1a1a1a] text-[#fafafa] hover:bg-[#000] active:bg-[#000] transition-colors duration-300 touch-manipulation"
+                className="px-7 py-3 min-h-[44px] uppercase tracking-[0.25em] text-[11px] sm:text-[12px] font-medium border border-[#1a1a1a] bg-[#1a1a1a] text-[#fafafa] hover:bg-[#000] active:bg-[#000] transition-colors duration-300 touch-manipulation"
               >
                 Generate
               </button>
             )}
           </div>
-          <p className="text-[10px] uppercase tracking-[0.3em] font-light text-gray-400 text-center mt-3">
+          <p className="text-[10px] uppercase tracking-[0.3em] font-light text-gray-400 mt-3.5">
             {onGenerateDirectly ? 'Refine first · or render now' : 'Refine materials and atmosphere'}
           </p>
         </footer>
@@ -250,10 +260,11 @@ export const DiagnosisReport: React.FC<DiagnosisReportProps> = ({ diagnosis, onE
   );
 };
 
-/** Compact uppercase pill used in the Essence meta row. Optional accent
- *  colour tints a small leading dot — used for the secondary-element pill. */
+/** Compact uppercase pill for the Essence meta row. Optional leading dot
+ *  tints with an accent colour — used by the secondary-element pill so
+ *  the colour code links back to the ring/bars without extra labelling. */
 const Pill: React.FC<{ label: string; accent?: string }> = ({ label, accent }) => (
-  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-[#e0e0e0] rounded-full bg-white/60">
+  <span className="inline-flex items-center gap-1.5 px-3 py-1 border border-[#e5e5e5] rounded-full bg-white/70">
     {accent && (
       <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: accent }} />
     )}
