@@ -18,6 +18,7 @@ import {
   ELEMENT_DAYLIGHT_QUALITY,
   ELEMENT_ACCENT_DECOR,
   ROOM_ATMOSPHERE_REFINEMENT,
+  expandAdjectivesWithMeaning,
 } from './shrePrompt';
 
 /** One-line summary of workspace space config; shown/edited in results footer and fed to the image prompt */
@@ -155,6 +156,8 @@ export const calculateAnalysis = (state: UserState): AnalysisResult => {
   const scores: Record<Element, number> = { earth: 0, fire: 0, water: 0, air: 0 };
   Object.entries(state.shortSurveyAnswers).forEach(([qId, answerIdx]) => {
     const question = SHORT_QUESTIONS.find((q) => q.id === qId);
+    // The colour question is multi-select and scored separately below.
+    if (question && question.options.some((o) => o.color)) return;
     if (question && question.options[answerIdx]) {
       const weights = question.options[answerIdx].weights;
       Object.entries(weights).forEach(([el, weight]) => {
@@ -162,6 +165,22 @@ export const calculateAnalysis = (state: UserState): AnalysisResult => {
       });
     }
   });
+
+  // Colour-palette question (Q5) is multi-select: the user may pick up to 4
+  // swatches. Each picked colour adds its full weights so a set of e.g. four
+  // earthy tones pushes Earth strongly, while a mixed set spreads evenly. The
+  // colour question is identified by its options carrying a `color` field.
+  const colorQuestion = SHORT_QUESTIONS.find((q) => q.options.some((o) => o.color));
+  if (colorQuestion && state.shortSurveyColorAnswers && state.shortSurveyColorAnswers.length) {
+    state.shortSurveyColorAnswers.forEach((idx) => {
+      const opt = colorQuestion.options[idx];
+      if (opt) {
+        Object.entries(opt.weights).forEach(([el, weight]) => {
+          if (weight) scores[el as Element] += weight;
+        });
+      }
+    });
+  }
 
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0) || 1;
   const raw: Record<Element, number> = {
@@ -2042,7 +2061,7 @@ export const buildGenerationPackage = (input: PromptInput): GenerationPackage =>
   // Atmosphere
   const userAdjectives = input.adjectivesSelected.map(a => a.label);
   const atmosphereBlock = userAdjectives.length > 0
-    ? `Atmosphere requirements: ${userAdjectives.join(', ')}. These define the experiential character — every material, light source, and spatial proportion must reinforce these qualities.`
+    ? `Atmosphere requirements (each adjective is defined — the render must visibly satisfy every definition through buildable material, light, and proportion, never as literal symbols): ${expandAdjectivesWithMeaning(userAdjectives)}. These define the experiential character — every material, light source, and spatial proportion must reinforce these qualities.`
     : `Atmosphere: ${profile.atmospherePhrases.slice(0, balancedBlend ? 6 : 4).join(', ')}. Blend strength must track the Earth/Fire/Water/Air percentages — no single phrase may erase a sizeable share.`;
 
   // Composition cycling
@@ -2528,6 +2547,19 @@ ${contextOverride ? `- ROOM CHARACTER (overrides generic styling): ${contextOver
     : `DOMINANT ENERGY: ${primary.toUpperCase()} (${Math.round(activeDist[primary])}%) — this defines the entire spatial character`;
   P.push(`${domHead}.\nGeometry: ${domBrief.geometry}\nMaterials: ${domBrief.materialWeight}\nForms: ${domBrief.formLanguage}\nMaterial application: ${domBrief.materialApplication}\nLighting: ${domBrief.lightingLogic}\nSpatial feel: ${domBrief.spatialHierarchy}\nSTRICTLY AVOID: ${domBrief.avoidStrict}`);
 
+  // [4a] MATERIAL FIDELITY OVERRIDE — when the client has an explicit material
+  //      palette, the named stones/metals/woods in the element briefs above
+  //      (travertine, corten, nero marquina, green onyx, …) are CHARACTER cues
+  //      only and must not appear as literal surfaces. This stops the render
+  //      from showing materials (e.g. travertine) that never appear in the
+  //      client's "Materials used" panel — the exact mismatch we're fixing.
+  if (input.materialsSelected.length > 0) {
+    const lockedNames = input.materialsSelected.slice(0, 14).map((m) => m.name).join(', ');
+    P.push(
+      `MATERIAL FIDELITY OVERRIDE (HIGHEST AUTHORITY — overrides every material named in the element briefs above): The ONLY real material identities allowed in this render are the client's selected materials: ${lockedNames}. Any specific stone, metal, wood, or plaster named in the element/character briefs above (e.g. travertine, corten steel, nero marquina, green onyx, rainforest marble) is a CHARACTER REFERENCE ONLY — it conveys weight, finish, temperature and mood, and must NOT be rendered as a literal material unless it appears in the client's selected list. Express each element's character (mass, finish, tactility, temperature) THROUGH the selected materials. If a selected material does not suit a particular surface, use it sparingly or leave that surface in a neutral plaster/paint — do NOT substitute a different named material. Every prominent visible surface must be traceable to one of the client's selected materials; introducing an unlisted feature stone or metal is a failure.`,
+    );
+  }
+
   // [4b] Secondary + supporting energy influences (intensity scales with share vs top element)
   const supportParts: string[] = [];
   const maxShare = Math.max(...sorted.map((el) => activeDist[el]), 1);
@@ -2569,7 +2601,15 @@ ${contextOverride ? `- ROOM CHARACTER (overrides generic styling): ${contextOver
     balancedBlend || (Math.abs(primaryPctCombo - secondaryPct) <= 3 && primaryPctCombo >= 15 && secondaryPct >= 15);
   if (!skipPairAccent && secondaryPct >= 15 && COMBO_ACCENTS[comboKey]) {
     const intensity = secondaryPct >= 30 ? 'prominently' : secondaryPct >= 20 ? 'noticeably' : 'subtly';
-    P.push(`ELEMENT COMBINATION (${primary}+${secondary}, ${secondaryPct}% ${secondary}): ${intensity} integrate these accent elements: ${COMBO_ACCENTS[comboKey]}`);
+    // When the client has an explicit material palette, the combo-accent text
+    // names specific stones/metals (marble, travertine, brass, corten…) that
+    // would reintroduce the mismatch the fidelity override just removed. In
+    // that case keep ONLY the spatial/colour intent and defer all material
+    // identity to the selected palette.
+    const comboText = input.materialsSelected.length > 0
+      ? `${COMBO_ACCENTS[comboKey]} (MATERIAL NOTE: treat the specific materials named here as colour/mood accents only — render them using the client's selected materials, do not add unlisted stones or metals.)`
+      : COMBO_ACCENTS[comboKey];
+    P.push(`ELEMENT COMBINATION (${primary}+${secondary}, ${secondaryPct}% ${secondary}): ${intensity} integrate these accent elements: ${comboText}`);
   }
 
   // [5] FURNITURE & OBJECTS

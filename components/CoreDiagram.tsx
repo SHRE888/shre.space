@@ -68,6 +68,8 @@ interface CoreDiagramProps {
   domain?: string;
   gathering?: boolean;
   onGatherComplete?: () => void;
+  /** Briefly highlights a bead after the user adds a material (workspace picker). */
+  highlightMaterialId?: string | null;
 }
 
 export interface PresetCombo {
@@ -75,9 +77,9 @@ export interface PresetCombo {
   prompt: string; angle: number; dominant?: Element; reinforcer?: Element; supporter?: Element;
 }
 
-/** Used only for angular spacing math (smaller ⇒ more room in narrow sectors); visuals are larger. */
 /** ~half of on-screen material bead for angular clearance */
-const MATERIAL_RING_PACKING_RADIUS_PX = 30;
+const MATERIAL_RING_PACKING_RADIUS_PX = 34;
+const MATERIAL_BEAD_MIN_GAP_PX = 62;
 const ATMOSPHERE_RING_PACKING_RADIUS_PX = 14;
 
 const MAT_TEX: Record<string, string> = MATERIAL_SPHERE_IMAGES;
@@ -299,6 +301,33 @@ function sectorPosRingItemsInLayout(
   return { x: Math.cos(a) * effOrbit, y: Math.sin(a) * effOrbit };
 }
 
+/** Push overlapping ring beads apart so added materials never stack as ghosts. */
+function resolveRingCollisions(positions: Record<string, { x: number; y: number }>, minGap: number) {
+  const keys = Object.keys(positions);
+  if (keys.length < 2) return positions;
+  const next = { ...positions };
+  for (let pass = 0; pass < 4; pass++) {
+    for (let i = 0; i < keys.length; i++) {
+      for (let j = i + 1; j < keys.length; j++) {
+        const a = keys[i];
+        const b = keys[j];
+        const p1 = next[a];
+        const p2 = next[b];
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const d = Math.hypot(dx, dy);
+        if (d >= minGap || d < 1e-4) continue;
+        const push = (minGap - d) / 2;
+        const nx = dx / d;
+        const ny = dy / d;
+        next[a] = { x: p1.x - nx * push, y: p1.y - ny * push };
+        next[b] = { x: p2.x + nx * push, y: p2.y + ny * push };
+      }
+    }
+  }
+  return next;
+}
+
 function hexToRgba(hex: string, a: number): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return `rgba(136,136,136,${a})`;
@@ -410,42 +439,36 @@ const CONCEPT_HEADLINES: Record<Element, string[]> = {
   air: ['Futuristic Ethereal Light', 'Iridescent Forward Vision', 'Cosmic Translucent Clarity'],
 };
 
+// ── ATMOSPHERE REFERENCES ─────────────────────────────────────────────────────
+// One entry per canonical atmosphere WORD (4 per element — matching
+// adjectivesCatalog.ts). Each entry shows a real interior image plus a short
+// "what this word means visually in an interior" description so the user can
+// literally see the meaning of every atmosphere adjective. All images are
+// local (/public/references/) — no external hotlinks that can die.
 const ATMO_REFS: Record<Element, { title: string; style: string; desc: string; img?: string }[]> = {
   earth: [
-    { title: 'Wabi-Sabi Retreat', style: 'Aged patina, reclaimed timber, raw plaster', desc: 'Weathered wood beams, cracked plaster walls, jute rugs, handmade ceramics — imperfect beauty', img: 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=600&q=80&fit=crop' },
-    { title: 'Green Stone Kitchen', style: 'Dramatic veined marble with warm walnut', desc: 'Green onyx island, walnut cabinetry, woven pendants, sage velvet stools, aged brass', img: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80&fit=crop' },
-    { title: 'Desert Earth Villa', style: 'Rammed earth, terracotta, desert planting', desc: 'Warm ochre plaster walls, cacti courtyard, teak loungers, lap pool — primal warmth', img: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&q=80&fit=crop' },
-    { title: 'Restored Stone Palazzo', style: 'Ancient walls with modern intervention', desc: 'Double-height rough stone, heavy timber beams, linen sofas, glass table — time layered', img: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=600&q=80&fit=crop' },
-    { title: 'Nordic Earth Living', style: 'Polished concrete, reclaimed wood, warm plaster', desc: 'Steel-frame windows, walnut display cabinet, ceramic collection, olive cushions — refined warmth', img: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=600&q=80&fit=crop' },
-    { title: 'Rustic Wabi-Sabi', style: 'Rough-hewn timber, aged ceramics, warm light', desc: 'Reclaimed wood columns, raw plaster patches, branch arrangements, warm amber glow', img: 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=600&q=80&fit=crop' },
+    { title: 'grounded',  style: 'Heavy stone wall, low anchored seating', desc: 'Massive stone wall, low grounded sofas sitting close to the floor — rooted, anchored, nothing floats.', img: '/references/earth-stone-wall-living.png' },
+    { title: 'tactile',   style: 'Reclaimed timber, raw plaster, ceramics', desc: 'Rough reclaimed wood, cracked plaster and handmade ceramics — surfaces you instinctively want to touch.', img: '/references/earth-wabisabi-restaurant.png' },
+    { title: 'mineral',   style: 'Bare stone, mineral plaster, honest rock', desc: 'Exposed natural stone and mineral plaster — the honest geology of the material left visible.', img: '/references/earth-stone-palazzo.png' },
+    { title: 'warm mass', style: 'Solid warm volumes, glowing hearth', desc: 'Thick warm-toned volumes and a glowing fireplace — heavy, comforting, enveloping mass.', img: '/references/earth-rustic-fireplace.png' },
   ],
   fire: [
-    { title: 'Corten Living Room', style: 'Corten steel wall, dark marble, rust velvet', desc: 'Full-height corten rust panel, nero marquina marble accent, deep cognac velvet sofa, blackened steel shelving with warm LED glow', img: 'https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?w=600&q=80&fit=crop' },
-    { title: 'Dark Copper Kitchen', style: 'Oxidized copper fronts, dark herringbone, brass pendants', desc: 'Copper-clad island, dark wood herringbone floor, polished copper sphere pendants, matte black cabinet wall — warm industrial luxury', img: 'https://images.unsplash.com/photo-1556909172-54557c7e4fb7?w=600&q=80&fit=crop' },
-    { title: 'Corten Exterior Portal', style: 'Monumental corten facade, deep entry portal', desc: 'Full-facade corten cladding with natural rust patina, tall slot windows, dark wood portal entry, reflecting pool — monumental warmth', img: 'https://images.unsplash.com/photo-1600607687644-c7171b42498f?w=600&q=80&fit=crop' },
-    { title: 'Moody Brass Living', style: 'Polished brass tables, concrete, rust sofa', desc: 'Cylindrical polished brass coffee tables, exposed concrete wall, gold leaf panel, brown leather sofa, warm directional light — cinematic moody', img: 'https://images.unsplash.com/photo-1600210492493-0946911123ea?w=600&q=80&fit=crop' },
-    { title: 'Dramatic Fireplace Lounge', style: 'Statement fireplace, dark tones, warm amber', desc: 'Oversized linear fireplace, charcoal plaster walls, cognac leather seating, warm pendant lights — intense evening atmosphere', img: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=600&q=80&fit=crop' },
-    { title: 'Industrial Loft', style: 'Exposed brick, steel beams, Edison bulbs', desc: 'Raw brick walls, blackened steel staircase, warm filament bulbs, concrete floor, vintage leather — bold urban warmth', img: 'https://images.unsplash.com/photo-1600607687644-c7171b42498f?w=600&q=80&fit=crop' },
+    { title: 'moody',     style: 'Deep dark walls, low warm lamplight', desc: 'Dark charcoal/navy walls lit only by warm pools of lamplight — intimate, shadowed, moody.', img: '/references/fire-dark-elegance.png' },
+    { title: 'cinematic', style: 'High-contrast staging, brass, marble', desc: 'Charcoal room, dramatic marble fireplace and brass accents staged like a film set — cinematic contrast.', img: '/references/fire-bold-dramatic.png' },
+    { title: 'intense',   style: 'Bold dark masses, single glowing focus', desc: 'Heavy dark forms with one concentrated glowing focal point — bold, decisive, intense.', img: '/references/fire-bold-dramatic.png' },
+    { title: 'oxidized',  style: 'Aged metal, dark walnut, warm patina', desc: 'Aged metals, dark walnut and warm rust-toned patina — the burnished warmth of oxidised surfaces.', img: '/references/fire-dark-elegance.png' },
   ],
   water: [
-    { title: 'Reflective Spa Lounge', style: 'Polished surfaces, calm pools, soft light', desc: 'Mirror-polished stone floors, still water features, diffused ambient light, cream bouclé sofas — immersive reflective serenity', img: 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=600&q=80&fit=crop' },
-    { title: 'Minimal Pool Villa', style: 'Infinity edge, white stone, blue reflection', desc: 'Clean-edged infinity pool, white limestone deck, sheer curtains, Mediterranean blue — fluid calm luxury', img: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=600&q=80&fit=crop' },
-    { title: 'Glass & Steel Bathroom', style: 'Floor-to-ceiling glass, polished chrome, rain shower', desc: 'Frameless glass enclosure, polished stainless fixtures, microcement walls, floating vanity — sculptural water ritual', img: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=600&q=80&fit=crop' },
-    { title: 'Coastal Living Room', style: 'Ocean tones, natural linen, driftwood', desc: 'Pale blue-grey walls, linen sofas, shell accents, panoramic ocean view, bleached wood — serene coastal living', img: 'https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=600&q=80&fit=crop' },
-    { title: 'Marble & Water Feature', style: 'Flowing water wall, veined marble, ambient glow', desc: 'Floor-to-ceiling water cascade over honed marble, recessed LED coves, floating bench — meditative fluid space', img: 'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=600&q=80&fit=crop' },
-    { title: 'Nordic Blue Kitchen', style: 'Deep blue cabinetry, brass hardware, cool tones', desc: 'Midnight blue lacquer fronts, veined marble counters, brushed brass pulls, pendant globes — calm sophisticated depth', img: 'https://images.unsplash.com/photo-1556909114-44e3e70034e2?w=600&q=80&fit=crop' },
+    { title: 'reflective', style: 'Polished stone, mirrors, calm light', desc: 'Mirror-polished stone and calm reflective surfaces under soft light — serene, still, reflective.', img: '/references/water-marble-bath.jpg' },
+    { title: 'flowing',    style: 'Soft rounded forms, neutral palette', desc: 'Soft rounded furniture and a continuous neutral palette — everything reads as gentle, uninterrupted flow.', img: '/references/water-soft-fluid.jpg' },
+    { title: 'immersive',  style: 'Enveloping soft textiles, calm tones', desc: 'Layered soft textiles in calm tones that wrap around you — quiet, immersive comfort.', img: '/references/water-serene-comfort.jpg' },
+    { title: 'sculptural', style: 'Sculpted freestanding stone forms', desc: 'Freestanding honed-stone forms shaped like sculpture — fluid, sculptural water ritual.', img: '/references/water-marble-bath.jpg' },
   ],
-  // ── AIR REFERENCES ────────────────────────────────────────────
-  // User-curated set of 4 architectural images that cycle through the
-  // Air slot of the Atmosphere References panel. Each one expresses a
-  // distinct Air register (veil / wave / cloud / mirror) so the panel
-  // rotates among genuinely different atmospheres rather than near-
-  // duplicate gallery shots. Images live in /public/references/.
   air: [
-    { title: 'Veiled Pavilion Facade', style: 'Sheer white scrim, glass ground level, vertical lightness', desc: 'Translucent white fabric scrim panels rising above a glass-enclosed ground floor — ethereal monumentality, daylight passing through cloth, weightless verticality', img: '/references/air-veiled-pavilion.png' },
-    { title: 'Wave Hall', style: 'Undulating ribbed walls, mirror columns, white concrete', desc: 'Continuously curving white ribbed wall, polished steel column reflections, sculptural rounded furniture in pearl-silver — fluid ceremonial volume in pure white', img: '/references/air-wave-hall.png' },
-    { title: 'Cloud Reception', style: 'Sculptural ceiling cloud, textured travertine desk, blue glass accent', desc: 'Pleated white sculptural ceiling, hand-carved travertine reception block, sheer white seating, translucent blue glass occasional table — silent luminous interior', img: '/references/air-cloud-lobby.png' },
-    { title: 'Mirror Ribbon Lounge', style: 'Chrome curve ceiling, fluted columns, pale blue accents', desc: 'Sculptural chrome ribbon arcing across a white plaster ceiling, fluted column rhythm, pale blue rug, white upholstered dining chairs — iridescent ceremonial lightness', img: '/references/air-mirror-ribbon.png' },
+    { title: 'ethereal',   style: 'Sheer white scrim, daylight through cloth', desc: 'Translucent white scrim with daylight passing through fabric — weightless, ethereal monumentality.', img: '/references/air-veiled-pavilion.png' },
+    { title: 'weightless', style: 'Undulating white walls, mirror columns', desc: 'Curving white ribbed walls and reflective columns — a volume that feels like it has no weight.', img: '/references/air-wave-hall.png' },
+    { title: 'luminous',   style: 'Sculptural ceiling cloud, soft glow', desc: 'Pleated white sculptural ceiling washed in soft daylight — silent, luminous, full of light.', img: '/references/air-cloud-lobby.png' },
+    { title: 'futuristic', style: 'Chrome ribbon, fluted columns, pale blue', desc: 'A sweeping chrome ribbon over pale plaster — forward-looking, iridescent, futuristic lightness.', img: '/references/air-mirror-ribbon.png' },
   ],
 };
 
@@ -472,7 +495,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
   onAdjust, onToggleLock, onToggleMaterial, disabledMaterialIds, onToggleMaterialEnabled, onToggleAtmosphere, isMuted = false,
   onBrilliantChange, isMatrixOpen = false, onRotationSnap, onGenerate,
   onToggleDiagnostic, onToggleGuide, onTutorialComplete, spaceCategory, rooms, domain,
-  gathering = false, onGatherComplete,
+  gathering = false, onGatherComplete, highlightMaterialId = null,
 }) => {
   const cRef = useRef<HTMLDivElement>(null);
   const nucleusRef = useRef<HTMLDivElement>(null);
@@ -559,8 +582,11 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
 
   const matsByEl = useMemo(() => {
     const g: Record<Element, MaterialDef[]> = { earth: [], fire: [], water: [], air: [] };
+    const seen = new Set<string>();
     selectedMaterials.forEach(m => {
-      g[m.element].push(m);
+      if (seen.has(m.id)) return;
+      seen.add(m.id);
+      g[m.element]?.push(m);
     });
     return g;
   }, [selectedMaterials]);
@@ -629,15 +655,15 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
     const map: Record<string, { x: number; y: number }> = {};
     ELEMENTS.forEach(el => {
       matsByEl[el].forEach((m, i) => {
-        map[m.name] = sectorPosRingItemsInLayout(el, i, matsByEl[el].length, matOrbR, sectorLayout, {
+        map[m.id] = sectorPosRingItemsInLayout(el, i, matsByEl[el].length, matOrbR, sectorLayout, {
           orbRadiusPx: MATERIAL_RING_PACKING_RADIUS_PX,
           edgeFrac: 0.09,
           minEdgeRad: Math.PI / 22,
-          ringStepPx: 26,
+          ringStepPx: 32,
         });
       });
     });
-    return map;
+    return resolveRingCollisions(map, MATERIAL_BEAD_MIN_GAP_PX);
   }, [matsByEl, matOrbR, sectorLayout]);
 
   const adjsByEl = useMemo(() => {
@@ -1020,15 +1046,16 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
 
         {/* ═══ Material beads — element border ring, names on hover (label toward center) ═══ */}
         {!showAllMats && selectedMaterials.map(mat => {
-          const p = matPositions[mat.name]; if (!p) return null;
+          const p = matPositions[mat.id]; if (!p) return null;
           const mc = MUTED_COLORS[mat.element];
           const isDom = mat.element === dom;
           const tex = MAT_TEX[mat.name];
           const isExp = expMat === mat.name;
           const matOn = isMaterialEnabled(mat.id, disabledMaterialIds);
           const ringExp = expandedRing === 'mat';
+          const isHighlighted = highlightMaterialId === mat.id;
           const baseSz = 54;
-          const sz = isExp ? 92 : ringExp ? baseSz + 8 : baseSz;
+          const sz = isExp ? 92 : isHighlighted ? baseSz + 10 : ringExp ? baseSz + 8 : baseSz;
           const cx = ctr + p.x;
           const cy = ctr + p.y;
           const ang = Math.atan2(p.y, p.x);
@@ -1050,14 +1077,14 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           };
           const showLabel = isExp || ringExp;
           return (
-            <div key={mat.name} className="absolute group orb-item"
+            <div key={mat.id} className="absolute group orb-item"
               style={{
                 left: cx, top: cy, transform: 'translate(-50%, -50%)',
-                transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)',
-                zIndex: isExp ? 26 : ringExp ? 18 : 15,
+                transition: 'all 0.45s cubic-bezier(0.34,1.56,0.64,1)',
+                zIndex: isExp ? 26 : isHighlighted ? 24 : ringExp ? 18 : 15,
                 cursor: 'pointer',
-                opacity: matOn ? 1 : 0.42,
-                filter: matOn ? 'none' : 'grayscale(0.4)',
+                opacity: matOn ? 1 : 0.38,
+                filter: matOn ? 'none' : 'grayscale(0.55) saturate(0.7)',
               }}
               onClick={handleMatClick}
               onMouseEnter={e => { if (!isExp) { (e.currentTarget as HTMLElement).style.transform = 'translate(-50%, -50%) scale(1.08)'; (e.currentTarget as HTMLElement).style.zIndex = '25'; } }}
@@ -1071,7 +1098,9 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 background: tex
                   ? 'transparent'
                   : `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)`,
-                boxShadow: isExp
+                boxShadow: isHighlighted
+                  ? `0 0 0 3px ${mc}55, 0 0 28px ${mc}66, 0 4px 16px rgba(0,0,0,0.14)`
+                  : isExp
                   ? `0 0 22px ${mc}66, 0 4px 16px rgba(0,0,0,0.14)`
                   : matOn
                     ? `0 0 14px ${mc}38, 0 2px 10px rgba(0,0,0,0.10)`
@@ -1329,29 +1358,17 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                   </svg>
                 );
               })()}
-              <div className="flex flex-col items-center justify-center mt-1" style={{ gap: 3 }}>
-                <span
-                  className="uppercase font-medium text-center leading-tight"
-                  style={{
-                    fontSize: 9,
-                    color: 'rgba(255,255,255,0.5)',
-                    letterSpacing: '0.32em',
-                    textShadow: '0 1px 6px rgba(0,0,0,0.12)',
-                  }}
-                >
-                  {dom}
-                </span>
+              <div className="flex flex-col items-center justify-center mt-1">
                 <span
                   className="tabular-nums font-extralight leading-none text-center"
                   style={{
-                    fontSize: 14,
-                    color: 'rgba(255,255,255,0.88)',
-                    letterSpacing: '0.04em',
-                    textShadow: '0 1px 6px rgba(0,0,0,0.15)',
+                    fontSize: 13,
+                    color: 'rgba(255,255,255,0.75)',
+                    letterSpacing: '0.02em',
+                    textShadow: '0 1px 6px rgba(0,0,0,0.12)',
                   }}
                 >
                   {Math.round(distribution[dom])}
-                  <span style={{ fontSize: 9, fontWeight: 500, opacity: 0.5, marginLeft: 1 }}>%</span>
                 </span>
               </div>
             </div>

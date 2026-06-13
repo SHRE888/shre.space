@@ -66,6 +66,10 @@ export interface QuestionOption {
   text: string;
   weights: Partial<Record<Element, number>>;
   image?: string;
+  /** Solid swatch colour (hex) for colour-based questions (e.g. the Q5
+   *  palette step). When present the survey renders a colour tile instead
+   *  of a photo. */
+  color?: string;
 }
 
 export interface Question {
@@ -258,6 +262,9 @@ export interface UserState {
     spaceSummaryLine?: string;
   };
   shortSurveyAnswers: Record<string, number>;
+  /** Multi-select picks for the colour-palette question (Q5): up to 4 option
+   *  indices. Scored in addition to the single-select answers. */
+  shortSurveyColorAnswers?: number[];
   deepSurveyAnswers: Record<string, number>;
   shortSurveySkipped: boolean;
   analysis?: AnalysisResult;

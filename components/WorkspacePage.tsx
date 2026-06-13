@@ -119,6 +119,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [isDomainPanelOpen, setIsDomainPanelOpen] = useState(false);
   const [gathering, setGathering] = useState(false);
+  const [highlightMaterialId, setHighlightMaterialId] = useState<string | null>(null);
   const [showConceptPage, setShowConceptPage] = useState(false);
   const [roomDropdownOpen, setRoomDropdownOpen] = useState(false);
   const [brilliantZone, setBrilliantZone] = useState<PresetCombo | null>(null);
@@ -479,7 +480,6 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
     } else {
       const MAX_MATERIALS = 7;
       if (state.refinement.selectedMaterials.length >= MAX_MATERIALS) {
-        // Swap: remove the oldest material of the same element, or the last added overall
         const sameElIdx = state.refinement.selectedMaterials.findIndex(m => m.element === matDef.element);
         const removeIdx = sameElIdx >= 0 ? sameElIdx : state.refinement.selectedMaterials.length - 1;
         newMaterials = [...state.refinement.selectedMaterials];
@@ -488,6 +488,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
       } else {
         newMaterials = [...state.refinement.selectedMaterials, matDef];
       }
+      nextDisabled = nextDisabled.filter((id) => id !== matDef.id);
+      setHighlightMaterialId(matDef.id);
+      window.setTimeout(() => setHighlightMaterialId(null), 2200);
     }
 
     const updatedState: UserState = {
@@ -1372,7 +1375,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
         })()}
 
         {/* Central Core Diagram — reserve bottom space on phone for fixed Generate dock */}
-        <div className="flex-grow flex items-center justify-center transition-all duration-500 pt-0 pb-1 max-sm:pb-[min(9rem,22vh)] sm:pt-1 sm:pb-2" style={{ minHeight: 0 }}>
+        <div className="flex-grow flex items-center justify-center transition-all duration-500 pt-0 pb-1 max-sm:pb-[min(11rem,28vh)] sm:pt-1 sm:pb-2" style={{ minHeight: 0 }}>
           <div className="flex-1 flex items-center justify-center w-full h-full min-h-0">
           <CoreDiagram
             distribution={state.refinement.refinedPercentages}
@@ -1398,6 +1401,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
             domain={state.params.domain}
             gathering={gathering}
             onGatherComplete={handleGatherComplete}
+            highlightMaterialId={highlightMaterialId}
           />
           </div>
         </div>
@@ -1574,9 +1578,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
         {/* Generate + Brilliant — fixed dock on phone (always in viewport); absolute on sm+ */}
         <div
           ref={diagRef}
-          className="workspace-content-reveal z-[70] flex flex-col items-center w-[min(100%,220px)] sm:w-[180px]
-            fixed left-1/2 -translate-x-1/2 bottom-0 pb-[max(10px,env(safe-area-inset-bottom,0px))] pt-2 px-3
-            rounded-t-2xl border-t border-gray-200/50 bg-[#f4f7fc]/92 backdrop-blur-md shadow-[0_-8px_32px_rgba(0,0,0,0.08)]
+          className="workspace-content-reveal z-[70] flex flex-col items-center w-[min(100%,280px)] sm:w-[248px]
+            fixed left-1/2 -translate-x-1/2 bottom-0 pb-[max(10px,env(safe-area-inset-bottom,0px))] pt-2.5 px-3
+            rounded-t-2xl border-t border-gray-200/40 bg-[#f8f9fc]/94 backdrop-blur-xl shadow-[0_-10px_40px_rgba(0,0,0,0.06)]
             sm:rounded-none sm:border-0 sm:bg-transparent sm:backdrop-blur-none sm:shadow-none sm:p-0 sm:pb-0
             sm:absolute sm:bottom-8 sm:left-[44px] sm:translate-x-0"
         >
@@ -1631,90 +1635,53 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
               )}
             </div>
           )}
-          {/* Element percentages with +/- controls above generate */}
+          {/* Element percentages — minimal readout above generate */}
           {(() => {
             const dist = state.refinement.refinedPercentages;
             const domEl = orbSettledDominant;
-            const domMc = MUTED_EL[domEl];
+            const domEc = ELEMENT_COLORS[domEl];
             const fixedOrder: Element[] = ['earth', 'fire', 'water', 'air'];
             return (
               <>
-                <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3 sm:mb-5 w-full">
+                <div className="flex items-center justify-center gap-3 sm:gap-4 mb-2.5 sm:mb-3 w-full">
                   {fixedOrder.map(el => {
-                    const val = dist[el];
-                    const mc = MUTED_EL[el];
                     const isDom = el === domEl;
-                    const sz = isDom ? 32 : 24;
-                    const szLg = isDom ? 38 : 28;
+                    const roundVal = Math.round(dist[el]);
                     return (
-                      <div key={el} className="flex flex-col items-center gap-0.5 sm:gap-1" style={{ transition: 'all 0.4s ease' }}>
-                        <button className="flex items-center justify-center transition-all hover:scale-125 active:scale-90 touch-target-auto"
-                          style={{ width: 20, height: 16, color: mc, opacity: 0.55 }}
-                          onClick={e => { e.stopPropagation(); handleDistributionChange(el, Math.min(65, val + 5)); }}>
-                          <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 5 L5 1 L9 5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                        </button>
-                        <div className="rounded-full relative transition-all duration-400 hidden sm:block" style={{
-                          width: szLg, height: szLg,
-                          background: `radial-gradient(circle at 35% 28%, ${mc}E0, ${mc}80)`,
-                          boxShadow: isDom ? `0 2px 14px ${mc}40, 0 0 0 2px ${mc}20` : `0 1px 6px ${mc}18`,
-                        }}>
-                          <div className="absolute inset-0 rounded-full flex items-center justify-center">
-                            <span className="text-white font-semibold tabular-nums" style={{
-                              fontSize: isDom ? 14 : 11,
-                              textShadow: '0 1px 2px rgba(0,0,0,0.15)',
-                              fontFamily: "'IBM Plex Mono', monospace",
-                            }}>{Math.round(val)}</span>
-                          </div>
-                        </div>
-                        <div className="rounded-full relative transition-all duration-400 sm:hidden" style={{
-                          width: sz, height: sz,
-                          background: `radial-gradient(circle at 35% 28%, ${mc}E0, ${mc}80)`,
-                          boxShadow: isDom ? `0 2px 10px ${mc}40, 0 0 0 2px ${mc}20` : `0 1px 4px ${mc}18`,
-                        }}>
-                          <div className="absolute inset-0 rounded-full flex items-center justify-center">
-                            <span className="text-white font-semibold tabular-nums" style={{
-                              fontSize: isDom ? 12 : 10,
-                              textShadow: '0 1px 2px rgba(0,0,0,0.15)',
-                              fontFamily: "'IBM Plex Mono', monospace",
-                            }}>{Math.round(val)}</span>
-                          </div>
-                        </div>
-                        <button className="flex items-center justify-center transition-all hover:scale-125 active:scale-90 touch-target-auto"
-                          style={{ width: 20, height: 16, color: mc, opacity: 0.55 }}
-                          onClick={e => { e.stopPropagation(); handleDistributionChange(el, Math.max(5, val - 5)); }}>
-                          <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1 L5 5 L9 1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                        </button>
-                      </div>
+                      <span
+                        key={el}
+                        className="font-mono tabular-nums leading-none"
+                        style={{ fontSize: 10, color: isDom ? '#444' : '#aaa', fontWeight: isDom ? 500 : 400 }}
+                      >
+                        {roundVal}
+                      </span>
                     );
                   })}
                 </div>
                 <div className="relative w-full">
                   {brilliantZone && brilliant && (
-                    <div className="absolute -top-6 sm:-top-7 left-1/2 -translate-x-1/2 z-10 cursor-pointer flex items-center gap-1 sm:gap-1.5 whitespace-nowrap transition-transform duration-300 hover:scale-[1.15] touch-target-auto" onClick={() => setShowDiagnosticPanel(p => !p)}>
+                    <div className="absolute -top-6 sm:-top-7 left-1/2 -translate-x-1/2 z-10 cursor-pointer flex items-center gap-1 sm:gap-1.5 whitespace-nowrap transition-transform duration-300 hover:scale-[1.12] touch-target-auto" onClick={() => setShowDiagnosticPanel(p => !p)}>
                       <div className="w-[5px] h-[5px] sm:w-[6px] sm:h-[6px] rounded-full" style={{ background: '#4A80D0', boxShadow: '0 0 10px rgba(60,110,200,0.7)', animation: 'brilliantDot 2s ease-in-out infinite' }} />
-                      <span className="text-[11px] sm:text-[13px] uppercase tracking-[0.15em] sm:tracking-[0.2em] font-semibold" style={{ color: '#3A6BBF', animation: 'brilliantBreathe 3s ease-in-out infinite' }}>Brilliant Zone</span>
+                      <span className="text-[10px] sm:text-[11px] uppercase tracking-[0.18em] font-medium" style={{ color: '#3A6BBF', animation: 'brilliantBreathe 3s ease-in-out infinite' }}>Brilliant Zone</span>
                     </div>
                   )}
                   <button
+                    type="button"
                     onClick={handleInitiateGeneration}
-                    className="w-full py-2.5 sm:py-3.5 rounded-full text-[14px] sm:text-[16px] uppercase tracking-[0.25em] sm:tracking-[0.35em] font-medium transition-all duration-500 hover:scale-[1.03] active:scale-[0.97] text-white text-center touch-target-auto"
+                    className="shre-gen-btn w-full touch-target-auto"
                     style={{
-                      background: brilliantZone && brilliant
-                        ? 'linear-gradient(135deg, #1E3F7A 0%, #2D5AAE 40%, #4080D4 100%)'
-                        : domMc,
-                      boxShadow: brilliantZone && brilliant
-                        ? '0 6px 36px rgba(30,63,122,0.55), 0 0 60px rgba(45,90,174,0.2)'
-                        : `0 4px 18px ${domMc}40`,
-                      animation: brilliantZone && brilliant ? 'generatePulse 2.5s ease-in-out infinite' : 'none',
+                      ['--gen-color' as string]: brilliantZone && brilliant ? '#2D5AAE' : domEc,
+                      ...(brilliantZone && brilliant ? { animation: 'generatePulse 2.5s ease-in-out infinite' } : {}),
                     }}
                   >
                     Generate
                   </button>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setIsDeepDiveOpen(true)}
-                  className="w-full py-1.5 sm:py-2 rounded-full text-[10px] sm:text-[11px] uppercase tracking-[0.2em] sm:tracking-[0.3em] font-light transition-all duration-300 hover:bg-gray-50 mt-1.5 sm:mt-2 touch-target-auto"
-                  style={{ color: '#8899b3', border: '1px solid rgba(136,153,179,0.15)' }}>
+                  className="w-full py-1.5 sm:py-2 rounded-full text-[9px] sm:text-[10px] uppercase tracking-[0.22em] font-light transition-all duration-300 hover:bg-white/80 mt-2 touch-target-auto"
+                  style={{ color: '#8899b3', border: '1px solid rgba(136,153,179,0.12)' }}>
                   Deep Dive Test
                 </button>
               </>

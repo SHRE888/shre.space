@@ -330,21 +330,9 @@ export const CANONICAL_ATMOSPHERE: Record<Element | 'shared', string[]> = CANONI
 
 const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
 
-/** Square macro crop for material-step options (2×2 grid); full-bleed texture fill. */
-const surveyTex = (photoId: string) =>
-  `https://images.unsplash.com/${photoId}?auto=format&w=720&h=720&fit=crop&q=85`;
-
-/** Landscape / nature step — outdoor scenes only, square crop for survey grid. */
-const surveyScene = (photoId: string) =>
-  `https://images.unsplash.com/${photoId}?auto=format&w=900&h=900&fit=crop&q=85`;
-
-/** Interior / room step — real indoor spaces only (never building exteriors for “room” copy). */
-const surveyRoom = (photoId: string) =>
-  `https://images.unsplash.com/${photoId}?auto=format&w=800&h=800&fit=crop&q=85`;
-
-/** Architecture / season step — exteriors, buildings, or seasonal landscapes. */
-const surveyArch = (photoId: string) =>
-  `https://images.unsplash.com/${photoId}?auto=format&w=800&h=520&fit=crop&q=85`;
+// All survey imagery is now served locally from /public/survey-photos/ and
+// /public/survey-textures/ (generated + curated). External Unsplash hotlinks
+// were removed because dead IDs kept falling back to element-tinted gradients.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SHRE SURVEY — WEIGHTED PERCENTAGE SCORING
@@ -360,128 +348,138 @@ const surveyArch = (photoId: string) =>
 //   - Others:            0      (no artificial sprinkling; 0% is allowed)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Q1 — LANDSCAPE / NATURE ─────────────────────────────────────────────────
+// Local, human-accessible nature photos (generated, served from
+// /public/survey-photos/). Six images cover the four elements and rotate
+// across the three variants so a session never shows a broken hotlink.
+//   earth → desert dunes        fire → volcanic glow / sunset cliffs
+//   water → fjord silence       air  → misty peaks / cloud forest
 const Q1_VARIANTS: Question[] = [
   {
     id: 'q1', text: 'Which nature calls to you?', subtitle: 'Feel the energy — each landscape holds an element', visual: true,
     options: [
-      { text: 'Canyon & clay', weights: { earth: 80, fire: 20 }, image: surveyScene('photo-1474044159687-1ee9f3a51722') },
-      // photo-1476390893418-4c88ecc5a945 is dead on Unsplash's CDN
-      // (returns 404), so the tile was falling through to the
-      // element-tinted gradient. Replaced with a verified live lava
-      // texture photo that's been around for years.
-      { text: 'Volcanic glow', weights: { fire: 80, earth: 20 }, image: surveyScene('photo-1462332420958-a05d1e002413') },
-      { text: 'Still lake',    weights: { water: 80, air: 20 },  image: surveyScene('photo-1439066615861-d1af74d74000') },
-      { text: 'Misty peaks',   weights: { air: 80, water: 20 },  image: surveyScene('photo-1464822759023-fed622ff2c3b') },
+      { text: 'Canyon & clay', weights: { earth: 80, fire: 20 }, image: '/survey-photos/q1-desert-dunes.png' },
+      { text: 'Volcanic glow', weights: { fire: 80, earth: 20 }, image: '/survey-photos/q1-volcanic-glow.png' },
+      { text: 'Still water',   weights: { water: 80, air: 20 },  image: '/survey-photos/q1-fjord-silence.png' },
+      { text: 'Misty peaks',   weights: { air: 80, water: 20 },  image: '/survey-photos/q1-misty-peaks.png' },
     ]
   },
   {
     id: 'q1', text: 'Where does your soul rest?', subtitle: 'Nature reveals your inner element', visual: true,
     options: [
-      { text: 'Desert dunes', weights: { earth: 75, air: 25 }, image: surveyScene('photo-1509316785289-025f5b846b35') },
-      { text: 'Sunset cliffs', weights: { fire: 70, earth: 30 }, image: surveyScene('photo-1506929562872-bb421503ef21') },
-      { text: 'Ocean horizon', weights: { water: 70, air: 30 }, image: surveyScene('photo-1507525428034-b723cf961d3e') },
-      { text: 'Cloud forest', weights: { air: 70, water: 20, earth: 10 }, image: surveyScene('photo-1501785888041-af3ef285b470') },
+      { text: 'Desert dunes', weights: { earth: 75, air: 25 }, image: '/survey-photos/q1-desert-dunes.png' },
+      { text: 'Sunset cliffs', weights: { fire: 70, earth: 30 }, image: '/survey-photos/q1-sunset-cliffs.png' },
+      { text: 'Calm fjord', weights: { water: 70, air: 30 }, image: '/survey-photos/q1-fjord-silence.png' },
+      { text: 'Cloud forest', weights: { air: 70, water: 20, earth: 10 }, image: '/survey-photos/q1-cloud-forest.png' },
     ]
   },
   {
     id: 'q1', text: 'Which landscape is yours?', subtitle: 'The place that feels like home', visual: true,
     options: [
-      { text: 'Ancient forest', weights: { earth: 80, water: 20 }, image: surveyScene('photo-1448375240586-882707db888b') },
-      { text: 'Savanna heat',   weights: { fire: 75, air: 25 },    image: surveyScene('photo-1516026672322-bc52d61a55d5') },
-      // Previous photo-1513519245088-0e12902e35ca rendered as an empty
-      // grey gradient for some viewers; swapped to a well-known stable
-      // Norwegian fjord/lake reflection that loads reliably.
-      { text: 'Fjord silence',  weights: { water: 75, earth: 25 }, image: surveyScene('photo-1500964757637-c85e8a162699') },
-      { text: 'Alpine air',     weights: { air: 75, fire: 25 },    image: surveyScene('photo-1506905925346-21bda4d32df4') },
+      { text: 'Ancient forest', weights: { earth: 80, water: 20 }, image: '/survey-photos/q1-cloud-forest.png' },
+      { text: 'Volcanic heat',  weights: { fire: 75, air: 25 },    image: '/survey-photos/q1-volcanic-glow.png' },
+      { text: 'Fjord silence',  weights: { water: 75, earth: 25 }, image: '/survey-photos/q1-fjord-silence.png' },
+      { text: 'Alpine air',     weights: { air: 75, fire: 25 },    image: '/survey-photos/q1-misty-peaks.png' },
     ]
   },
 ];
 
 // ── Q2 — TEXTURES / MATERIALS ───────────────────────────────────────────────
-// Full-bleed macro texture photos (same tile treatment as landscape / interior
-// steps). Square crop via surveyTex — no sphere PNGs on black.
+// Full-bleed macro texture photos served locally from /public/survey-textures/
+// (generated high-res material samples — the old Unsplash hotlinks kept dying
+// and falling back to element-tinted gradients).
 const Q2_VARIANTS: Question[] = [
   {
     id: 'q2', text: 'Which surface do you want to touch?', subtitle: 'The material that resonates with your nature', visual: true,
     options: [
-      { text: 'Natural stone',   weights: { earth: 80, water: 20 }, image: surveyTex('photo-1589939705384-518513b7377d') },
-      { text: 'Oxidized metal',  weights: { fire: 70, earth: 30 },  image: surveyTex('photo-1622396489024-83843ad17204') },
-      { text: 'Dark walnut',     weights: { earth: 80, water: 20 }, image: surveyTex('photo-1503602642600-2fabb7e4e139') },
-      { text: 'White marble',    weights: { air: 70, water: 30 },   image: surveyTex('photo-1618005182384-a83a8bd57fbe') },
+      // Local high-quality macro textures — the previous Unsplash IDs were
+      // dead or pointed at wrong subjects (house exterior / colorful render),
+      // so the cards fell back to element-tinted gradients.
+      { text: 'Natural stone',   weights: { earth: 80, water: 20 }, image: '/survey-textures/natural-stone.png' },
+      { text: 'Oxidized metal',  weights: { fire: 70, earth: 30 },  image: '/survey-textures/oxidized-metal.png' },
+      { text: 'Dark walnut',     weights: { earth: 80, water: 20 }, image: '/survey-textures/dark-walnut.png' },
+      { text: 'White marble',    weights: { air: 70, water: 30 },   image: '/survey-textures/white-marble.png' },
     ]
   },
   {
     id: 'q2', text: 'Which texture speaks to you?', subtitle: 'Close your eyes and feel', visual: true,
     options: [
-      { text: 'Raw clay',          weights: { earth: 75, fire: 25 },  image: surveyTex('photo-1615529328331-f8917597711f') },
-      { text: 'Brushed copper',    weights: { fire: 75, air: 25 },    image: surveyTex('photo-1574491919902-ec96028ba327') },
-      { text: 'Aged oak',          weights: { earth: 70, water: 30 }, image: surveyTex('photo-1541123437805-54ac32a03196') },
-      { text: 'Polished concrete', weights: { air: 70, earth: 30 },   image: surveyTex('photo-1590315366989-42bb28e83870') },
+      { text: 'Raw clay',          weights: { earth: 75, fire: 25 },  image: '/survey-textures/raw-clay.png' },
+      { text: 'Brushed copper',    weights: { fire: 75, air: 25 },    image: '/survey-textures/brushed-copper.png' },
+      { text: 'Aged oak',          weights: { earth: 70, water: 30 }, image: '/survey-textures/aged-oak.png' },
+      { text: 'Polished concrete', weights: { air: 70, earth: 30 },   image: '/survey-textures/polished-concrete.png' },
     ]
   },
   {
     id: 'q2', text: 'What your hands want to feel', subtitle: 'Pick the material palette closest to you', visual: true,
     options: [
-      { text: 'Terracotta',   weights: { earth: 70, fire: 30 },  image: surveyTex('photo-1578507527779-eb6f89e68f54') },
-      { text: 'Black steel',  weights: { fire: 80, water: 20 },  image: surveyTex('photo-1565193566173-7a0ee3dbe261') },
-      { text: 'Smooth wood',  weights: { earth: 70, water: 30 }, image: surveyTex('photo-1611532739678-79f46f3380c3') },
-      { text: 'Frosted glass',weights: { air: 75, water: 25 },   image: surveyTex('photo-1544989090-417675b31623') },
+      { text: 'Terracotta',   weights: { earth: 70, fire: 30 },  image: '/survey-textures/terracotta.png' },
+      { text: 'Black steel',  weights: { fire: 80, water: 20 },  image: '/survey-textures/black-steel.png' },
+      { text: 'Smooth wood',  weights: { earth: 70, water: 30 }, image: '/survey-textures/smooth-wood.png' },
+      { text: 'Frosted glass',weights: { air: 75, water: 25 },   image: '/survey-textures/frosted-glass.png' },
     ]
   },
 ];
 
+// ── Q3 — INTERIOR ATMOSPHERE ────────────────────────────────────────────────
+// Local interior photos (generated + curated, /public/survey-photos/). Six
+// images cover the four elements and rotate across the variants:
+//   earth → warm & textured     fire → bold dramatic / dark elegance
+//   water → soft fluid / serene comfort   air → bright & open
 const Q3_VARIANTS: Question[] = [
   {
     id: 'q3', text: 'Where would you feel at home?', subtitle: 'The interior that speaks your language', visual: true,
     options: [
-      { text: 'Warm & textured', weights: { earth: 80, fire: 20 }, image: surveyRoom('photo-1600210492486-724fe5c67fb0') },
-      { text: 'Bold & dramatic', weights: { fire: 80, earth: 20 }, image: surveyRoom('photo-1600607687939-ce8a6c25118c') },
-      { text: 'Soft & fluid', weights: { water: 75, air: 25 }, image: surveyRoom('photo-1616486338812-3dadae4b4ace') },
-      { text: 'Bright & open', weights: { air: 80, water: 20 }, image: surveyRoom('photo-1600566753190-17f0baa2a6c3') },
+      { text: 'Warm & textured', weights: { earth: 80, fire: 20 }, image: '/survey-photos/q3-warm-textured.jpg' },
+      { text: 'Bold & dramatic', weights: { fire: 80, earth: 20 }, image: '/survey-photos/q3-bold-dramatic.png' },
+      { text: 'Soft & fluid', weights: { water: 75, air: 25 }, image: '/survey-photos/q3-soft-fluid-water.png' },
+      { text: 'Bright & open', weights: { air: 80, water: 20 }, image: '/survey-photos/q3-bright-open.png' },
     ]
   },
   {
     id: 'q3', text: 'Which room draws you in?', subtitle: 'Imagine spending a day here', visual: true,
     options: [
-      { text: 'Rustic retreat', weights: { earth: 75, water: 25 }, image: surveyRoom('photo-1618219908412-a29a1bb7b86e') },
-      { text: 'Dark elegance', weights: { fire: 80, water: 20 }, image: surveyRoom('photo-1615874694520-474822394e73') },
-      { text: 'Serene comfort', weights: { water: 80, earth: 20 }, image: surveyRoom('photo-1617325247661-675ab4b64ae2') },
-      { text: 'Airy loft', weights: { air: 80, fire: 20 }, image: surveyRoom('photo-1502672260266-1c1ef2d93688') },
+      { text: 'Rustic retreat', weights: { earth: 75, water: 25 }, image: '/survey-photos/q3-warm-textured.jpg' },
+      { text: 'Dark elegance', weights: { fire: 80, water: 20 }, image: '/survey-photos/q3-dark-elegance.png' },
+      { text: 'Serene comfort', weights: { water: 80, earth: 20 }, image: '/survey-photos/q3-serene-comfort.jpg' },
+      { text: 'Airy loft', weights: { air: 80, fire: 20 }, image: '/survey-photos/q3-bright-open.png' },
     ]
   },
   {
     id: 'q3', text: 'Which space is your sanctuary?', subtitle: 'The atmosphere you crave', visual: true,
     options: [
-      { text: 'Earth tones',    weights: { earth: 70, fire: 15, water: 15 }, image: surveyRoom('photo-1600585154526-990dced4db0d') },
-      { text: 'Moody contrast', weights: { fire: 75, earth: 25 },            image: surveyRoom('photo-1600607687920-4e2a09cf159d') },
-      { text: 'Calm waters',    weights: { water: 80, air: 20 },             image: surveyRoom('photo-1540555700478-4be289fbecef') },
-      // photo-1595526114035-0d45ed16cfbc is dead on Unsplash; replaced
-      // with a verified bright/luminous interior that reads clearly as
-      // the "pure light" Air option.
-      { text: 'Pure light',     weights: { air: 80, earth: 20 },             image: surveyRoom('photo-1505693416388-ac5ce068fe85') },
+      { text: 'Earth tones',    weights: { earth: 70, fire: 15, water: 15 }, image: '/survey-photos/q3-warm-textured.jpg' },
+      { text: 'Moody contrast', weights: { fire: 75, earth: 25 },            image: '/survey-photos/q3-bold-dramatic.png' },
+      { text: 'Calm waters',    weights: { water: 80, air: 20 },             image: '/survey-photos/q3-soft-fluid-water.png' },
+      { text: 'Pure light',     weights: { air: 80, earth: 20 },             image: '/survey-photos/q3-bright-open.png' },
     ]
   },
 ];
 
+// ── Q4 — ARCHITECTURE ───────────────────────────────────────────────────────
+// Six distinct, element-true exterior photos (generated + curated) that rotate
+// across the two variants — each image now genuinely reads as its element:
+//   earth → heavy stone mass / warm stone fortress
+//   fire  → warm dramatic corten building at sunset / glowing steel skyline
+//   water → flowing curved building mirrored in still water
+//   air   → bright glass towers against open sky
 const Q4_ARCHITECTURE: Question[] = [
   {
     id: 'q4', text: 'Which form inspires you?', subtitle: 'Architecture as frozen energy', visual: true,
     options: [
-      { text: 'Grounded mass', weights: { earth: 80, fire: 20 }, image: surveyArch('photo-1600596542815-ffad4c1539a9') },
-      { text: 'Dynamic edge', weights: { fire: 75, air: 25 }, image: surveyArch('photo-1511818966892-d7d671e672a2') },
-      { text: 'Organic curve', weights: { water: 80, earth: 20 }, image: surveyArch('photo-1510554318937-cd0860bf68c2') },
-      { text: 'Glass & sky', weights: { air: 80, water: 20 }, image: surveyArch('photo-1486406146926-c627a92ad1ab') },
+      { text: 'Grounded mass', weights: { earth: 80, fire: 20 }, image: '/survey-photos/q4-stone-mass.png' },
+      { text: 'Dynamic edge', weights: { fire: 75, air: 25 }, image: '/survey-photos/q4-fire-dramatic.png' },
+      { text: 'Organic curve', weights: { water: 80, earth: 20 }, image: '/survey-photos/q4-water-flowing.png' },
+      { text: 'Glass & sky', weights: { air: 80, water: 20 }, image: '/survey-photos/q4-glass-sky.jpg' },
     ]
   },
   {
     id: 'q4', text: 'Which building would you enter?', subtitle: 'Structure reveals character', visual: true,
     options: [
-      { text: 'Stone fortress', weights: { earth: 80, water: 20 }, image: surveyArch('photo-1564013799919-ab600027ffc6') },
-      // photo-1487958449943-2427ede8e615 is dead; replaced with a
-      // verified live modern steel/industrial building photo.
-      { text: 'Steel & fire',   weights: { fire: 80, earth: 20 },  image: surveyArch('photo-1486325212027-8081e485255e') },
-      { text: 'Flowing form',   weights: { water: 75, air: 25 },   image: surveyArch('photo-1510554318937-cd0860bf68c2') },
-      { text: 'Open frame',     weights: { air: 80, fire: 20 },    image: surveyArch('photo-1486406146926-c627a92ad1ab') },
+      { text: 'Stone fortress', weights: { earth: 80, water: 20 }, image: '/survey-photos/q4-stone-fortress.jpg' },
+      { text: 'Steel & fire',   weights: { fire: 80, earth: 20 },  image: '/survey-photos/q4-steel-fire.jpg' },
+      { text: 'Flowing form',   weights: { water: 75, air: 25 },   image: '/survey-photos/q4-water-flowing.png' },
+      { text: 'Open frame',     weights: { air: 80, fire: 20 },    image: '/survey-photos/q4-glass-sky.jpg' },
     ]
   },
 ];
@@ -496,31 +494,65 @@ const Q4_ARCHITECTURE: Question[] = [
 //   spring = cherry blossom / soft meadow flowers
 // V1 and V2 use *different* IDs for the same season so the user doesn't see
 // the same image twice if both variants ever appear in a single session.
+// ── Q4 — SEASONS ────────────────────────────────────────────────────────────
+// Each season now uses a genuinely season-accurate local photo (no more "green
+// forest as autumn"):
+//   autumn → golden foliage forest   summer → warm sunset cliffs / volcanic glow
+//   winter → snowy frozen lake        spring → fresh green misty valley
 const Q4_SEASONS: Question[] = [
   {
     id: 'q4', text: 'Which season feels like you?', subtitle: 'Your energy has a rhythm', visual: true,
     options: [
-      { text: 'Autumn warmth',    weights: { earth: 70, fire: 30 },  image: surveyArch('photo-1508193638397-1c4234db14d8') },
-      { text: 'Summer blaze',     weights: { fire: 80, air: 20 },    image: surveyArch('photo-1500530855697-b586d89ba3ee') },
-      { text: 'Winter stillness', weights: { water: 80, earth: 20 }, image: surveyArch('photo-1457269449834-928af64c684d') },
-      { text: 'Spring breeze',    weights: { air: 75, water: 25 },   image: surveyArch('photo-1462275646964-a0e3386b89fa') },
+      { text: 'Autumn warmth',    weights: { earth: 70, fire: 30 },  image: '/survey-photos/q-autumn-golden.png' },
+      { text: 'Summer blaze',     weights: { fire: 80, air: 20 },    image: '/survey-photos/q1-volcanic-glow.png' },
+      { text: 'Winter stillness', weights: { water: 80, earth: 20 }, image: '/survey-photos/q-winter-snow.png' },
+      { text: 'Spring breeze',    weights: { air: 75, water: 25 },   image: '/survey-photos/q1-misty-peaks.png' },
     ]
   },
   {
     id: 'q4', text: 'Your time of year?', subtitle: 'Seasons mirror elemental energy', visual: true,
     options: [
-      { text: 'Golden autumn',  weights: { earth: 75, water: 25 }, image: surveyArch('photo-1508193638397-1c4234db14d8') },
-      { text: 'Burning summer', weights: { fire: 70, earth: 30 },  image: surveyArch('photo-1473496169904-658ba7c44d8a') },
-      { text: 'Deep winter',    weights: { water: 80, air: 20 },   image: surveyArch('photo-1457269449834-928af64c684d') },
-      { text: 'Fresh spring',   weights: { air: 80, earth: 20 },   image: surveyArch('photo-1494500764479-0c8f2919a3d8') },
+      { text: 'Golden autumn',  weights: { earth: 75, fire: 25 },  image: '/survey-photos/q-autumn-golden.png' },
+      { text: 'Burning summer', weights: { fire: 70, earth: 30 },  image: '/survey-photos/q1-sunset-cliffs.png' },
+      { text: 'Deep winter',    weights: { water: 80, air: 20 },   image: '/survey-photos/q-winter-snow.png' },
+      { text: 'Fresh spring',   weights: { air: 80, earth: 20 },   image: '/survey-photos/q1-misty-peaks.png' },
     ]
   },
 ];
 
+// ── Q5 — COLOUR PALETTE ─────────────────────────────────────────────────────
+// Final calibration step: 12 solid colour swatches (3 per element) rendered as
+// a colour grid. Colour is a strong, direct elemental signal, so this question
+// sharpens the final Earth/Fire/Water/Air distribution. Single canonical
+// question (no random variant) so index-based scoring is always consistent.
+//   EARTH → warm earth tones    FIRE → reds / rust / charcoal
+//   WATER → blues / teals       AIR  → whites / pale light tones
+const Q5_COLORS: Question = {
+  id: 'q5', text: 'Which colours pull you in?', subtitle: 'Pick up to 4 — colour is the most direct read of your element', visual: true,
+  options: [
+    // EARTH
+    { text: 'Terracotta',   weights: { earth: 80, fire: 20 },  color: '#B5532E' },
+    { text: 'Warm ochre',   weights: { earth: 100 },           color: '#C7973F' },
+    { text: 'Walnut brown', weights: { earth: 100 },           color: '#5E3D29' },
+    // FIRE
+    { text: 'Oxblood',      weights: { fire: 100 },            color: '#6E1F1A' },
+    { text: 'Burnt rust',   weights: { fire: 80, earth: 20 },  color: '#A4521F' },
+    { text: 'Charcoal',     weights: { fire: 70, water: 30 },  color: '#2A2724' },
+    // WATER
+    { text: 'Deep teal',    weights: { water: 100 },           color: '#1E5F6B' },
+    { text: 'Slate blue',   weights: { water: 80, air: 20 },   color: '#4A6A86' },
+    { text: 'Midnight navy',weights: { water: 100 },           color: '#1B2A4A' },
+    // AIR
+    { text: 'Soft white',   weights: { air: 100 },             color: '#EFEDE6' },
+    { text: 'Pale grey',    weights: { air: 80, water: 20 },   color: '#C9CDD0' },
+    { text: 'Sky light',    weights: { air: 80, water: 20 },   color: '#AEC9DE' },
+  ],
+};
+
 export const generateSurveyQuestions = (): Question[] => {
   const useSeason = Math.random() < 0.4;
   const q4Pool = useSeason ? Q4_SEASONS : Q4_ARCHITECTURE;
-  return [pick(Q1_VARIANTS), pick(Q2_VARIANTS), pick(Q3_VARIANTS), pick(q4Pool)];
+  return [pick(Q1_VARIANTS), pick(Q2_VARIANTS), pick(Q3_VARIANTS), pick(q4Pool), Q5_COLORS];
 };
 
 export const SHORT_QUESTIONS: Question[] = generateSurveyQuestions();
@@ -609,7 +641,7 @@ const assertWeightsSumTo100 = (q: Question): string[] => {
 
 const _allSurveyQuestions: Question[] = [
   ...Q1_VARIANTS, ...Q2_VARIANTS, ...Q3_VARIANTS,
-  ...Q4_ARCHITECTURE, ...Q4_SEASONS,
+  ...Q4_ARCHITECTURE, ...Q4_SEASONS, Q5_COLORS,
   ...DEEP_QUESTIONS,
 ];
 const _surveyValidationErrors = _allSurveyQuestions.flatMap(assertWeightsSumTo100);

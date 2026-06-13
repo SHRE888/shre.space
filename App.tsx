@@ -13,7 +13,7 @@ import { calculateAnalysis, buildUniversalPrompt, buildTargetedEditPrompt } from
 import { buildDiagnosis } from './services/shreDiagnosis';
 import { generateImageFromPrompt, dataUrlToFile, setUserApiKey, hasUserApiKey, analyzeFloorPlan } from './services/geminiService';
 import { interpretRefinementFeedback } from './services/refinementFeedback';
-import { getInitialSelection, getSelectionFromPercentages } from './services/refinementLogic';
+import { getInitialSelection, getSelectionFromPercentages, isMaterialEnabled } from './services/refinementLogic';
 import { SHORT_QUESTIONS, ELEMENT_COLORS, CANONICAL_MATERIALS, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER, MATERIAL_TEXTURE_TINT, generateSurveyQuestions } from './constants';
 import { getRecommendedProfessionalPartners, type ProfessionalPartner } from './lib/professionalPartners';
 
@@ -255,6 +255,9 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
   const [imagesFailed, setImagesFailed] = useState<Record<string, boolean>>({});
   const [showResult, setShowResult] = useState(false);
   const [completedState, setCompletedState] = useState<UserState | null>(null);
+  // Colour question (Q5) is multi-select — the user may pick up to 4 swatches.
+  const [colorSelections, setColorSelections] = useState<number[]>([]);
+  const MAX_COLORS = 4;
   const navigate = useNavigate();
 
   // Preload next question's images
@@ -269,10 +272,11 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
     });
   }, [qIndex, questions]);
 
-  const finalizeSurvey = (surveyAnswers: Record<string, number>) => {
+  const finalizeSurvey = (surveyAnswers: Record<string, number>, colorAnswers: number[] = []) => {
     const updatedState: UserState = {
       ...state,
       shortSurveyAnswers: surveyAnswers,
+      shortSurveyColorAnswers: colorAnswers,
       shortSurveySkipped: false,
     };
     const baseAnalysis = calculateAnalysis(updatedState);
@@ -333,11 +337,31 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
     }
   };
 
+  // Colour question (multi-select): toggle a swatch, capping at MAX_COLORS.
+  const toggleColor = (idx: number) => {
+    chime();
+    setColorSelections((prev) => {
+      if (prev.includes(idx)) return prev.filter((i) => i !== idx);
+      if (prev.length >= MAX_COLORS) return prev;
+      return [...prev, idx];
+    });
+  };
+
+  // Confirm the colour picks and complete the survey.
+  const confirmColors = () => {
+    if (colorSelections.length === 0) return;
+    chime();
+    const fs = finalizeSurvey(answers, colorSelections);
+    setCompletedState(fs);
+    setShowResult(true);
+  };
+
   const q = questions[qIndex];
+  const isColorQ = q.options.some((o) => !!o.color);
   const progress = ((qIndex + 1) / questions.length) * 100;
   const lastQ = questions[3];
   const isSeasonsQ = lastQ?.text?.toLowerCase().includes('season') || lastQ?.text?.toLowerCase().includes('time of year');
-  const stepLabels = ['Landscape', 'Material', 'Interior', isSeasonsQ ? 'Season' : 'Architecture'];
+  const stepLabels = ['Landscape', 'Material', 'Interior', isSeasonsQ ? 'Season' : 'Architecture', 'Colour'];
 
   const ENERGY_HEADLINES: Record<Element, string[]> = {
     earth: ['Grounded Raw Warmth', 'Rooted Natural Craft', 'Textured Earth Living'],
@@ -388,17 +412,18 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
             // fields are still empty — anything the user might have set
             // earlier (returning user from localStorage) is preserved.
             whoosh();
-            setState((prev) => ({
-              ...prev,
+            const base = completedState ?? state;
+            setState({
+              ...base,
               params: {
-                ...prev.params,
-                domain: prev.params.domain ?? 'interior',
-                category: prev.params.category ?? 'Living / Residential',
-                rooms: (prev.params.rooms && prev.params.rooms.length)
-                  ? prev.params.rooms
+                ...base.params,
+                domain: base.params.domain ?? 'interior',
+                category: base.params.category ?? 'Living / Residential',
+                rooms: (base.params.rooms && base.params.rooms.length)
+                  ? base.params.rooms
                   : ['Living Room'],
               },
-            }));
+            });
             navigate('/generate');
           }}
         />
@@ -451,13 +476,35 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
               </div>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => { whoosh(); navigate('/core'); }}
-            className="px-6 py-3 min-h-[44px] uppercase tracking-[0.25em] text-[11px] font-medium border border-[#1a1a1a] text-[#1a1a1a] hover:bg-[#1a1a1a] hover:text-[#fafafa] transition-colors duration-300"
-          >
-            Enter Workspace
-          </button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2.5 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => { whoosh(); navigate('/core'); }}
+              className="px-6 py-3 min-h-[44px] uppercase tracking-[0.25em] text-[11px] font-medium border border-[#1a1a1a] text-[#1a1a1a] hover:bg-[#f0f0f0] transition-colors duration-300"
+            >
+              Enter Workspace
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                whoosh();
+                const base = completedState ?? state;
+                setState({
+                  ...base,
+                  params: {
+                    ...base.params,
+                    domain: base.params.domain ?? 'interior',
+                    category: base.params.category ?? 'Living / Residential',
+                    rooms: (base.params.rooms && base.params.rooms.length) ? base.params.rooms : ['Living Room'],
+                  },
+                });
+                navigate('/generate');
+              }}
+              className="px-6 py-3 min-h-[44px] uppercase tracking-[0.25em] text-[11px] font-medium border border-[#1a1a1a] bg-[#1a1a1a] text-[#fafafa] hover:bg-[#000] transition-colors duration-300"
+            >
+              Generate
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -532,7 +579,90 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
               )}
             </div>
 
+            {/* Colour palette grid — 12 solid swatches (Q5). Rendered as a
+                3×4 / 4×3 grid of colour tiles instead of photos. */}
+            {isColorQ && (
+              <div className="grid w-full max-w-[min(100%,26rem)] sm:max-w-lg md:max-w-xl mx-auto grid-cols-3 sm:grid-cols-4 gap-[clamp(0.5rem,2vw,0.75rem)]">
+                {q.options.map((opt, i) => {
+                  const isSelected = colorSelections.includes(i);
+                  const selectionOrder = colorSelections.indexOf(i) + 1;
+                  const atLimit = colorSelections.length >= MAX_COLORS && !isSelected;
+                  const isHovered = hoveredOption === i;
+                  // Pick readable label colour against the swatch.
+                  const hex = (opt.color || '#888').replace('#', '');
+                  const r = parseInt(hex.slice(0, 2), 16);
+                  const g = parseInt(hex.slice(2, 4), 16);
+                  const b = parseInt(hex.slice(4, 6), 16);
+                  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+                  const labelColor = luminance > 0.6 ? '#1a1a1a' : '#ffffff';
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => toggleColor(i)}
+                      onMouseEnter={() => setHoveredOption(i)}
+                      onMouseLeave={() => setHoveredOption(null)}
+                      aria-pressed={isSelected}
+                      className="group relative w-full min-h-[44px] min-w-0 overflow-hidden rounded-[12px] focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40 focus-visible:ring-offset-2 touch-manipulation"
+                      style={{
+                        aspectRatio: '1 / 1',
+                        background: opt.color,
+                        border: isSelected ? '3px solid #1a1a1a' : '1px solid rgba(0,0,0,0.10)',
+                        boxShadow: isSelected
+                          ? '0 8px 30px rgba(0,0,0,0.22)'
+                          : isHovered
+                          ? '0 12px 40px rgba(0,0,0,0.14)'
+                          : '0 2px 12px rgba(0,0,0,0.05)',
+                        transform: isSelected ? 'scale(1.04)' : isHovered && !atLimit ? 'scale(1.03) translateY(-2px)' : 'scale(1)',
+                        opacity: atLimit ? 0.45 : 1,
+                        transition: 'all 0.35s cubic-bezier(0.22,0.61,0.36,1)',
+                      }}
+                    >
+                      {isSelected && (
+                        <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-white flex items-center justify-center text-[11px] font-semibold text-[#1a1a1a]" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+                          {selectionOrder}
+                        </div>
+                      )}
+                      <div className="absolute bottom-0 left-0 right-0 p-1.5 sm:p-2">
+                        <span
+                          className="block text-center font-medium uppercase"
+                          style={{
+                            fontSize: 'clamp(8px, 2.4vw, 10px)',
+                            letterSpacing: '0.06em',
+                            color: labelColor,
+                            textShadow: luminance > 0.6 ? 'none' : '0 1px 4px rgba(0,0,0,0.45)',
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          {opt.text}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Colour multi-select footer — counter + confirm. Picking is capped
+                at 4 swatches; confirm finalises the survey. */}
+            {isColorQ && (
+              <div className="mt-4 sm:mt-6 flex flex-col items-center gap-2.5">
+                <p className="text-[10px] sm:text-[11px] uppercase tracking-[0.25em] text-neutral-400 font-light">
+                  Pick up to {MAX_COLORS} — {colorSelections.length}/{MAX_COLORS} selected
+                </p>
+                <button
+                  type="button"
+                  onClick={confirmColors}
+                  disabled={colorSelections.length === 0}
+                  className="px-8 py-3 min-h-[44px] uppercase tracking-[0.25em] text-[11px] font-medium border border-[#1a1a1a] transition-colors duration-300 disabled:opacity-30 disabled:cursor-not-allowed bg-[#1a1a1a] text-[#fafafa] hover:bg-[#000]"
+                >
+                  Continue
+                </button>
+              </div>
+            )}
+
             {/* Visual image grid — 2×2 square tiles, equal gaps (symmetry) */}
+            {!isColorQ && (
             <div className="grid w-full max-w-[min(100%,28rem)] sm:max-w-xl md:max-w-2xl mx-auto grid-cols-2 gap-[clamp(0.5rem,2vw,0.75rem)]">
               {q.options.map((opt, i) => {
                 const isSelected = answers[q.id] === i;
@@ -671,6 +801,7 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                 );
               })}
             </div>
+            )}
           </div>
 
           {/* Bottom actions */}
@@ -865,7 +996,11 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   const [renderAspect, setRenderAspect] = useState<string | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
   /** DNA panel open by default on phones too — collapsed 30vh cap hid sliders, orbit, and palette. */
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Material DNA starts collapsed so the generation page reads calmly on entry;
+  // the collapsed pill glows (dnaHinted=false) to invite expansion until the
+  // user opens it once.
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [dnaHinted, setDnaHinted] = useState(false);
 
   /** Material DNA orbital — static diagram (no drag-to-rotate) */
   const [dnaOrbitHover, setDnaOrbitHover] = useState(false);
@@ -900,6 +1035,21 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   const [showCustomMatModal, setShowCustomMatModal] = useState(false);
   const [editingCustomMat, setEditingCustomMat] = useState<CustomMaterial | null>(null);
   const [pctEditOpen, setPctEditOpen] = useState(false);
+  // Transient confirmation toast shown when a material is added/removed, plus
+  // the id of the most-recently added material so we can flash its bead.
+  const [matToast, setMatToast] = useState<string | null>(null);
+  const [flashMatId, setFlashMatId] = useState<string | null>(null);
+  const matToastTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashMaterial = React.useCallback((message: string, id?: string) => {
+    setMatToast(message);
+    if (id) setFlashMatId(id);
+    if (matToastTimer.current) clearTimeout(matToastTimer.current);
+    matToastTimer.current = setTimeout(() => {
+      setMatToast(null);
+      setFlashMatId(null);
+    }, 2600);
+  }, []);
+  React.useEffect(() => () => { if (matToastTimer.current) clearTimeout(matToastTimer.current); }, []);
   const [generationKey, setGenerationKey] = useState(0);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [refinementInput, setRefinementInput] = useState('');
@@ -966,6 +1116,29 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
       refinement: { ...prev.refinement, selectedMaterials: newMats },
     }));
     setMaterialsChanged(true);
+    flashMaterial(`Removed ${matName.split('(')[0].trim()}`);
+  };
+
+  // Pause / resume a material without removing it. Paused (disabled) materials
+  // stay visible in the panel but dimmed, and are excluded from the prompt via
+  // getEnabledMaterials — i.e. "turn off a material that doesn't fit the design,
+  // keep the ones that are used glowing brightly".
+  const toggleMaterialEnabled = (materialId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    chime();
+    setSelectedHistoryImage(null);
+    const disabled = state.refinement.disabledMaterialIds ?? [];
+    const isOff = disabled.includes(materialId);
+    const next = isOff ? disabled.filter((id) => id !== materialId) : [...disabled, materialId];
+    setState(prev => ({
+      ...prev,
+      refinement: { ...prev.refinement, hasUserRefined: true, disabledMaterialIds: next },
+    }));
+    setMaterialsChanged(true);
+    const mat = liveSelectedMaterials.find((m) => m.id === materialId);
+    const label = mat ? mat.name.split('(')[0].trim() : 'Material';
+    flashMaterial(isOff ? `Using ${label}` : `Paused ${label}`);
   };
 
   const addMaterial = (matName: string, element: Element) => {
@@ -990,6 +1163,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
       refinement: { ...prev.refinement, selectedMaterials: newMats },
     }));
     setMaterialsChanged(true);
+    flashMaterial(`Added ${matName.split('(')[0].trim()}`, matDef.id);
   };
 
   /**
@@ -1033,7 +1207,28 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
     });
     setMaterialsChanged(true);
     setShowCustomMatModal(false);
+    flashMaterial(`Added ${material.name.split('(')[0].trim()}`, material.id);
   };
+
+  /**
+   * Shared "apply material/refinement changes" regeneration. Used by the
+   * collapsed-sidebar footer button and the new always-visible regenerate
+   * bar on the results page so both stay in sync.
+   */
+  const regenerateFromChanges = React.useCallback(() => {
+    chime();
+    setMatToast(null);
+    setFlashMatId(null);
+    setMaterialsChanged(false);
+    setMaterialPickerOpen(false);
+    setSelectedHistoryImage(null);
+    setLoading(true);
+    setPhase('generating');
+    setLoadProgress(0);
+    setImageLoaded(false);
+    setImageUrl(null);
+    setGenerationKey(k => k + 1);
+  }, []);
 
   const similarReferences = React.useMemo(() => {
     const combo = `${liveDominant}-${liveSortedElements[1]?.[0] || liveDominant}`;
@@ -1516,13 +1711,6 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
   }
 
   // --- LOADING STATE ---
-  const ELEMENT_CONCEPTS: Record<Element, string> = {
-    earth: 'Grounded warmth, organic depth',
-    fire: 'Bold energy, dynamic intensity',
-    water: 'Fluid serenity, cool clarity',
-    air: 'Luminous space, ethereal lightness',
-  };
-
   if (loading) {
     return (
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center bg-[#fafafa] relative overflow-hidden px-4">
@@ -1544,27 +1732,23 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           <p className="text-[15px] uppercase tracking-[0.5em] text-gray-400 font-medium mb-1.5">Materializing</p>
           <p className="text-[11px] uppercase tracking-[0.2em] text-gray-300 font-light mb-0">Constructing spatial visualization</p>
 
-          <div className="mt-10 flex items-start gap-5">
+          <div className="mt-10 flex items-end justify-center gap-4 sm:gap-5">
             {sortedElements.map(([el, val]) => {
               const ec = ELEMENT_COLORS[el];
-              const isUp = el === 'fire' || el === 'air';
-              const hasBar = el === 'air' || el === 'earth';
               const animatedVal = Math.round(val * Math.min(loadProgress / 100, 1));
+              const isDom = el === liveDominant;
               return (
-                <div key={el} className="flex flex-col items-center gap-1.5" style={{ minWidth: 52 }}>
-                  <span className="text-[15px] font-mono tabular-nums font-medium transition-all duration-700" style={{ color: ec, opacity: 0.85 }}>{animatedVal}%</span>
-                  <div className="h-24 w-3 rounded-full overflow-hidden relative" style={{ background: 'rgba(0,0,0,0.04)' }}>
+                <div key={el} className="flex flex-col items-center gap-2" style={{ minWidth: 48 }}>
+                  <span className="font-mono tabular-nums text-[14px] font-light transition-all duration-700" style={{ color: ec, opacity: isDom ? 1 : 0.75 }}>{animatedVal}%</span>
+                  <div className="h-20 w-[6px] rounded-full overflow-hidden relative" style={{ background: 'rgba(0,0,0,0.04)', boxShadow: isDom ? `inset 0 0 0 1px ${ec}18` : 'none' }}>
                     <div className="absolute bottom-0 w-full rounded-full transition-all duration-1000 ease-out"
-                      style={{ height: `${animatedVal}%`, backgroundColor: ec, opacity: 0.75,
-                        boxShadow: `0 0 8px ${ec}40` }} />
+                      style={{
+                        height: `${animatedVal}%`,
+                        background: `linear-gradient(180deg, color-mix(in srgb, ${ec} 70%, #fff), ${ec})`,
+                        boxShadow: `0 0 12px ${ec}45`,
+                      }} />
                   </div>
-                  <svg width="12" height="12" viewBox="0 0 14 14" className="mt-0.5">
-                    <path d={isUp ? 'M7 2 L12 11 L2 11 Z' : 'M7 12 L12 3 L2 3 Z'}
-                      fill="none" stroke={ec} strokeWidth="1.3" strokeLinejoin="round" opacity="0.7" />
-                    {hasBar && <line x1="4" y1={isUp ? 7.5 : 6.5} x2="10" y2={isUp ? 7.5 : 6.5} stroke={ec} strokeWidth="1" strokeLinecap="round" opacity="0.7" />}
-                  </svg>
-                  <span className="text-[9px] uppercase tracking-[0.14em] font-semibold" style={{ color: ec, opacity: 0.75 }}>{el}</span>
-                  <span className="text-[8px] text-center leading-[1.3] tracking-wide max-w-[64px]" style={{ color: ec, opacity: 0.45 }}>{ELEMENT_CONCEPTS[el].split(',')[0]}</span>
+                  <span className="text-[8px] uppercase tracking-[0.2em] font-medium" style={{ color: ec, opacity: isDom ? 0.9 : 0.55 }}>{el.slice(0, 2)}</span>
                 </div>
               );
             })}
@@ -1720,7 +1904,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                                 <a key={b.id} href={b.url} target="_blank" rel="noopener noreferrer"
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/95 border border-gray-100 shadow-md hover:shadow-lg hover:border-gray-300 transition-all duration-200 group"
                                   onMouseEnter={() => setHoveredBrand(b.id)} onMouseLeave={() => setHoveredBrand(null)} onClick={(e) => e.stopPropagation()}>
-                                  <span className="text-[10px] font-semibold text-gray-700 group-hover:text-black">{b.name}</span>
+                                  <span className="text-[12px] font-medium text-gray-700 group-hover:text-black" style={{ fontFamily: "'Playfair Display', 'Libre Bodoni', Georgia, serif", letterSpacing: '0.01em' }}>{b.name}</span>
                                   <span className="text-[8px] text-gray-400 font-light">{b.specialty}</span>
                                   <svg width="7" height="7" viewBox="0 0 10 10" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round" className="flex-shrink-0 ml-auto"><path d="M3 7 L7 3 M7 3 L7 6 M7 3 L4 3" /></svg>
                                 </a>
@@ -1791,11 +1975,8 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                       });
                       setGenerationKey((k) => k + 1);
                     }}
-                    className="whitespace-nowrap text-[8px] uppercase tracking-[0.16em] font-semibold px-2.5 py-1 rounded-md transition-all active:scale-[0.97] text-white shadow-sm"
-                    style={{
-                      background: scaleDirty ? `linear-gradient(135deg, ${domColor}, ${domColor}cc)` : 'transparent',
-                      boxShadow: scaleDirty ? `0 1px 6px ${domColor}35` : 'none',
-                    }}
+                    className="shre-gen-btn whitespace-nowrap !py-1.5 !px-3 !text-[8px]"
+                    style={{ ['--gen-color' as string]: domColor }}
                   >
                     Regenerate
                   </button>
@@ -1850,17 +2031,17 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
         {/* ── MATERIAL DNA SIDEBAR ── */}
         <div className={`relative z-10 bg-white border-l md:border-l border-t md:border-t-0 border-gray-100/60 flex flex-col overflow-hidden shrink-0 transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
           sidebarOpen
-            ? 'w-full md:w-[340px] flex-1 min-h-0 max-md:min-h-[min(42dvh,400px)] md:flex-none md:max-h-none'
+            ? 'w-full md:w-[300px] flex-1 min-h-0 max-md:min-h-[min(42dvh,400px)] md:flex-none md:max-h-none'
             : 'w-full md:w-[44px] max-h-[44px] md:max-h-none flex-none'
         } ${isRevealed ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}
           style={{ transitionDelay: isRevealed ? '300ms' : '0ms' }}>
 
           {/* Collapsed state */}
           {!sidebarOpen && (
-            <button onClick={() => setSidebarOpen(true)}
+            <button onClick={() => { setSidebarOpen(true); setDnaHinted(true); }}
               className="flex-1 flex md:flex-col flex-row items-center justify-center gap-2 md:gap-3 py-2 md:py-6 px-4 md:px-0 group transition-all hover:bg-gray-50/50 touch-target-auto">
-              <div className="w-6 h-6 rounded-full flex items-center justify-center shadow-sm flex-shrink-0"
-                style={{ background: `radial-gradient(circle at 35% 35%, ${domColor}30, ${domColor}70)`, border: `1px solid ${domColor}40` }}>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center shadow-sm flex-shrink-0 ${dnaHinted ? '' : 'dna-attention'}`}
+                style={{ background: `radial-gradient(circle at 35% 35%, ${domColor}30, ${domColor}70)`, border: `1px solid ${domColor}40`, ['--dna-glow' as any]: `${domColor}80` }}>
                 <span className="text-white text-[11px] font-semibold">{dnaMaterials.length}</span>
               </div>
               <div className="hidden md:flex flex-col items-center" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
@@ -1894,13 +2075,9 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
               <div className="flex-1 overflow-y-auto custom-scroll min-h-0">
               <div className="px-4 pt-2 pb-2">
 
-                {/* Orbit + compact element regulator side-by-side.
-                    Reference layout: orbital diagram on the left, the four
-                    element sliders sit immediately to its right (instead of
-                    stacked below) so the panel is shorter and reads at a
-                    glance. Sliders keep the same applyNewVal handler — only
-                    the visual proportions change. */}
-                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                {/* Orbit + energy balance — stacked for clearer proportions in
+                    the sidebar; balance uses a 2×2 glass card grid. */}
+                <div className="flex flex-col items-stretch gap-3">
                 {(() => {
                   const VB = 200;
                   const CX = 100;
@@ -1915,12 +2092,12 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   const ringOuterOpacity = orbitHover ? 0.36 : 0.22;
                   const ringInnerOpacity = orbitHover ? 0.26 : 0.14;
                   return (
-                    <div className="mx-auto md:mx-0 shrink-0 w-full max-w-[168px] md:w-[160px] md:max-w-[160px]">
+                    <div className="mx-auto shrink-0 w-full max-w-[148px]">
                     <div
                       ref={dnaOrbitalRef}
                       aria-label="Material DNA — element shares and selected materials"
-                      className={`relative mx-auto select-none rounded-full transition-[box-shadow] duration-500 aspect-square max-w-[168px] ${orbitHover ? 'shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_6px_20px_-5px_rgba(0,0,0,0.06)]' : ''}`}
-                      style={{ width: 'min(100%, 168px)' }}
+                      className={`relative mx-auto select-none rounded-full transition-[box-shadow] duration-500 aspect-square max-w-[148px] ${orbitHover ? 'shadow-[0_0_0_1px_rgba(0,0,0,0.04),0_6px_20px_-5px_rgba(0,0,0,0.06)]' : ''}`}
+                      style={{ width: 'min(100%, 148px)' }}
                       onMouseEnter={() => setDnaOrbitHover(true)}
                       onMouseMove={(e) => updateDnaNucleusProximity(e.clientX, e.clientY)}
                       onMouseLeave={() => {
@@ -1998,10 +2175,6 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         const elY = CY + Math.sin(rad) * ROUT;
                         const s = Math.max(7, Math.min(13, val * 0.26 + 4));
                         const mats = matsByEl[el];
-                        const lr = rad;
-                        const labelScale = 1.2;
-                        const lx = CX + Math.cos(lr) * ROUT * labelScale;
-                        const ly = CY + Math.sin(lr) * ROUT * labelScale;
                         return (
                           <React.Fragment key={el}>
                             {mats.map((mat, mi) => {
@@ -2054,20 +2227,6 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                                 zIndex: isDom ? 10 : 5,
                               }}
                             />
-                            <span
-                              className="absolute pointer-events-none z-[12] font-mono tabular-nums max-md:text-[9px] text-[6px] sm:text-[6.5px] font-extralight leading-none tracking-tight transition-opacity duration-300"
-                              style={{
-                                left: `${(lx / VB) * 100}%`,
-                                top: `${(ly / VB) * 100}%`,
-                                transform: 'translate(-50%, -50%)',
-                                color: ec,
-                                opacity: orbitHover ? (isDom ? 0.95 : 0.78) : isDom ? 0.88 : 0.62,
-                                textShadow: '0 0 4px rgba(255,255,255,0.98), 0 1px 1px rgba(255,255,255,0.9)',
-                              }}
-                            >
-                              {val}
-                              <span style={{ opacity: 0.55, fontSize: '5px' }}>%</span>
-                            </span>
                           </React.Fragment>
                         );
                       })}
@@ -2077,103 +2236,28 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   );
                 })()}
 
-                {/* Compact Element Balance — interactive bars + direct input */}
-                {(() => {
-                  const applyNewVal = (el: Element, newVal: number) => {
-                    newVal = Math.max(0, Math.min(100, newVal));
+                {/* Element percentages — minimal readout */}
+                <div className="w-full flex items-center justify-center gap-3 py-1">
+                  {(['earth', 'fire', 'water', 'air'] as Element[]).map(el => {
                     const val = Math.round(dist[el]);
-                    const diff = newVal - val;
-                    const others = (['earth', 'fire', 'water', 'air'] as Element[]).filter(x => x !== el);
-                    const othersSum = others.reduce((s, x) => s + dist[x], 0);
-                    const newDist = { ...dist } as Record<Element, number>;
-                    newDist[el] = newVal;
-                    others.forEach(x => {
-                      newDist[x] = othersSum > 0
-                        ? Math.max(0, Math.round(dist[x] - (diff * dist[x] / othersSum)))
-                        : Math.round((100 - newVal) / others.length);
-                    });
-                    const total = others.reduce((s, x) => s + newDist[x], 0) + newVal;
-                    if (total !== 100) {
-                      const biggest = others.sort((a, b) => newDist[b] - newDist[a])[0];
-                      newDist[biggest] += 100 - total;
-                    }
-                    const newSelection = getSelectionFromPercentages(newDist as any);
-                    setState(prev => ({
-                      ...prev,
-                      refinement: { ...prev.refinement, hasUserRefined: true, refinedPercentages: newDist as any, selectedAdjectives: newSelection.adjectives, selectedMaterials: newSelection.materials },
-                    }));
-                    setMaterialsChanged(true);
-                  };
-                  return (
-                    <div className="flex-1 min-w-0 md:max-w-[200px] space-y-[2px] md:px-0 px-1">
-                      {(['earth', 'fire', 'water', 'air'] as Element[]).map(el => {
-                        const val = Math.round(dist[el]);
-                        const isDom = el === dominant;
-                        const ec = ELEMENT_COLORS[el];
-                        return (
-                          <div key={el} className="flex items-center gap-1.5" style={{ opacity: isDom ? 1 : 0.7 }}>
-                            <span className="text-[9px] uppercase tracking-[0.1em] w-6 shrink-0 text-right font-light" style={{ fontWeight: isDom ? 600 : 400, color: ec }}>{el.slice(0, 2)}</span>
-                            <div className="flex-1 relative h-[12px] flex items-center cursor-ew-resize group touch-manipulation">
-                              <div className="absolute left-0 right-0 h-[3px] top-1/2 -translate-y-1/2 rounded-full" style={{ background: 'rgba(0,0,0,0.05)' }} />
-                              <div className="absolute left-0 top-1/2 -translate-y-1/2 h-[3px] rounded-full transition-all duration-300"
-                                style={{ width: `${val}%`, backgroundColor: ec, opacity: isDom ? 0.85 : 0.5 }} />
-                              <input
-                                type="range" min="0" max="100" value={val}
-                                className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-ew-resize"
-                                aria-label={`${el} share percent`}
-                                onChange={(e) => applyNewVal(el, parseInt(e.target.value, 10))}
-                              />
-                            </div>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              maxLength={3}
-                              defaultValue={val}
-                              key={`${el}-${val}`}
-                              className="font-mono tabular-nums text-[10px] w-8 text-center shrink-0 rounded px-0 py-[1px] outline-none transition-all border font-normal"
-                              style={{
-                                fontWeight: isDom ? 600 : 450,
-                                color: isDom ? ec : '#666',
-                                borderColor: `${ec}30`,
-                                background: `${ec}08`,
-                              }}
-                              onFocus={(e) => { e.target.select(); e.target.style.borderColor = ec; e.target.style.background = '#fff'; e.target.style.boxShadow = `0 0 0 2px ${ec}15`; }}
-                              onBlur={(e) => {
-                                e.target.style.borderColor = `${ec}30`;
-                                e.target.style.background = `${ec}08`;
-                                e.target.style.boxShadow = 'none';
-                                const v = parseInt(e.target.value, 10);
-                                if (!isNaN(v) && v >= 0 && v <= 100 && v !== val) applyNewVal(el, v);
-                                else e.target.value = String(val);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  const v = parseInt((e.target as HTMLInputElement).value, 10);
-                                  if (!isNaN(v) && v >= 0 && v <= 100) applyNewVal(el, v);
-                                  (e.target as HTMLInputElement).blur();
-                                }
-                                if (e.key === 'ArrowUp') { e.preventDefault(); applyNewVal(el, Math.min(100, val + 1)); }
-                                if (e.key === 'ArrowDown') { e.preventDefault(); applyNewVal(el, Math.max(0, val - 1)); }
-                              }}
-                              onInput={(e) => {
-                                const input = e.target as HTMLInputElement;
-                                input.value = input.value.replace(/[^0-9]/g, '');
-                                if (input.value.length > 0 && parseInt(input.value, 10) > 100) input.value = '100';
-                              }}
-                            />
-                            <span className="text-[8px] font-medium" style={{ color: `${ec}50` }}>%</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
-                </div>{/* /flex orbit-+-sliders */}
+                    const isDom = el === dominant;
+                    return (
+                      <span
+                        key={el}
+                        className="font-mono tabular-nums leading-none"
+                        style={{ fontSize: 10, color: isDom ? '#444' : '#aaa', fontWeight: isDom ? 500 : 400 }}
+                      >
+                        {val}
+                      </span>
+                    );
+                  })}
+                </div>
+                </div>{/* /orbit + balance stack */}
 
                 {materialsChanged && (
-                  <div className="flex items-center gap-2 mt-1.5 px-2 py-1 rounded-md bg-amber-50/80 border border-amber-200/50 animate-fade-in">
-                    <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                    <span className="text-[10px] text-amber-700 font-medium">Distribution changed</span>
+                  <div className="flex items-center gap-2 mt-2 px-2.5 py-1.5 rounded-xl border border-gray-100/80 bg-white/70 backdrop-blur-sm animate-fade-in">
+                    <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: domColor, boxShadow: `0 0 6px ${domColor}88` }} />
+                    <span className="text-[9px] uppercase tracking-[0.16em] text-gray-500 font-medium">Changes pending</span>
                   </div>
                 )}
               </div>
@@ -2207,32 +2291,32 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   </div>
                 )}
 
-                {/* Palette quick-select */}
-                <div className="px-3 pt-1.5 pb-1.5 border-t border-gray-50/60">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-gray-400 font-medium mb-1.5">Palette</p>
-                  <div className="flex flex-wrap gap-1">
+                {/* Palette — color strip chips in a 2×2 grid */}
+                <div className="px-3 pt-2 pb-2 border-t border-gray-50/60">
+                  <p className="text-[9px] uppercase tracking-[0.28em] text-gray-400/90 font-medium mb-2">Palette</p>
+                  <div className="grid grid-cols-2 gap-1.5">
                     {(() => {
                       const ELEMENT_PALETTES_GEN: Record<string, { id: string; label: string; colors: string[] }[]> = {
                         earth: [
-                          { id: 'auto', label: 'Auto', colors: ['#bbb', '#999'] },
+                          { id: 'auto', label: 'Auto', colors: ['#d4d4d4', '#a3a3a3', '#737373'] },
                           { id: 'warm-earth', label: 'Warm Earth', colors: ['#C4A882', '#8B6E4E', '#E8DCC8'] },
                           { id: 'dark-bronze', label: 'Dark Bronze', colors: ['#3C2A1E', '#8B6E4E', '#2A2A2E'] },
                           { id: 'cool-mineral', label: 'Cool Mineral', colors: ['#A0A87E', '#C8C8CC', '#7A8450'] },
                         ],
                         fire: [
-                          { id: 'auto', label: 'Auto', colors: ['#bbb', '#999'] },
+                          { id: 'auto', label: 'Auto', colors: ['#d4d4d4', '#a3a3a3', '#737373'] },
                           { id: 'dark-bronze', label: 'Dark Bronze', colors: ['#3C2A1E', '#8B6E4E', '#2A2A2E'] },
                           { id: 'warm-earth', label: 'Warm Earth', colors: ['#A0522D', '#C87B30', '#E8DCC8'] },
                           { id: 'cool-mineral', label: 'Cool Mineral', colors: ['#8B8D94', '#C8C8CC', '#4A4A50'] },
                         ],
                         water: [
-                          { id: 'auto', label: 'Auto', colors: ['#bbb', '#999'] },
+                          { id: 'auto', label: 'Auto', colors: ['#d4d4d4', '#a3a3a3', '#737373'] },
                           { id: 'ocean-calm', label: 'Ocean Calm', colors: ['#C8D4DC', '#B8BCC4', '#E8E6E0'] },
                           { id: 'cool-mineral', label: 'Cool Mineral', colors: ['#C0C0C4', '#8B8D94', '#F0EDE8'] },
                           { id: 'light-air', label: 'Light Air', colors: ['#FAFAFA', '#E8DCC8', '#F0F2F4'] },
                         ],
                         air: [
-                          { id: 'auto', label: 'Auto', colors: ['#bbb', '#999'] },
+                          { id: 'auto', label: 'Auto', colors: ['#d4d4d4', '#a3a3a3', '#737373'] },
                           { id: 'light-air', label: 'Light Air', colors: ['#FAFAFA', '#F0F2F4', '#E4ECF0'] },
                           { id: 'ocean-calm', label: 'Ocean Calm', colors: ['#C8D4DC', '#D0D0D4', '#E8E6E0'] },
                           { id: 'cool-mineral', label: 'Cool Mineral', colors: ['#C8C8CC', '#8B8D94', '#F0EDE8'] },
@@ -2242,17 +2326,20 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         const active = (state.params.colorPalette || 'auto') === p.id;
                         return (
                           <button key={p.id}
+                            type="button"
                             onClick={() => {
                               setState(prev => ({ ...prev, params: { ...prev.params, colorPalette: p.id as any } }));
                               setMaterialsChanged(true);
                             }}
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] tracking-[0.02em] transition-all duration-200 border active:scale-95 ${
-                              active ? 'border-gray-500 text-gray-700 bg-gray-50 font-semibold shadow-sm' : 'border-gray-100 text-gray-400 hover:border-gray-300 hover:text-gray-600'
-                            }`}>
-                            <div className="flex gap-0.5">
-                              {p.colors.map((c, ci) => <div key={ci} className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: c }} />)}
+                            className={`shre-palette-chip text-left ${active ? 'is-active' : ''}`}
+                            style={{ ['--chip-accent' as string]: domColor }}
+                          >
+                            <div className="shre-palette-strip">
+                              {p.colors.map((c, ci) => <span key={ci} style={{ backgroundColor: c }} />)}
                             </div>
-                            {p.label}
+                            <span className={`text-[8px] uppercase tracking-[0.14em] leading-tight ${active ? 'text-gray-700 font-medium' : 'text-gray-400 font-light'}`}>
+                              {p.label}
+                            </span>
                           </button>
                         );
                       });
@@ -2397,20 +2484,23 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
               </div>
 
               {/* ═══ FOOTER Actions (always visible) ═══ */}
-              <div className={`flex-shrink-0 px-3 py-2 border-t space-y-1.5 transition-all duration-300 ${materialsChanged ? 'border-amber-200/60 bg-amber-50/30' : 'border-gray-100/60 bg-white'}`}>
+              <div className={`flex-shrink-0 px-3 py-2.5 border-t space-y-2 transition-all duration-300 ${materialsChanged ? 'border-gray-100/80 bg-gradient-to-b from-white to-gray-50/40' : 'border-gray-100/60 bg-white'}`}>
                 {materialsChanged && (
-                  <button onClick={() => { chime(); setMaterialsChanged(false); setMaterialPickerOpen(false); setSelectedHistoryImage(null); setLoading(true); setPhase('generating'); setLoadProgress(0); setImageLoaded(false); setImageUrl(null); setGenerationKey(k => k + 1); }}
-                    className="w-full py-3 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-lg text-[11px] uppercase tracking-[0.25em] font-semibold transition-all active:scale-[0.97] shadow-lg hover:shadow-xl flex items-center justify-center gap-2 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-transparent animate-pulse" />
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="relative z-10">
+                  <button
+                    type="button"
+                    onClick={regenerateFromChanges}
+                    className="shre-gen-btn w-full"
+                    style={{ ['--gen-color' as string]: domColor }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
                     </svg>
-                    <span className="relative z-10">Regenerate</span>
+                    Regenerate
                   </button>
                 )}
                 <button onClick={() => { whoosh(); navigate('/core'); }}
-                  className="w-full py-2 border border-gray-200 text-[10px] uppercase tracking-[0.2em] font-medium text-gray-400 hover:border-black hover:text-black rounded-md transition-all active:scale-[0.97]">
-                  Refine & Regenerate
+                  className="w-full py-2 rounded-full text-[9px] uppercase tracking-[0.18em] font-medium text-gray-400 hover:text-gray-700 border border-gray-100 hover:border-gray-200 bg-white/80 transition-all active:scale-[0.98]">
+                  Refine in workspace
                 </button>
               </div>
             </div>
@@ -2466,17 +2556,22 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                               style={{ color: isSelected ? refDomColor : '#5a6577' }}>
                           {label}
                         </span>
-                        {/* Top-2 element percentages — truncates instead of overflowing on tight rows. */}
-                        <span className="text-[8px] tracking-[0.04em] font-light w-full text-center truncate">
-                          {top2.map(([el, v], k) => (
-                            <span key={el}>
-                              <span style={{ color: ELEMENT_COLORS[el], opacity: 0.85 }}>
-                                {el.charAt(0).toUpperCase() + el.slice(1, 2)}&nbsp;{Math.round(v)}%
-                              </span>
-                              {k < top2.length - 1 && <span className="text-gray-300 mx-0.5">·</span>}
+                        {/* Top-2 element shares — compact mono pills */}
+                        <div className="flex flex-wrap items-center justify-center gap-0.5 w-full">
+                          {top2.map(([el, v]) => (
+                            <span
+                              key={el}
+                              className="text-[7px] font-mono tabular-nums px-1 py-[1px] rounded-full"
+                              style={{
+                                color: ELEMENT_COLORS[el],
+                                background: `${ELEMENT_COLORS[el]}12`,
+                                opacity: isSelected ? 0.95 : 0.7,
+                              }}
+                            >
+                              {Math.round(v)}%
                             </span>
                           ))}
-                        </span>
+                        </div>
                         {/* Mini 4-dot orbital — kept per user request, fixed size keeps the elemental signature readable */}
                         <div className="relative mt-0.5 flex-shrink-0" style={{ width: '36px', height: '16px' }}>
                           {([
@@ -2514,6 +2609,23 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   Manage
                 </button>
               </div>
+
+              {/* In-page regenerate bar — appears the moment materials (or other
+                  refinements) change, so the user never has to open the
+                  collapsed Material DNA panel to apply them. */}
+              {materialsChanged && (
+                <button
+                  type="button"
+                  onClick={regenerateFromChanges}
+                  className="shre-gen-btn w-full mb-2.5 animate-fade-in-up"
+                  style={{ ['--gen-color' as string]: domColor }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                  </svg>
+                  Regenerate
+                </button>
+              )}
               {/* Materials row scales with the count — each bead is a `flex-1`
                   cell with a max width, so 3 selections look generous and
                   8 selections compress neatly without an overflow scrollbar. */}
@@ -2526,20 +2638,32 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   const pct = Math.round(dist[m.element] || 0);
                   const isCustom = (m as Partial<CustomMaterial>).isCustom === true;
                   const refImg = (m as Partial<CustomMaterial>).referenceImageDataUrl;
+                  const isFlashing = flashMatId === m.id;
+                  const enabled = isMaterialEnabled(m.id, state.refinement.disabledMaterialIds);
                   return (
-                    <div key={m.id} className="group flex-1 min-w-0 max-w-[80px] flex flex-col items-center gap-1">
-                      {/* Circular sphere bead — matches the orbital-material
-                          style. Hover reveals the × delete button so the
-                          user can deselect any picked material directly. */}
-                      <div className="relative w-full aspect-square max-w-[64px] rounded-full overflow-hidden"
+                    <div key={m.id} className={`group flex-1 min-w-0 max-w-[80px] flex flex-col items-center gap-1 ${isFlashing ? 'animate-fade-in-up' : ''}`}>
+                      {/* Circular sphere bead. Enabled (used) materials glow
+                          brightly; paused materials are dimmed/desaturated so
+                          "what is used stands out and what doesn't fit fades".
+                          The × removes, the pause toggle turns a material off
+                          without losing it. */}
+                      <div className="relative w-full aspect-square max-w-[64px] rounded-full overflow-hidden transition-all duration-300"
                            style={{
-                             border: `1.5px solid ${ec}30`,
-                             boxShadow: `0 0 0 1px ${ec}18, 0 2px 8px ${ec}25, 0 1px 4px rgba(0,0,0,0.08)`,
+                             border: !enabled
+                               ? '1.5px dashed rgba(0,0,0,0.20)'
+                               : isFlashing ? `2px solid ${ec}` : `1.5px solid ${ec}55`,
+                             boxShadow: !enabled
+                               ? 'none'
+                               : isFlashing
+                                 ? `0 0 0 3px ${ec}40, 0 4px 16px ${ec}55`
+                                 : `0 0 0 1.5px ${ec}30, 0 3px 12px ${ec}45, 0 1px 4px rgba(0,0,0,0.10)`,
                              background: refImg
                                ? 'transparent'
                                : sphere
                                  ? 'transparent'
                                  : `radial-gradient(circle at 34% 30%, ${ec}E8, ${ec}A0)`,
+                             opacity: enabled ? 1 : 0.4,
+                             filter: enabled ? 'none' : 'grayscale(0.7)',
                            }}>
                         {refImg ? (
                           <img src={refImg} alt={m.name} className="absolute inset-0 w-full h-full object-cover" />
@@ -2552,6 +2676,26 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         )}
                         {isCustom && (
                           <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 text-[6px] uppercase tracking-[0.1em] font-bold px-1 py-[0.5px] rounded-sm bg-black/75 text-white">custom</span>
+                        )}
+                        {/* Pause / use toggle — top-left. Filled = used in the
+                            render, hollow = paused (excluded from generation). */}
+                        <button
+                          type="button"
+                          onClick={(e) => toggleMaterialEnabled(m.id, e)}
+                          className="absolute -top-1.5 -left-1.5 w-[18px] h-[18px] rounded-full bg-white border flex items-center justify-center hover:scale-110 transition-all duration-200 shadow-md z-10"
+                          style={{ borderColor: enabled ? ec : 'rgba(0,0,0,0.25)' }}
+                          title={enabled ? `${m.name} — used in render (click to pause)` : `${m.name} — paused (click to use)`}
+                          aria-pressed={enabled}
+                          aria-label={enabled ? `Pause ${m.name}` : `Use ${m.name}`}
+                        >
+                          {enabled ? (
+                            <span className="w-2.5 h-2.5 rounded-full" style={{ background: ec }} />
+                          ) : (
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="#888" /></svg>
+                          )}
+                        </button>
+                        {!enabled && (
+                          <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[6px] uppercase tracking-[0.12em] font-bold px-1 py-[0.5px] rounded-sm bg-black/60 text-white">paused</span>
                         )}
                         {/* × delete button — visible on hover (always visible
                             on mobile via group-hover override below). */}
@@ -2577,21 +2721,21 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                               removeMaterial(m.name);
                             }
                           }}
-                          className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-white border border-gray-200 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:border-red-200 transition-all duration-200 shadow-sm"
+                          className="absolute -top-1.5 -right-1.5 w-[18px] h-[18px] rounded-full bg-white border border-gray-300 flex items-center justify-center opacity-100 hover:bg-red-500 hover:border-red-500 hover:scale-110 transition-all duration-200 shadow-md group/x z-10"
                           title={`Remove ${m.name}`}
                           aria-label={`Remove ${m.name}`}
                         >
-                          <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#e57373" strokeWidth="2" strokeLinecap="round">
+                          <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#d65656" strokeWidth="2.2" strokeLinecap="round" className="group-hover/x:stroke-white transition-colors">
                             <line x1="3" y1="3" x2="9" y2="9" /><line x1="9" y1="3" x2="3" y2="9" />
                           </svg>
                         </button>
                         {/* Element-color dot — corner accent like the orbit beads */}
                         <div className="absolute bottom-0.5 right-0.5 w-2 h-2 rounded-full border border-white shadow-sm" style={{ background: ec }} />
                       </div>
-                      <span className="text-[9px] font-medium text-center leading-tight w-full truncate" style={{ color: '#3a4a64' }}>
+                      <span className={`text-[9px] font-medium text-center leading-tight w-full truncate ${enabled ? '' : 'line-through'}`} style={{ color: enabled ? '#3a4a64' : '#9aa3b2' }}>
                         {m.name.split('(')[0].trim()}
                       </span>
-                      <span className="text-[8px] font-medium uppercase tracking-[0.1em] text-center w-full truncate" style={{ color: ec, opacity: 0.85 }}>
+                      <span className="text-[8px] font-medium uppercase tracking-[0.1em] text-center w-full truncate" style={{ color: ec, opacity: enabled ? 0.85 : 0.4 }}>
                         {m.element} {pct}%
                       </span>
                     </div>
@@ -2663,7 +2807,18 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                     decor: 'Decor',
                     wall: 'Walls & Paint',
                   };
-                  return orderedCats.map((cat) => {
+                  // Keep the row light — show a small curated set (the
+                  // highlighted category always wins a slot) instead of one
+                  // brand per category, which read as a heavy wall of names.
+                  const MAX_BRANDS = 5;
+                  let shownCats = orderedCats;
+                  if (orderedCats.length > MAX_BRANDS) {
+                    const prioritized = highlightedCategory && orderedCats.includes(highlightedCategory)
+                      ? [highlightedCategory, ...orderedCats.filter((c) => c !== highlightedCategory)]
+                      : orderedCats;
+                    shownCats = prioritized.slice(0, MAX_BRANDS);
+                  }
+                  return shownCats.map((cat) => {
                     const brand = BRAND_CATALOG.find((b) => b.category === cat);
                     if (!brand) return null;
                     const isHighlighted = highlightedCategory === cat;
@@ -2671,14 +2826,14 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                       <a key={brand.id} href={brand.url} target="_blank" rel="noopener noreferrer"
                          onMouseEnter={() => setHoveredBrand(brand.id)} onMouseLeave={() => setHoveredBrand(null)}
                          title={`${brand.name} — ${brand.specialty} (${PRETTY_CAT[cat] || cat})`}
-                         className="flex-1 min-w-0 max-w-[140px] flex flex-col items-start group">
-                        <span className={`text-[13px] sm:text-[15px] font-semibold tracking-[0.01em] leading-tight transition-colors w-full truncate ${
-                          isHighlighted ? 'text-black' : 'text-gray-800 group-hover:text-black'
+                         className="flex-1 min-w-0 max-w-[150px] flex flex-col items-start group">
+                        <span className={`text-[13px] sm:text-[14px] font-normal leading-tight transition-colors w-full truncate ${
+                          isHighlighted ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-900'
                         }`}
-                              style={{ fontFamily: "'Libre Bodoni', 'Playfair Display', serif", letterSpacing: '0.005em' }}>
+                              style={{ fontFamily: "'Playfair Display', 'Libre Bodoni', Georgia, serif", letterSpacing: '0.015em' }}>
                           {brand.name}
                         </span>
-                        <span className="text-[9px] uppercase tracking-[0.14em] text-gray-400 group-hover:text-gray-600 font-medium leading-tight mt-1 w-full truncate transition-colors">
+                        <span className="text-[8px] uppercase tracking-[0.16em] text-gray-300 group-hover:text-gray-500 font-light leading-tight mt-1 w-full truncate transition-colors">
                           {PRETTY_CAT[cat] || cat}
                         </span>
                       </a>
@@ -2807,6 +2962,19 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
         onCancel={() => { setShowCustomMatModal(false); setEditingCustomMat(null); }}
         onSave={addCustomMaterialFromResults}
       />
+
+      {/* ═══ MATERIAL CONFIRMATION TOAST — clear feedback that a material was
+          added / removed (the bottom-row beads alone were easy to miss). ═══ */}
+      {matToast && (
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-12 z-[70] pointer-events-none animate-fade-in-up" style={{ animationDuration: '0.25s' }}>
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-gray-900/95 text-white shadow-2xl backdrop-blur-sm">
+            <span className="w-4 h-4 rounded-full flex items-center justify-center" style={{ background: domColor }}>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7" /></svg>
+            </span>
+            <span className="text-[11px] tracking-[0.06em] font-medium">{matToast}</span>
+          </div>
+        </div>
+      )}
 
       {/* ═══ BUDGET ESTIMATE OVERLAY ═══ */}
       {budgetOpen && (() => {

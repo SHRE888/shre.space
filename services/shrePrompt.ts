@@ -322,6 +322,51 @@ export const ROOM_ATMOSPHERE_REFINEMENT: Record<string, string> = {
  * user adjectives, and the active daylight scenario into one directive the
  * image model treats as the emotional target for the frame.
  */
+/**
+ * Canonical atmosphere word → concrete, buildable visual meaning.
+ * Mirrors the descriptions shown in the in-app Atmosphere References panel
+ * (CoreDiagram.ATMO_REFS) so the image model receives the SAME definition the
+ * user saw when they picked the word. This is what turns a bare adjective
+ * ("moody") into an enforceable, non-utopian visual instruction. Keys match
+ * the labels in adjectivesCatalog.ts exactly.
+ */
+export const ATMOSPHERE_WORD_MEANING: Record<string, string> = {
+  // EARTH
+  grounded:   'visually weighted to the floor — low heavy furniture, solid bases, nothing floats',
+  tactile:    'rough touchable surfaces — raw plaster, hand-worked wood, woven fibre, matte stone',
+  mineral:    'honest raw stone and earth tones — exposed natural geology, unpolished mineral surfaces',
+  'warm mass':'thick warm-toned solid volumes that read heavy, enveloping and permanent',
+  // FIRE
+  moody:      'dark intimate shadow with low warm pools of light against deep-toned walls',
+  cinematic:  'high-contrast dramatic staging, strong directional light, one theatrical focal point',
+  intense:    'bold saturated darks with a single concentrated glowing focus — decisive and powerful',
+  oxidized:   'aged metal patina, rust and bronze tones, burnished warm weathered surfaces',
+  // WATER
+  reflective: 'polished and mirror-calm surfaces, still reflections, serene clarity',
+  flowing:    'continuous curved forms and seamless transitions, uninterrupted gentle movement',
+  immersive:  'enveloping soft layered surfaces in calm tones that wrap around the occupant',
+  sculptural: 'fluid sculpted freestanding forms — stone and surfaces shaped like art',
+  // AIR
+  ethereal:   'weightless translucency, daylight passing through sheer veils, dematerialised edges',
+  weightless: 'forms that appear to float — thin profiles, airy verticality, nothing heavy',
+  luminous:   'bright and full of soft daylight, glowing pale surfaces, silent luminance',
+  futuristic: 'forward-looking and refined — iridescent, clean, advanced surfaces',
+  // SHARED (dual-element bridges)
+  anchored:   'a solid grounded base with one warm focal anchor — earth steadiness meeting fire focus',
+  composed:   'calm ordered balance of grounded mass and light openness — earth meeting air',
+  refined:    'precise polished restraint, warm focus tempered by light clarity — fire meeting air',
+  enveloping: 'soft surrounding calm — grounded warmth wrapped in fluid softness — earth meeting water',
+};
+
+/** Expand selected adjective labels into "word (visual meaning)" phrases. */
+export const expandAdjectivesWithMeaning = (labels: string[]): string =>
+  labels
+    .map((l) => {
+      const meaning = ATMOSPHERE_WORD_MEANING[l.trim().toLowerCase()];
+      return meaning ? `${l} (${meaning})` : l;
+    })
+    .join('; ');
+
 export function buildAtmosphereCalibrationBlock(args: {
   primary: Element;
   secondary: Element | null;
@@ -349,7 +394,7 @@ export function buildAtmosphereCalibrationBlock(args: {
     `- ENERGY BALANCE in frame: Earth ${e}% tactile mass · Fire ${f}% contrast · Water ${w}% reflectivity · Air ${a}% openness — each readable through material and light, never as symbols`,
     `- DAYLIGHT (${lightTime}): ${lightDesc}`,
     userAdjectives.length > 0
-      ? `- CLIENT ADJECTIVES (mandatory experiential cues): ${userAdjectives.join(', ')} — translate through buildable material, light, and proportion only`
+      ? `- CLIENT ADJECTIVES (mandatory experiential cues — each word is defined; the render MUST visibly satisfy every definition through buildable material, light, and proportion only, never as literal symbols): ${expandAdjectivesWithMeaning(userAdjectives)}`
       : '- TONE: restrained luxury, emotional intelligence, quiet gravitas + warmth together — never sterile showroom, never decorative chaos',
     '- REFINEMENT RULE: atmosphere is layered and edited — one dominant light story, one dominant material story, supporting accents subtle; the frame feels photographed by a world-class architectural photographer — clean, noise-free, no speckle dots or film grain',
   ];
