@@ -1766,14 +1766,14 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
   // --- RESULTS VIEW ---
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-x-hidden md:overflow-hidden bg-[#fafafa] relative w-full min-h-[50dvh]">
+    <div className="shre-results-root flex-1 min-h-0 flex flex-col overflow-x-hidden md:overflow-hidden relative w-full min-h-[50dvh]">
 
       {/* ═══ MAIN AREA — image + sidebar ═══ */}
       <div className="flex-1 flex flex-col md:flex-row overflow-visible md:overflow-hidden relative min-h-0">
 
         {/* ── HERO IMAGE + HOTSPOTS — on mobile cap height so Material DNA (below) stays usable ── */}
         <div
-          className={`relative flex flex-col overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] min-w-0 min-h-0 max-md:flex-shrink-0 max-md:flex-none md:flex-1 max-md:sticky max-md:top-11 max-md:z-30 max-md:bg-[#fafafa] max-md:shadow-[0_6px_20px_-8px_rgba(0,0,0,0.08)] ${
+          className={`relative flex flex-col overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] min-w-0 min-h-0 max-md:flex-shrink-0 max-md:flex-none md:flex-1 max-md:sticky max-md:top-11 max-md:z-30 max-md:bg-[#eceae6] max-md:shadow-[0_6px_20px_-8px_rgba(0,0,0,0.08)] ${
             isEditingMaterials && sidebarOpen ? 'md:flex-[1_1_55%]' : ''
           } ${isRevealed ? 'opacity-100' : 'opacity-0 scale-[1.02]'}`}
         >
@@ -1781,21 +1781,15 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           {/* Image container — the render is the hero. Padding is minimal so
               the image gets the largest possible footprint on every viewport,
               and `object-contain` keeps the full render in view (never cropped). */}
-          <div className={`flex-1 md:flex-1 flex items-center justify-center relative z-10 w-full min-h-0 max-md:max-h-[min(48dvh,460px)] md:max-h-none transition-all duration-500 ${isEditingMaterials ? 'p-1.5 sm:p-3' : 'p-1 sm:p-2'}`}>
+          <div className={`flex-1 md:flex-1 flex items-center justify-center relative z-10 w-full min-h-0 max-md:max-h-[min(52dvh,520px)] md:max-h-none transition-all duration-500 ${isEditingMaterials ? 'p-2 sm:p-3' : 'p-2 sm:p-3 md:p-4'}`}>
             {displayedImageUrl && (
-              <div className={`relative w-full max-w-full overflow-hidden transition-all duration-700 ease-out max-md:aspect-[16/9] max-md:min-h-[min(200px,30dvh)] max-md:max-h-[min(48dvh,460px)] md:flex md:items-center md:justify-center md:h-full md:min-h-0 md:max-h-none md:aspect-auto ${isRevealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'} ${isEditingMaterials ? 'scale-[0.95]' : 'scale-100'}`}>
-                {/* Shadow / frame wrapper. On desktop, when the render's
-                    natural aspect ratio is known we apply `aspectRatio` so the
-                    frame hugs the image exactly (no letterbox bands) and the
-                    hotspot orbs land on render pixels. `w-full + max-h-full`
-                    lets the browser pick the larger constraint (the smaller of
-                    width or height) while preserving aspect. */}
-                <div className={`relative max-w-full min-h-[220px] md:min-h-0 rounded-lg overflow-hidden transition-all duration-500 ${isEditingMaterials ? 'shadow-lg shadow-black/5' : 'shadow-2xl shadow-black/10'} ${renderAspect ? 'w-full max-md:h-full md:max-h-full' : 'w-full h-full'}`}
+              <div className={`relative w-full max-w-full overflow-hidden transition-opacity duration-700 ease-out max-md:aspect-[16/9] max-md:min-h-[min(220px,32dvh)] max-md:max-h-[min(52dvh,520px)] md:flex md:items-center md:justify-center md:h-full md:min-h-0 md:max-h-none md:aspect-auto ${isRevealed ? 'opacity-100' : 'opacity-0'} ${isEditingMaterials ? 'scale-[0.98]' : 'scale-100'}`}>
+                <div className={`shre-hero-frame relative max-w-full min-h-[220px] md:min-h-0 w-full ${renderAspect ? 'max-md:h-full md:max-h-full' : 'h-full'}`}
                      style={renderAspect ? { aspectRatio: renderAspect } : undefined}>
-                  <div className="absolute inset-0 rounded-lg overflow-hidden border border-white/50 bg-gray-100/60">
+                  <div className="absolute inset-0 overflow-hidden bg-[#1a1a1a]">
                     <img src={displayedImageUrl} alt="Architectural visualization"
                       decoding="async"
-                      className={`w-full h-full object-contain transition-opacity duration-[2s] ease-out cursor-zoom-in ${imageLoaded ? 'opacity-100' : 'opacity-40'}`}
+                      className={`w-full h-full object-contain transition-opacity duration-[1.2s] ease-out cursor-zoom-in ${imageLoaded ? 'opacity-100' : 'opacity-30'}`}
                       onLoad={(e) => {
                         setImageLoaded(true);
                         const t = e.currentTarget;
@@ -1809,38 +1803,9 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         reference (element name + behavioural caption + DETAILS
                         link to the Diagnosis report). */}
                     {isComplete && (
-                      <div className="absolute top-4 left-4 z-[15] max-w-[200px] sm:max-w-[240px] animate-fade-in"
-                           style={{ animationDuration: '0.6s' }}>
-                        <p className="text-[9px] uppercase tracking-[0.3em] font-medium mb-1.5"
-                           style={{ color: 'rgba(255,255,255,0.7)', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
-                          Primary element
-                        </p>
-                        <p className="text-[28px] sm:text-[36px] uppercase tracking-[0.06em] font-semibold leading-none mb-2.5"
-                           style={{ color: '#fff', textShadow: '0 2px 12px rgba(0,0,0,0.45)' }}>
-                          {dominant}
-                        </p>
-                        <p className="text-[11px] font-light leading-snug mb-3"
-                           style={{ color: 'rgba(255,255,255,0.82)', textShadow: '0 1px 6px rgba(0,0,0,0.45)' }}>
-                          {dominant === 'earth' && 'Structural stability, warmth and grounded presence.'}
-                          {dominant === 'fire' && 'Dramatic warmth, oxidized depth and cinematic energy.'}
-                          {dominant === 'water' && 'Reflective fluidity, cool clarity and sculptural curves.'}
-                          {dominant === 'air' && 'Luminous transparency, lightness and forward-looking openness.'}
-                        </p>
-                        {state.analysis?.diagnosis && (
-                          <button onClick={() => navigate('/diagnosis-report')}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] uppercase tracking-[0.2em] font-semibold transition-all hover:bg-white/15"
-                            style={{
-                              background: 'rgba(255,255,255,0.10)',
-                              border: '1px solid rgba(255,255,255,0.30)',
-                              color: '#fff',
-                              backdropFilter: 'blur(8px)',
-                            }}>
-                            Details
-                            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                              <path d="M3 6 L9 6 M6 3 L9 6 L6 9" />
-                            </svg>
-                          </button>
-                        )}
+                      <div className="shre-hero-tag animate-fade-in" style={{ animationDuration: '0.5s' }}>
+                        <span className="shre-hero-tag__el">Primary</span>
+                        <span className="shre-hero-tag__name">{dominant}</span>
                       </div>
                     )}
                     {/* Editing overlay */}
@@ -1849,43 +1814,19 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                     )}
                   </div>
 
-                  {/* Hotspot orbs — animated with pulse rings */}
+                  {/* Hotspot markers — minimal editorial dots */}
                   {isComplete && activeHotspots.map((h, i) => {
                     const isHovered = hoveredHotspot === h.id || highlightedCategory === h.category;
                     const isActive = activeHotspot === h.id;
                     const brands = getBrandsForHotspot(h.id);
                     return (
                       <div key={h.id}
-                        className={`absolute z-20 transition-all duration-1000 ${isComplete ? 'opacity-100' : 'opacity-0'}`}
-                        style={{ left: `${h.x}%`, top: `${h.y}%`, transform: 'translate(-50%, -50%)', transitionDelay: `${1400 + i * 150}ms` }}
+                        className={`absolute z-20 transition-opacity duration-400 ${isComplete ? 'opacity-100' : 'opacity-0'}`}
+                        style={{ left: `${h.x}%`, top: `${h.y}%`, transform: 'translate(-50%, -50%)', transitionDelay: `${300 + i * 60}ms` }}
                         onMouseEnter={() => setHoveredHotspot(h.id)}
                         onMouseLeave={() => setHoveredHotspot(null)}
                         onClick={(e) => { e.stopPropagation(); setActiveHotspot(prev => prev === h.id ? null : h.id); }}>
-                        {/* Outer pulse ring */}
-                        <div className={`absolute rounded-full transition-all duration-500 ${isActive ? 'opacity-0 scale-0' : 'opacity-100'}`}
-                          style={{ width: '36px', height: '36px', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                            border: '1px solid rgba(255,255,255,0.15)',
-                            animation: `hotspotBreathe ${3 + i * 0.3}s ease-in-out infinite`, animationDelay: `${i * 0.5}s` }} />
-                        {/* Inner glow ring */}
-                        <div className={`absolute rounded-full transition-all duration-500 ${isActive ? 'opacity-0' : 'opacity-70'}`}
-                          style={{ width: '22px', height: '22px', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                            background: 'radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%)',
-                            animation: `hotspotBreathe ${2.5 + i * 0.3}s ease-in-out infinite reverse`, animationDelay: `${i * 0.4}s` }} />
-                        {/* Core dot */}
-                        <div className="relative rounded-full cursor-pointer transition-all duration-400"
-                          style={{ width: isActive ? '16px' : isHovered ? '14px' : '10px', height: isActive ? '16px' : isHovered ? '14px' : '10px',
-                            background: isActive
-                              ? 'radial-gradient(circle at 40% 35%, #fff, rgba(255,255,255,0.9))'
-                              : isHovered
-                                ? 'radial-gradient(circle at 40% 35%, rgba(255,255,255,0.95), rgba(255,255,255,0.7))'
-                                : 'radial-gradient(circle at 40% 35%, rgba(255,255,255,0.7), rgba(255,255,255,0.3))',
-                            boxShadow: isActive
-                              ? '0 0 20px rgba(255,255,255,0.9), 0 0 40px rgba(255,255,255,0.3), 0 2px 8px rgba(0,0,0,0.3)'
-                              : isHovered
-                                ? '0 0 16px rgba(255,255,255,0.7), 0 2px 6px rgba(0,0,0,0.25)'
-                                : '0 0 10px rgba(255,255,255,0.4), 0 1px 4px rgba(0,0,0,0.2)',
-                            border: isActive ? '2px solid rgba(255,255,255,1)' : '1.5px solid rgba(255,255,255,0.5)',
-                          }} />
+                        <div className={`shre-hotspot-dot cursor-pointer ${isActive ? 'is-active' : isHovered ? 'is-hovered' : ''}`} />
                         {/* Label + brands popup */}
                         <div className={`absolute left-1/2 whitespace-nowrap transition-all duration-300 ${isHovered || isActive ? 'opacity-100 translate-y-0 pointer-events-auto' : `opacity-0 ${h.y < 25 ? '-translate-y-1' : 'translate-y-1'} pointer-events-none`}`}
                           style={{ ...(h.y < 25 ? { top: '100%', marginTop: '10px' } : { bottom: '100%', marginBottom: '10px' }), transform: 'translateX(-50%)' }}>
@@ -1921,116 +1862,81 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
             )}
           </div>
 
-          {/* Scale — one thin row; Regenerate only when values differ (like DNA tweak) */}
+          {/* Editorial meta bar — room, scale, balance, actions */}
           {isComplete && displayedImageUrl && (
-            <div className="flex-shrink-0 border-t border-gray-100/80 bg-white/55">
-              <div className="flex items-center gap-2 px-2 sm:px-3 py-1">
-                <span className="text-[8px] uppercase tracking-[0.2em] text-gray-400 font-medium shrink-0">Scale</span>
-                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1 tabular-nums text-[9px] sm:text-[10px] text-gray-600">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    spellCheck={false}
-                    aria-label="Area square meters"
-                    className="w-10 sm:w-11 bg-transparent border-0 border-b border-gray-200/90 focus:border-gray-400 px-0 py-0.5 text-right focus:outline-none focus:ring-0"
-                    value={scaleAreaDraft}
-                    onChange={(e) => setScaleAreaDraft(e.target.value.replace(/[^\d.]/g, ''))}
-                  />
-                  <span className="text-gray-400 shrink-0">m²</span>
-                  <span className="text-gray-200 shrink-0">·</span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    spellCheck={false}
-                    aria-label="Ceiling height meters"
-                    className="w-8 sm:w-9 bg-transparent border-0 border-b border-gray-200/90 focus:border-gray-400 px-0 py-0.5 text-right focus:outline-none focus:ring-0"
-                    value={scaleCeilingDraft}
-                    onChange={(e) => setScaleCeilingDraft(e.target.value.replace(/[^\d.,]/g, '').replace(',', '.'))}
-                  />
-                  <span className="text-gray-400 shrink-0">m</span>
-                </div>
-                <div
-                  className={`shrink-0 overflow-hidden transition-all duration-300 ease-out ${
-                    scaleDirty ? 'max-w-[140px] opacity-100 translate-x-0' : 'max-w-0 opacity-0 translate-x-1 pointer-events-none'
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const { area, ceil } = parseScaleDrafts();
-                      setScaleAreaDraft(String(area));
-                      setScaleCeilingDraft(String(ceil));
-                      chime();
-                      setSelectedHistoryImage(null);
-                      setLoading(true);
-                      setPhase('generating');
-                      setLoadProgress(0);
-                      setImageLoaded(false);
-                      setImageUrl(null);
-                      setState((prev) => {
-                        const next = { ...prev.params, squareMeters: area, ceilingHeight: ceil };
-                        delete next.spaceSummaryLine;
-                        return { ...prev, params: next };
-                      });
-                      setGenerationKey((k) => k + 1);
-                    }}
-                    className="shre-gen-btn whitespace-nowrap !py-1.5 !px-3 !text-[8px]"
-                    style={{ ['--gen-color' as string]: domColor }}
-                  >
-                    Regenerate
-                  </button>
-                </div>
+            <div className="shre-meta-bar flex-shrink-0">
+              <div className="shre-meta-bar__title">
+                <p className="shre-meta-bar__room">{spaceType}</p>
+                <p className="shre-meta-bar__sub">{domain} · {dominant}</p>
               </div>
-            </div>
-          )}
-
-          {/* Concept Brief strip — compact inline */}
-          {isComplete && (
-            <div className="flex-shrink-0 px-2 sm:px-3 py-1.5 transition-all duration-700 ease-out"
-              style={{ transitionDelay: '400ms' }}>
-              <div className="flex items-center justify-between gap-2 sm:gap-3">
-                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
-                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: domColor, opacity: 0.7 }} />
-                  <span className="text-[10px] sm:text-[11px] uppercase tracking-[0.15em] sm:tracking-[0.2em] text-gray-600 font-semibold flex-shrink-0">{spaceType}</span>
-                  <span className="text-gray-200 text-[10px] flex-shrink-0 hidden sm:inline">·</span>
-                  <span className="text-[10px] uppercase tracking-[0.1em] text-gray-400 font-light flex-shrink-0 hidden sm:inline">{domain}</span>
-                  {(() => {
-                    const conceptText = activeHistoryEntry && activeHistoryEntry.id !== 'current' ? activeHistoryEntry.concept : story;
-                    return conceptText ? (
-                      <>
-                        <span className="text-gray-200 text-[10px] flex-shrink-0 hidden md:inline">—</span>
-                        <span className="text-[10px] text-gray-400 font-light truncate hidden md:inline">{conceptText}</span>
-                      </>
-                    ) : null;
-                  })()}
-                </div>
-                <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
-                  <button onClick={() => setBudgetOpen(true)}
-                    className="px-2 sm:px-2.5 py-0.5 border text-[8px] uppercase tracking-[0.15em] sm:tracking-[0.2em] font-semibold rounded transition-all flex items-center gap-1 touch-target-auto"
-                    style={{ borderColor: `${domColor}30`, color: domColor, background: `${domColor}06` }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = `${domColor}60`; e.currentTarget.style.background = `${domColor}10`; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = `${domColor}30`; e.currentTarget.style.background = `${domColor}06`; }}>
-                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>
-                    <span className="hidden sm:inline">Budget</span>
-                  </button>
-                  <button onClick={() => window.print()}
-                    className="px-1.5 sm:px-2 py-0.5 border border-gray-200 text-[8px] uppercase tracking-[0.15em] sm:tracking-[0.2em] font-medium text-gray-400 hover:border-gray-400 hover:text-gray-600 rounded transition-all bg-white/60 touch-target-auto">
-                    Export
-                  </button>
-                  <button onClick={() => navigate('/core')}
-                    className="px-1.5 sm:px-2 py-0.5 border border-gray-200 text-[8px] uppercase tracking-[0.15em] sm:tracking-[0.2em] font-medium text-gray-400 hover:border-gray-400 hover:text-gray-600 rounded transition-all bg-white/60 touch-target-auto hidden sm:inline-flex">
-                    Re-calibrate
-                  </button>
-                </div>
+              <div className="flex items-center gap-1.5 tabular-nums text-[10px] text-[#6b6660] shrink-0">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label="Area square meters"
+                  className="w-9 bg-transparent border-0 border-b border-[#d5d0ca] focus:border-[#1a1a1a] px-0 py-0.5 text-right text-[10px] focus:outline-none"
+                  value={scaleAreaDraft}
+                  onChange={(e) => setScaleAreaDraft(e.target.value.replace(/[^\d.]/g, ''))}
+                />
+                <span className="text-[#b0aba5]">m²</span>
+                <span className="text-[#ddd8d2] mx-0.5">·</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label="Ceiling height meters"
+                  className="w-7 bg-transparent border-0 border-b border-[#d5d0ca] focus:border-[#1a1a1a] px-0 py-0.5 text-right text-[10px] focus:outline-none"
+                  value={scaleCeilingDraft}
+                  onChange={(e) => setScaleCeilingDraft(e.target.value.replace(/[^\d.,]/g, '').replace(',', '.'))}
+                />
+                <span className="text-[#b0aba5]">m</span>
+              </div>
+              <div className="shre-meta-bar__balance">
+                {(['earth', 'fire', 'water', 'air'] as Element[]).map(el => (
+                  <span key={el} className={el === dominant ? 'is-dom' : ''}>{Math.round(dist[el])}</span>
+                ))}
+              </div>
+              {scaleDirty && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const { area, ceil } = parseScaleDrafts();
+                    setScaleAreaDraft(String(area));
+                    setScaleCeilingDraft(String(ceil));
+                    chime();
+                    setSelectedHistoryImage(null);
+                    setLoading(true);
+                    setPhase('generating');
+                    setLoadProgress(0);
+                    setImageLoaded(false);
+                    setImageUrl(null);
+                    setState((prev) => {
+                      const next = { ...prev.params, squareMeters: area, ceilingHeight: ceil };
+                      delete next.spaceSummaryLine;
+                      return { ...prev, params: next };
+                    });
+                    setGenerationKey((k) => k + 1);
+                  }}
+                  className="shre-gen-btn !py-1 !px-2.5 !text-[8px] shrink-0"
+                  style={{ ['--gen-color' as string]: domColor }}
+                >
+                  Regenerate
+                </button>
+              )}
+              <div className="shre-meta-bar__actions">
+                <button type="button" onClick={() => setBudgetOpen(true)} className="shre-meta-btn">Budget</button>
+                <button type="button" onClick={() => window.print()} className="shre-meta-btn">Export</button>
+                <button type="button" onClick={() => navigate('/core')} className="shre-meta-btn hidden sm:inline-block">Calibrate</button>
               </div>
             </div>
           )}
         </div>
 
         {/* ── MATERIAL DNA SIDEBAR ── */}
-        <div className={`relative z-10 bg-white border-l md:border-l border-t md:border-t-0 border-gray-100/60 flex flex-col overflow-hidden shrink-0 transition-[width,opacity,max-height,flex] duration-500 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
+        <div className={`relative z-10 bg-[#f7f6f3] border-l md:border-l border-t md:border-t-0 border-[rgba(0,0,0,0.06)] flex flex-col overflow-hidden shrink-0 transition-[width,opacity,max-height,flex] duration-500 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
           sidebarOpen
             ? 'w-full md:w-[300px] flex-1 min-h-0 max-md:min-h-[min(42dvh,400px)] md:flex-none md:max-h-none'
             : 'w-full md:w-[44px] max-h-[44px] md:max-h-none flex-none'
@@ -2517,86 +2423,30 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           Mirrors the reference layout — each column is its own card with a
           clear uppercase title and a vertical hairline divider between them. */}
       {isComplete && (
-        <div className="flex-shrink-0 border-t border-gray-100/70 bg-white animate-fade-in">
-          <div className="flex flex-col md:flex-row md:items-stretch md:divide-x md:divide-gray-100">
+        <div className="flex-shrink-0 border-t border-[rgba(0,0,0,0.06)] animate-fade-in">
+          <div className="flex flex-col md:flex-row md:items-stretch md:divide-x md:divide-[rgba(0,0,0,0.06)]">
 
-            {/* ─── COLUMN 1: RENDER HISTORY ─────────────────────────────── */}
             {similarReferences.length > 0 && (
-              <div className="flex-1 md:basis-[55%] md:max-w-[55%] px-4 py-2 min-w-0">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] uppercase tracking-[0.3em] text-gray-700 font-semibold">Render History</span>
-                  <span className="text-[9px] uppercase tracking-[0.18em] text-gray-300 font-light">
-                    {similarReferences.length} {similarReferences.length === 1 ? 'render' : 'renders'}
-                  </span>
+              <div className="shre-panel flex-1 md:basis-[55%] md:max-w-[55%] min-w-0">
+                <div className="shre-panel-head">
+                  <span className="shre-panel-head__title">Render History</span>
+                  <span className="shre-panel-head__meta">{similarReferences.length}</span>
                 </div>
-                {/* History row scales rather than scrolls — items use `flex-1`
-                    with a sane `max-w` so they distribute the full row width.
-                    More variations → each thumb shrinks (down to a tight
-                    `min-w-0` floor) so the whole sequence stays visible without
-                    a horizontal scrollbar. */}
-                <div className="flex flex-nowrap items-start gap-1.5 sm:gap-2 overflow-hidden pb-0.5">
+                <div className="flex flex-nowrap items-start gap-2 overflow-hidden">
                   {similarReferences.map((ref, idx) => {
                     const isSelected = displayedImageUrl === ref.imageUrl;
-                    const refDist = ref.dist;
-                    const refSorted = (Object.entries(refDist) as [Element, number][]).sort((a, b) => b[1] - a[1]);
-                    const refDominant = refSorted[0][0];
-                    const refDomColor = ELEMENT_COLORS[refDominant];
-                    const label = ref.id === 'current'
-                      ? 'CURRENT'
-                      : `V${String(idx).padStart(2, '0')}`;
-                    // Top-2 elements with % — reference shows "Earth 37% · Fire 28%"
-                    const top2 = refSorted.slice(0, 2);
+                    const label = ref.id === 'current' ? 'Now' : `${idx}`;
                     return (
-                      <div key={ref.id} className="flex-1 min-w-0 max-w-[120px] flex flex-col items-center gap-1">
-                        <button onClick={() => setSelectedHistoryImage(isSelected ? null : ref.imageUrl)}
+                      <div key={ref.id} className="flex-1 min-w-0 max-w-[100px] flex flex-col items-stretch gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedHistoryImage(isSelected ? null : ref.imageUrl)}
                           onDoubleClick={() => setZoomedImage(ref.imageUrl)}
-                          className={`w-full aspect-[13/8] rounded-md overflow-hidden border transition-all duration-300 group ${
-                            isSelected ? 'border-gray-400 ring-1 ring-gray-300 shadow-md' : 'border-gray-100 hover:border-gray-300 hover:shadow-sm'
-                          }`}
-                          style={isSelected ? { transform: 'scale(1.04)' } : undefined}>
-                          <img src={ref.imageUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                          className={`shre-history-thumb w-full aspect-[16/10] group ${isSelected ? 'is-selected' : ''}`}
+                        >
+                          <img src={ref.imageUrl} alt="" className="w-full h-full object-cover" />
                         </button>
-                        <span className="text-[9px] uppercase tracking-[0.16em] font-semibold w-full text-center truncate"
-                              style={{ color: isSelected ? refDomColor : '#5a6577' }}>
-                          {label}
-                        </span>
-                        {/* Top-2 element shares — compact mono pills */}
-                        <div className="flex flex-wrap items-center justify-center gap-0.5 w-full">
-                          {top2.map(([el, v]) => (
-                            <span
-                              key={el}
-                              className="text-[7px] font-mono tabular-nums px-1 py-[1px] rounded-full"
-                              style={{
-                                color: ELEMENT_COLORS[el],
-                                background: `${ELEMENT_COLORS[el]}12`,
-                                opacity: isSelected ? 0.95 : 0.7,
-                              }}
-                            >
-                              {Math.round(v)}%
-                            </span>
-                          ))}
-                        </div>
-                        {/* Mini 4-dot orbital — kept per user request, fixed size keeps the elemental signature readable */}
-                        <div className="relative mt-0.5 flex-shrink-0" style={{ width: '36px', height: '16px' }}>
-                          {([
-                            { el: 'air' as Element, x: 18, y: 1 },
-                            { el: 'fire' as Element, x: 35, y: 8 },
-                            { el: 'earth' as Element, x: 18, y: 15 },
-                            { el: 'water' as Element, x: 1, y: 8 },
-                          ]).map(({ el, x, y }) => {
-                            const v = refDist[el] || 0;
-                            const s = Math.max(3, Math.min(8, v * 0.12 + 2));
-                            const isDom = el === refDominant;
-                            return (
-                              <div key={el} className="absolute rounded-full transition-all duration-500" style={{
-                                width: `${s}px`, height: `${s}px`, left: `${x}px`, top: `${y}px`,
-                                transform: 'translate(-50%, -50%)', backgroundColor: ELEMENT_COLORS[el],
-                                opacity: isDom ? 0.9 : (isSelected ? 0.55 : 0.3),
-                                boxShadow: isDom && isSelected ? `0 0 4px ${ELEMENT_COLORS[el]}55` : 'none',
-                              }} />
-                            );
-                          })}
-                        </div>
+                        <span className="text-[8px] uppercase tracking-[0.2em] text-center text-[#8a8580] font-medium">{label}</span>
                       </div>
                     );
                   })}
@@ -2604,12 +2454,11 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
               </div>
             )}
 
-            {/* ─── COLUMN 2: MATERIALS USED IN THIS SPACE ───────────────── */}
-            <div className="flex-1 md:basis-[45%] md:max-w-[45%] px-4 py-2 min-w-0 border-t md:border-t-0 border-gray-100">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] uppercase tracking-[0.3em] text-gray-700 font-semibold">Materials Used in this Space</span>
-                <button onClick={() => { setEditingCustomMat(null); setShowCustomMatModal(true); }}
-                  className="text-[9px] uppercase tracking-[0.2em] text-gray-400 hover:text-gray-700 font-medium transition-colors">
+            <div className="shre-panel flex-1 md:basis-[45%] md:max-w-[45%] min-w-0 border-t md:border-t-0 border-[rgba(0,0,0,0.06)]">
+              <div className="shre-panel-head">
+                <span className="shre-panel-head__title">Materials</span>
+                <button type="button" onClick={() => { setEditingCustomMat(null); setShowCustomMatModal(true); }}
+                  className="shre-panel-head__meta hover:text-[#5a5550] transition-colors">
                   Manage
                 </button>
               </div>
@@ -2639,7 +2488,6 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   const sphere = MATERIAL_SPHERE_IMAGES[m.name];
                   const tint = MATERIAL_TEXTURE_TINT[m.name];
                   const flt = MATERIAL_TEXTURE_FILTER[m.name];
-                  const pct = Math.round(dist[m.element] || 0);
                   const isCustom = (m as Partial<CustomMaterial>).isCustom === true;
                   const refImg = (m as Partial<CustomMaterial>).referenceImageDataUrl;
                   const isFlashing = flashMatId === m.id;
@@ -2651,7 +2499,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                           "what is used stands out and what doesn't fit fades".
                           The × removes, the pause toggle turns a material off
                           without losing it. */}
-                      <div className="relative w-full aspect-square max-w-[64px] rounded-full overflow-hidden transition-all duration-300"
+                      <div className="relative w-full aspect-square max-w-[64px] rounded-full overflow-hidden transition-[opacity,box-shadow,border-color] duration-200"
                            style={{
                              border: !enabled
                                ? '1.5px dashed rgba(0,0,0,0.20)'
@@ -2736,11 +2584,8 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         {/* Element-color dot — corner accent like the orbit beads */}
                         <div className="absolute bottom-0.5 right-0.5 w-2 h-2 rounded-full border border-white shadow-sm" style={{ background: ec }} />
                       </div>
-                      <span className={`text-[9px] font-medium text-center leading-tight w-full truncate ${enabled ? '' : 'line-through'}`} style={{ color: enabled ? '#3a4a64' : '#9aa3b2' }}>
+                      <span className={`shre-mat-label w-full ${enabled ? '' : 'opacity-40 line-through'}`}>
                         {m.name.split('(')[0].trim()}
-                      </span>
-                      <span className="text-[8px] font-medium uppercase tracking-[0.1em] text-center w-full truncate" style={{ color: ec, opacity: enabled ? 0.85 : 0.4 }}>
-                        {m.element} {pct}%
                       </span>
                     </div>
                   );
@@ -2773,14 +2618,13 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           Mirrors the Polifrom · Boffi · GAGGENAU · FLOS treatment in the
           design reference. */}
       {isComplete && (
-        <div className="flex-shrink-0 border-t border-gray-100/70 bg-white animate-fade-in">
-          <div className="flex flex-col md:flex-row md:items-stretch md:divide-x md:divide-gray-100">
+        <div className="flex-shrink-0 border-t border-[rgba(0,0,0,0.06)] bg-[#f7f6f3] animate-fade-in">
+          <div className="flex flex-col md:flex-row md:items-stretch md:divide-x md:divide-[rgba(0,0,0,0.06)]">
 
             {/* ─── BRANDS IN THIS SPACE ────────────────────────────────── */}
-            <div className="flex-1 md:basis-[62%] md:max-w-[62%] px-4 py-2 min-w-0">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] uppercase tracking-[0.3em] text-gray-700 font-semibold">Brands in this Space</span>
-                <span className="text-[9px] uppercase tracking-[0.18em] text-gray-300 font-light">curated</span>
+            <div className="shre-panel flex-1 md:basis-[62%] md:max-w-[62%] min-w-0">
+              <div className="shre-panel-head">
+                <span className="shre-panel-head__title">Brands in this Space</span>
               </div>
               {/* Brand row scales rather than scrolls — each card is a
                   flex-1 cell that shrinks gracefully (with truncation on the
@@ -2847,10 +2691,10 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
             </div>
 
             {/* ─── ARCHITECTS & INTERIOR DESIGNERS ──────────────────────── */}
-            <div className="flex-1 md:basis-[38%] md:max-w-[38%] px-4 py-2 min-w-0 border-t md:border-t-0 border-gray-100">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] uppercase tracking-[0.3em] text-gray-700 font-semibold">Architects &amp; Interior Designers</span>
-                <span className="text-[9px] uppercase tracking-[0.18em] text-gray-300 font-light">{architectsAndDesigners.length}</span>
+            <div className="shre-panel flex-1 md:basis-[38%] md:max-w-[38%] min-w-0 border-t md:border-t-0 border-[rgba(0,0,0,0.06)]">
+              <div className="shre-panel-head">
+                <span className="shre-panel-head__title">Architects & Designers</span>
+                <span className="shre-panel-head__meta">{architectsAndDesigners.length}</span>
               </div>
               {/* Architect row also fits-to-row instead of overflowing —
                   longer studio names truncate with ellipsis so every firm

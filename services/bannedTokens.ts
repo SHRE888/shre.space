@@ -83,7 +83,8 @@ const REPLACEMENTS: Record<string, string> = {
 };
 
 // v4.0 canonical closing phrase. Exported so the builder can verify it.
-export const V4_REQUIRED_PROMPT_TAIL = "clean editorial architectural photograph, photorealistic, smooth surfaces, no film grain, no render noise, no speckle dots";
+export const V4_REQUIRED_PROMPT_TAIL =
+  "Hasselblad medium-format architectural photograph, 35mm tilt-shift, photorealistic material micro-texture, unified color grade, smooth surfaces, no film grain, no render noise, no speckle dots";
 
 const TAIL_REGEX_SOURCE = V4_REQUIRED_PROMPT_TAIL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const TAIL_TRAILING_REGEX = new RegExp(`${TAIL_REGEX_SOURCE}\\s*\\.?\\s*$`, "i");

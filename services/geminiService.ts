@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { ANTI_UTOPIAN_ARCHITECTURAL_CONTROL } from './shrePrompt';
 
 const IMAGE_MODEL = 'gemini-3-pro-image-preview';
-const IMAGE_SIZE = '2K';
+const IMAGE_SIZE = '4K';
 const TEXT_ANALYSIS_MODEL = 'gemini-2.5-flash';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -73,6 +73,10 @@ const SYSTEM_INSTRUCTION = [
   'DETAILING INTELLIGENCE: architectural detailing must feel premium and buildable. Required: recessed shadow gaps, elegant integrated joinery, integrated linear lighting, refined edge conditions, premium stone detailing, believable cabinet proportions, realistic material transitions. Avoid bulky geometry, unrealistic thickness, generic cabinetry, cheap detailing.',
   '',
   'MATERIAL REALISM: every surface must read as photography, not CG. Stone shows natural veining variation and the difference between honed and polished finish; wood shows grain direction, knots, aging patina, oil or wax sheen (never plastic gloss); plaster shows trowel marks and micro-texture; metal reflects the actual surrounding scene with brushing direction and fingerprint-scale patina (never generic chrome shine); fabric shows weave and drape physics with natural wrinkles; concrete shows formwork patterns and aggregate; glass reflects the real room geometry, dichroic shifts hue across the panel rather than painting one flat purple.',
+  '',
+  'MATERIAL HARMONY: all finishes in the frame belong to one coherent project photographed in one exposure. Junctions between materials show real shadow gaps, rebated edges, or trim — never pasted texture seams. Reflections in glass and stone match the actual windows and objects in the room. One unified color grade ties warm wood, cool marble, and neutral plaster together. Multi-element percentages blend through zoning and reflected light, not by smearing finishes into invented hybrid surfaces.',
+  '',
+  'PHOTOGRAPHIC EXECUTION: shoot as Hasselblad medium-format architectural photography — 35mm tilt-shift equivalent, f/8, ISO 100, tripod, perfectly plumb verticals, subtle natural vignette, unified neutral-warm grade, gentle highlight rolloff, believable shadow depth. One dominant daylight vector; fill from bounce off floor and ceiling only. Slight depth falloff on distant planes is acceptable; foreground materials stay tack-sharp with micro-texture visible.',
   '',
   'REFERENCE LOCK MODE — when a reference image is attached to the brief, that image is the visual DNA. Before rendering, analyze the reference for: atmosphere, light behavior, shadow depth, material hierarchy, emotional density, openness vs enclosure, spatial rhythm, contrast level, furniture proportions, architectural detailing. Carry those qualities forward; do not drift into unrelated aesthetics or invent a different room. The reference\'s spatial layout, room proportions, and camera angle are PRESERVED. Material, lighting, and atmosphere changes ride on top of that preserved geometry.',
   '',

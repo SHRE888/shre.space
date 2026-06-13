@@ -433,7 +433,18 @@ export const SHRE_BANNED_ADJECTIVES: string[] = [
 ];
 
 /** Canonical closing line. Mirrors V4_REQUIRED_PROMPT_TAIL in bannedTokens.ts. */
-export const SHRE_CLOSING_LINE = 'clean editorial architectural photograph, photorealistic, smooth surfaces, no film grain, no render noise, no speckle dots';
+export const SHRE_CLOSING_LINE =
+  'Hasselblad H6D-100c medium-format architectural photograph, 35mm tilt-shift lens, f/8, ISO 100, tripod-mounted, perfectly corrected verticals, unified neutral-warm color grade, photorealistic material micro-texture, smooth tonal rolloff in shadows, no film grain, no render noise, no speckle dots, no CGI gloss';
+
+/** Material cohesion — stops collage-like AI pasting of unrelated finishes. */
+export const MATERIAL_HARMONY_AND_BLENDING = `MATERIAL HARMONY & BLENDING (mandatory — the room must read as ONE authored project, not a texture collage):
+- UNIFIED COLOR GRADE: all materials share one coherent white balance and exposure — warm oak, cool marble, and glass reflections must belong to the same photograph taken at one moment, not separate samples pasted together.
+- TRANSITION ZONES: where stone meets wood, wood meets plaster, or metal meets glass, show real junction detail — 3–8 mm shadow gap, rebated edge, brass trim strip, or flush reveal — never a hard AI seam or floating panel edge.
+- REFLECTION COHERENCE: glass and polished stone reflect the SAME room geometry, window positions, and light direction; reflections must match the actual scene, not generic studio HDRI.
+- MATERIAL SCALE: veining, wood grain, and fabric weave run at believable real-world scale (marble veins cm-wide, oak planks 140–220 mm, tile grout 2–3 mm) — never oversized repeating texture stamps.
+- SURFACE FINISH CONTRAST: pair ONE honed/matte mass (plaster, limewash, raw oak) with ONE polished accent (marble slab, satin metal, low-iron glass) — the contrast reads through finish, not through random color patches.
+- CONTACT & WEIGHT: every object casts a soft contact shadow on the surface below; heavy stone and timber read grounded; textiles drape with gravity — no floating furniture, no hovering slabs.
+- ELEMENT BLEND: multi-element percentages express as zoning and accent layers that share a common palette temperature — secondary materials harmonize through adjacent placement and reflected light, not by mixing finishes into one invented surface.`;
 
 /**
  * Universal anti-utopian architectural control — mandatory quality gate for
@@ -1140,11 +1151,8 @@ export function buildSHREPromptBody(args: {
   lines.push(`${tech.kelvin}K ${tech.lightType} on ${primaryNoun}`);
   lines.push(tech.surfaceFinish);
 
-  // 8. ARCHITECTURAL DETAILING — concrete instruction set so the
-  //    render carries premium, buildable detailing rather than CGI
-  //    smoothness. The wider anti-AI directive lives in SYSTEM_INSTRUCTION
-  //    so we keep this line tight + actionable.
-  lines.push('Detailing: recessed shadow gaps, elegant integrated joinery, integrated linear lighting, refined edge conditions, premium stone detailing, realistic material transitions');
+  // 8. Architectural detailing — buildable premium joints and transitions.
+  lines.push('Detailing: recessed shadow gaps, elegant integrated joinery, integrated linear lighting, refined edge conditions, premium stone detailing, realistic material transitions with visible junction shadow gaps');
 
   // 9. Canonical photographic-quality tail.
   lines.push(SHRE_CLOSING_LINE);

@@ -14,6 +14,7 @@ import {
   BATHROOM_ACCENT_DECOR,
   FUNCTIONAL_PLACEMENT_LOGIC,
   EDITORIAL_DESIGN_DEPTH,
+  MATERIAL_HARMONY_AND_BLENDING,
   readElements,
   ELEMENT_DAYLIGHT_QUALITY,
   ELEMENT_ACCENT_DECOR,
@@ -2312,6 +2313,7 @@ These are SMALL decor and lighting accents distributed in the room — they do N
   P.push(buildAntiUtopianControlBlock(roomKey));
   P.push(FUNCTIONAL_PLACEMENT_LOGIC);
   P.push(EDITORIAL_DESIGN_DEPTH);
+  P.push(MATERIAL_HARMONY_AND_BLENDING);
   P.push(CAMERA_FRAMING_DISCIPLINE);
 
   if (roomKey === 'Bathroom' || roomKey === 'Restroom') {
