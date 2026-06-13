@@ -782,7 +782,7 @@ input[type="range"]::-moz-range-thumb {
   }
 }
 .dna-attention {
-  animation: dnaAttentionGlow 2.2s ease-in-out infinite;
+  animation: dnaAttentionGlow 2.2s ease-in-out 3;
 }
 @media (prefers-reduced-motion: reduce) {
   .dna-attention {

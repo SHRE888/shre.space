@@ -1,13 +1,14 @@
 import { GoogleGenAI } from "@google/genai";
 import { ANTI_UTOPIAN_ARCHITECTURAL_CONTROL } from './shrePrompt';
 
-const IMAGE_MODEL = 'gemini-2.5-flash-image';
+const IMAGE_MODEL = 'gemini-3-pro-image-preview';
+const IMAGE_SIZE = '2K';
 const TEXT_ANALYSIS_MODEL = 'gemini-2.5-flash';
 
 // ════════════════════════════════════════════════════════════════════════════
 // SHRE · 4E SPATIAL INTELLIGENCE ENGINE — Image-model system instruction
 // ────────────────────────────────────────────────────────────────────────────
-// Fed directly to gemini-2.5-flash-image as `systemInstruction`, so it must
+// Fed directly to the image model as `systemInstruction`, so it must
 // be phrased as rendering guidance ("paint a space that looks like…") and
 // not as a planner workflow. The planner is `services/promptEngine.ts` +
 // `services/shrePrompt.ts` — they build the per-render brief that gets
@@ -171,6 +172,21 @@ const getClient = () => {
 
 export type ReferenceImageKind = 'plan' | 'space-photo' | 'reference';
 
+/** When the API returns multiple inline image parts, pick the largest payload (2K over 1K preview). */
+function pickBestInlineImageData(parts: { inlineData?: { data?: string } }[]): string | null {
+  let best: string | null = null;
+  let bestLen = 0;
+  for (const part of parts) {
+    const data = part.inlineData?.data;
+    if (!data) continue;
+    if (data.length > bestLen) {
+      bestLen = data.length;
+      best = data;
+    }
+  }
+  return best;
+}
+
 export const generateImageFromPrompt = async (
   prompt: string,
   referenceImage?: File,
@@ -206,10 +222,11 @@ export const generateImageFromPrompt = async (
     const isEdit = !!(imagePart && targetedEditInstruction);
 
     const config: Record<string, unknown> = {
-      responseModalities: ['TEXT', 'IMAGE'],
+      responseModalities: isEdit ? ['TEXT', 'IMAGE'] : ['IMAGE'],
       systemInstruction: isEdit ? EDIT_SYSTEM_INSTRUCTION : SYSTEM_INSTRUCTION,
       imageConfig: {
         aspectRatio: ar,
+        imageSize: IMAGE_SIZE,
       },
     };
 
@@ -248,10 +265,9 @@ export const generateImageFromPrompt = async (
 
     if (response.candidates && response.candidates[0]?.content?.parts) {
         const parts = response.candidates[0].content.parts;
-        for (const part of parts) {
-            if (part.inlineData && part.inlineData.data) {
-                return `data:image/png;base64,${part.inlineData.data}`;
-            }
+        const bestData = pickBestInlineImageData(parts);
+        if (bestData) {
+            return `data:image/png;base64,${bestData}`;
         }
 
         // No image came back. Surface whatever signal the model returned so we

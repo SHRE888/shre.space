@@ -1766,7 +1766,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
 
   // --- RESULTS VIEW ---
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-x-hidden overflow-y-auto md:overflow-hidden bg-[#fafafa] relative w-full min-h-[50dvh]">
+    <div className="flex-1 min-h-0 flex flex-col overflow-x-hidden md:overflow-hidden bg-[#fafafa] relative w-full min-h-[50dvh]">
 
       {/* ═══ MAIN AREA — image + sidebar ═══ */}
       <div className="flex-1 flex flex-col md:flex-row overflow-visible md:overflow-hidden relative min-h-0">
@@ -1794,7 +1794,8 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                      style={renderAspect ? { aspectRatio: renderAspect } : undefined}>
                   <div className="absolute inset-0 rounded-lg overflow-hidden border border-white/50 bg-gray-100/60">
                     <img src={displayedImageUrl} alt="Architectural visualization"
-                      className={`w-full h-full object-contain transition-all duration-[2s] ease-out cursor-zoom-in ${imageLoaded ? 'opacity-100 scale-100' : 'opacity-40 scale-[1.01]'}`}
+                      decoding="async"
+                      className={`w-full h-full object-contain transition-opacity duration-[2s] ease-out cursor-zoom-in ${imageLoaded ? 'opacity-100' : 'opacity-40'}`}
                       onLoad={(e) => {
                         setImageLoaded(true);
                         const t = e.currentTarget;
@@ -2029,7 +2030,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
         </div>
 
         {/* ── MATERIAL DNA SIDEBAR ── */}
-        <div className={`relative z-10 bg-white border-l md:border-l border-t md:border-t-0 border-gray-100/60 flex flex-col overflow-hidden shrink-0 transition-all duration-700 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
+        <div className={`relative z-10 bg-white border-l md:border-l border-t md:border-t-0 border-gray-100/60 flex flex-col overflow-hidden shrink-0 transition-[width,opacity,max-height,flex] duration-500 ease-[cubic-bezier(0.22,0.61,0.36,1)] ${
           sidebarOpen
             ? 'w-full md:w-[300px] flex-1 min-h-0 max-md:min-h-[min(42dvh,400px)] md:flex-none md:max-h-none'
             : 'w-full md:w-[44px] max-h-[44px] md:max-h-none flex-none'
@@ -2039,17 +2040,21 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           {/* Collapsed state */}
           {!sidebarOpen && (
             <button onClick={() => { setSidebarOpen(true); setDnaHinted(true); }}
-              className="flex-1 flex md:flex-col flex-row items-center justify-center gap-2 md:gap-3 py-2 md:py-6 px-4 md:px-0 group transition-all hover:bg-gray-50/50 touch-target-auto">
+              className="flex-1 flex md:flex-col flex-row items-center justify-center gap-2 md:gap-3 py-2 md:py-6 px-4 md:px-0 group hover:bg-gray-50/50 touch-target-auto">
               <div className={`w-6 h-6 rounded-full flex items-center justify-center shadow-sm flex-shrink-0 ${dnaHinted ? '' : 'dna-attention'}`}
                 style={{ background: `radial-gradient(circle at 35% 35%, ${domColor}30, ${domColor}70)`, border: `1px solid ${domColor}40`, ['--dna-glow' as any]: `${domColor}80` }}>
                 <span className="text-white text-[11px] font-semibold">{dnaMaterials.length}</span>
               </div>
               <div className="hidden md:flex flex-col items-center" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
-                <span className="text-[11px] uppercase tracking-[0.3em] text-gray-400 font-medium group-hover:text-gray-600 transition-colors">Material DNA</span>
+                <span className="text-[11px] uppercase tracking-[0.3em] text-gray-400 font-medium group-hover:text-gray-600">Material DNA</span>
               </div>
-              <span className="md:hidden text-[11px] uppercase tracking-[0.2em] text-gray-400 font-medium group-hover:text-gray-600 transition-colors">Material DNA</span>
-              <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round" className="md:mt-1 group-hover:stroke-gray-600 transition-colors md:rotate-0 -rotate-90">
+              <span className="md:hidden text-[11px] uppercase tracking-[0.2em] text-gray-400 font-medium group-hover:text-gray-600">Material DNA</span>
+              {/* Static chevrons — no CSS rotate (avoids jitter while scrolling) */}
+              <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round" className="hidden md:block md:mt-1 group-hover:stroke-gray-600">
                 <path d="M8 3 L5 6 L8 9" />
+              </svg>
+              <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="#bbb" strokeWidth="1.5" strokeLinecap="round" className="md:hidden group-hover:stroke-gray-600">
+                <path d="M3 4 L6 7 L9 4" />
               </svg>
             </button>
           )}
@@ -2512,8 +2517,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           Mirrors the reference layout — each column is its own card with a
           clear uppercase title and a vertical hairline divider between them. */}
       {isComplete && (
-        <div className="flex-shrink-0 border-t border-gray-100/70 bg-white transition-all duration-1000 ease-out"
-             style={{ transitionDelay: '800ms' }}>
+        <div className="flex-shrink-0 border-t border-gray-100/70 bg-white animate-fade-in">
           <div className="flex flex-col md:flex-row md:items-stretch md:divide-x md:divide-gray-100">
 
             {/* ─── COLUMN 1: RENDER HISTORY ─────────────────────────────── */}
@@ -2769,8 +2773,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
           Mirrors the Polifrom · Boffi · GAGGENAU · FLOS treatment in the
           design reference. */}
       {isComplete && (
-        <div className="flex-shrink-0 border-t border-gray-100/70 bg-white transition-all duration-1000 ease-out"
-             style={{ transitionDelay: '1000ms' }}>
+        <div className="flex-shrink-0 border-t border-gray-100/70 bg-white animate-fade-in">
           <div className="flex flex-col md:flex-row md:items-stretch md:divide-x md:divide-gray-100">
 
             {/* ─── BRANDS IN THIS SPACE ────────────────────────────────── */}
