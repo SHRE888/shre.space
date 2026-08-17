@@ -49,5 +49,6 @@ coverage
 .tmp_*
 .tmp_pdf_extract
 
-# Large local texture library (do not commit)
-public/survey-textures/
+# Local texture scratch — ship only the Q2 tiles the survey actually uses
+public/survey-textures/*
+!public/survey-textures/q2-*.png

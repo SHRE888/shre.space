@@ -483,7 +483,7 @@ const Q1_VARIANTS: Question[] = [
 // the material is part of the answer rather than a hint about the element.
 const Q2_VARIANTS: Question[] = [
   {
-    id: 'q2', text: 'Which surface would you want under your hands every day?', subtitle: 'The one you would keep touching without thinking', visual: true, showLabels: true,
+    id: 'q2', text: 'Which material would you live with?', subtitle: 'A surface for daily contact', visual: true, showLabels: true,
     options: [
       { text: 'Speckled granite',  weights: { earth: 80, air: 20 },  image: '/survey-textures/q2-earth-granite.png' },
       { text: 'Gold leaf',         weights: { fire: 80, air: 20 },   image: '/survey-textures/q2-fire-gold-leaf.png' },
@@ -492,7 +492,7 @@ const Q2_VARIANTS: Question[] = [
     ]
   },
   {
-    id: 'q2', text: 'If you closed your eyes, which texture would tell you that you are home?', subtitle: 'Touch decides before the mind explains', visual: true, showLabels: true,
+    id: 'q2', text: 'Which texture would you specify?', subtitle: 'The one that belongs in the room', visual: true, showLabels: true,
     options: [
       { text: 'Dark timber grain', weights: { earth: 80, fire: 20 }, image: '/survey-textures/q2-earth-dark-grain.png' },
       { text: 'Hammered copper',   weights: { fire: 80, earth: 20 }, image: '/survey-textures/q2-fire-hammered-copper.png' },
@@ -501,7 +501,7 @@ const Q2_VARIANTS: Question[] = [
     ]
   },
   {
-    id: 'q2', text: 'How should a room feel against your skin?', subtitle: 'Before it looks like anything, it feels like something', visual: true, showLabels: true,
+    id: 'q2', text: 'Which finish would you keep?', subtitle: 'Choose the material, not the look', visual: true, showLabels: true,
     options: [
       { text: 'Red travertine',  weights: { earth: 75, fire: 25 }, image: '/survey-textures/q2-earth-travertine.png' },
       { text: 'Molten bronze',   weights: { fire: 80, earth: 20 }, image: '/survey-textures/q2-fire-molten-bronze.png' },
