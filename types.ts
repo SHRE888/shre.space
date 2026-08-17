@@ -62,6 +62,41 @@ export interface MaterialDef {
   coverage?: number;
 }
 
+/**
+ * A latent variable the diagnostic can measure. Each dimension is a different
+ * sensory or spatial layer, so agreement ACROSS dimensions is real evidence
+ * while agreement inside one dimension is only a repeated measurement.
+ *
+ * The adaptive selector reads this to avoid asking the same layer twice in a
+ * row and to decide which layer is still unmeasured.
+ */
+export type DiagnosticDimension =
+  | 'atmosphere'
+  | 'material'
+  | 'spatialComfort'
+  | 'contrastFocus'
+  | 'tone'
+  | 'openness'
+  | 'movement'
+  | 'currentNeed';
+
+/**
+ * Why an answer was chosen, as opposed to which element it scored for. Two
+ * people can both pick Fire — one for the contrast, one for the warmth — and
+ * those are different clients. Motives are what the follow-up question tests.
+ */
+export type Motive =
+  | 'contrast'
+  | 'warmth'
+  | 'focus'
+  | 'openness'
+  | 'softness'
+  | 'weight'
+  | 'flow'
+  | 'stillness';
+
+export type MotiveVector = Record<Motive, number>;
+
 export interface QuestionOption {
   text: string;
   weights: Partial<Record<Element, number>>;
@@ -70,6 +105,11 @@ export interface QuestionOption {
    *  palette step). When present the survey renders a colour tile instead
    *  of a photo. */
   color?: string;
+  /** Optional per-option override of the motive reading. Normally the motive
+   *  vector is derived from the option's element weights seen through the
+   *  question's dimension, which keeps the bank maintainable — set this only
+   *  when a specific reference genuinely reads against its element. */
+  motives?: Partial<MotiveVector>;
 }
 
 export interface Question {
@@ -77,6 +117,14 @@ export interface Question {
   text: string;
   subtitle?: string;
   visual?: boolean;
+  /** Show each option's caption on the tile. Only the material and pigment
+   *  steps name what they show — scene photography is left unlabelled so the
+   *  pick stays instinctive rather than a reading comprehension task. */
+  showLabels?: boolean;
+  /** Which latent variable this question measures. Every variant inside one
+   *  bank entry shares a dimension: rewording a question must never change
+   *  what it scores. Assigned by the bank, not written per question. */
+  dimension?: DiagnosticDimension;
   options: QuestionOption[];
 }
 
@@ -164,6 +212,16 @@ export interface AnalysisResult {
   dominanceStrength?: DominanceStrength;
   /** New: full SHRE 7-section diagnosis (populated after the survey completes). */
   diagnosis?: Diagnosis;
+  /**
+   * How well-evidenced each percentage is, 0–1, kept deliberately separate
+   * from the percentage itself. Earth 46% says what the reading is; Earth
+   * confidence 0.88 says it was confirmed by several independent layers
+   * rather than inferred from one lucky pick.
+   *
+   * Never shown to the user — it drives how firmly the report and the image
+   * brief are allowed to speak.
+   */
+  confidence?: Record<Element, number>;
   estimate: EstimateResult;
 }
 
@@ -265,6 +323,12 @@ export interface UserState {
   /** Multi-select picks for the colour-palette question (Q5): up to 4 option
    *  indices. Scored in addition to the single-select answers. */
   shortSurveyColorAnswers?: number[];
+  /** The exact question set the user was shown, including which variant was
+   *  drawn and the order the options were presented in. Scoring MUST use this
+   *  rather than the module-level SHORT_QUESTIONS: the survey draws a fresh
+   *  rotation on mount, so the constant holds a different variant and its
+   *  option indices mean something else entirely. */
+  shortSurveyQuestions?: Question[];
   deepSurveyAnswers: Record<string, number>;
   shortSurveySkipped: boolean;
   analysis?: AnalysisResult;

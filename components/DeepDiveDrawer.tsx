@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { DEEP_QUESTIONS } from '../constants';
 
 const STEP_LABELS = [
-  'Order', 'Horizon', 'Gravity', 'Time', 'Ground',
-  'Temp', 'Geometry', 'Light', 'Scale', 'Memory',
+  'Order', 'View', 'Weight', 'Time', 'Ground',
+  'Warmth', 'Shape', 'Light', 'Scale', 'Memory',
 ];
 
 const Q_ILLUSTRATIONS: Record<string, React.ReactNode> = {

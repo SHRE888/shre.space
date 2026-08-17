@@ -59,6 +59,20 @@ export const SHRE_STYLE_DIRECTIONS: readonly StyleDirection[] = [
 export const SHRE_PALETTES: readonly ColorDirection[] = ['Warm', 'Cool', 'Neutral', 'Deep'] as const;
 
 /**
+ * An element below this share is suppressed: it contributes no material and
+ * no line of guidance in its register. The material picker and the prose
+ * builders both read this constant so they can never disagree — a mismatch
+ * used to fail validation and drop the whole report to the bare fallback.
+ */
+export const LOW_ELEMENT_THRESHOLD = 10;
+
+/** Minimum / maximum material picks a diagnosis may carry. */
+const MIN_MATERIALS = 5;
+const MAX_MATERIALS = 8;
+/** Most picks a single element may contribute when deepening a concentrated reading. */
+const MAX_PER_ELEMENT = 5;
+
+/**
  * Short, client-facing one-line definitions per Style Direction. Used in
  * the prompt preamble ("STYLE DIRECTION: {name} — {definition}") and in
  * the report screen's caption row.
@@ -93,7 +107,7 @@ export const SHRE_PALETTE_DEFINITIONS: Record<ColorDirection, string> = {
  */
 export const ALLOWED_CATEGORIES_BY_ELEMENT: Record<Element, ReadonlyArray<string>> = {
   earth: ['stone', 'wood', 'plaster', 'concrete', 'ceramic'],
-  fire:  ['stone', 'wood', 'plaster', 'metal', 'textile'],
+  fire:  ['stone', 'wood', 'plaster', 'metal'],
   water: ['stone', 'plaster', 'metal', 'glass', 'ceramic', 'textile'],
   air:   ['stone', 'wood', 'plaster', 'concrete', 'metal', 'glass', 'composite', 'textile'],
 };
@@ -122,7 +136,7 @@ export const REPRESENTATIVE_MATERIALS_BY_ELEMENT: Record<Element, string[]> = {
     'Board-formed concrete',                    // concrete — structural mass (grey)
     'Walnut veneer',                            // wood — secondary warmth (dark brown)
     'Industrial brick',                         // ceramic — textured wall (red-brown)
-    'Pietra Serena (Tuscan)',                   // stone — alternate stone (grey-green)
+    'Marrón Emperador (warm brown marble)',     // stone — dark reddish, loaded veining
     'Tadelakt (warm pigmented Moroccan)',       // plaster — polished warm mineral wall
   ],
   fire: [
@@ -133,7 +147,6 @@ export const REPRESENTATIVE_MATERIALS_BY_ELEMENT: Record<Element, string[]> = {
     'Corten steel (weathering)',                    // metal — rust-patina cladding
     'Patagonia quartzite (smoky burgundy)',         // stone — smoky red feature
     'Shou-sugi-ban (charred timber)',               // wood — charred black cladding
-    'Oxblood / rust velvet upholstery',             // textile — saturated soft accent
   ],
   water: [
     'Microcement (continuous)',                              // plaster — fluid baseline
@@ -237,15 +250,16 @@ const buildStyleReason = (
   const secondaryClause = secondary
     ? ` paired with ${cap(secondary)} (${pct[secondary]}%) as supporting register`
     : '';
+  const live = (el: Element) => pct[el] >= LOW_ELEMENT_THRESHOLD;
   switch (style) {
     case 'Grounded Minimalism':
-      return `${cap(primary)} carries spatial stability (${primaryShare}%)${secondaryClause}. The composition reads as calm structure — restrained palette, generous void, no focal intensity.`;
+      return `${cap(primary)} carries spatial stability (${primaryShare}%)${secondaryClause}. The composition reads as calm structure — restrained palette, generous void, ${live('fire') ? 'no focal intensity' : 'no single point of emphasis'}.`;
     case 'Warm Brutal Harmony':
       return `${cap(primary)} delivers material weight (${primaryShare}%)${secondaryClause}; the high contrast level is held by a single warm-metal or dark-stone focal piece. Mass dominates; warmth concentrates.`;
     case 'Sculptural Flow':
       return `${cap(primary)} dominates (${primaryShare}%)${secondaryClause}. Geometry follows continuity — curved partitions, polished bases, fluid spatial movement; visual rhythm built on reflection, not on contrast.`;
     case 'Accent Geometry':
-      return `${cap(primary)} concentrates focal intensity (${primaryShare}%)${secondaryClause}. A quieter base hosts sharp contrast points; tactile density is selective, not distributed.`;
+      return `${cap(primary)} concentrates focal intensity (${primaryShare}%)${secondaryClause}. A quieter base hosts sharp contrast points; ${live('earth') ? 'tactile density is' : 'emphasis is'} selective, not distributed.`;
     case 'Silent Light Spaces':
       return `${cap(primary)} carries openness and clarity (${primaryShare}%)${secondaryClause}. Surfaces lean white-base; daylight is the dominant light source; the atmosphere reads as silence and weightless volume.`;
     case 'Deep Ambient Atmosphere':
@@ -296,15 +310,18 @@ const buildPaletteReason = (
   primary: Element,
   pct: Record<Element, number>,
 ): string => {
+  const live = (el: Element) => pct[el] >= LOW_ELEMENT_THRESHOLD;
   switch (palette) {
     case 'Warm':
       return `Earth + fire share governs the palette toward warm tones (Earth ${pct.earth}%, Fire ${pct.fire}%). Daylight reads as warm; amber and rust enter through metal and timber, not through paint.`;
     case 'Cool':
-      return `Water + air share governs the palette toward cool tones (Water ${pct.water}%, Air ${pct.air}%). Daylight reads as cool diffused; silver-grey and pale blue dominate; reflection carries the rhythm.`;
+      return `Water + air share governs the palette toward cool tones (Water ${pct.water}%, Air ${pct.air}%). Daylight reads as cool diffused; silver-grey and pale blue dominate; ${live('water') ? 'reflection carries the rhythm' : 'even light carries the rhythm'}.`;
     case 'Neutral':
-      return `Earth and air balance the palette toward neutral (Earth ${pct.earth}%, Air ${pct.air}%). Cream, pale stone and off-white plaster hold the room; no saturation spikes; calm structure throughout.`;
+      return `Earth and air balance the palette toward neutral (Earth ${pct.earth}%, Air ${pct.air}%). ${live('earth') ? 'Cream, pale stone and off-white plaster' : 'Cream, chalk and off-white plaster'} hold the room; no saturation spikes; calm structure throughout.`;
     case 'Deep':
-      return `${primary === 'fire' ? 'Fire focal' : 'Earth + water density'} pushes the palette toward depth (Earth ${pct.earth}%, Fire ${pct.fire}%, Water ${pct.water}%). Charcoal, smoke and oxblood hold the base; warm pools of light concentrate at human-eye height.`;
+      return `${primary === 'fire' ? 'Fire focal' : 'Earth + water density'} pushes the palette toward depth (Earth ${pct.earth}%, Fire ${pct.fire}%, Water ${pct.water}%). ${live('fire')
+        ? 'Charcoal, smoke and oxblood hold the base; warm pools of light concentrate at human-eye height'
+        : 'Charcoal, smoke and deep walnut hold the base; light stays low and concentrated at human-eye height'}.`;
   }
 };
 
@@ -340,21 +357,35 @@ export const materialCountsFromDistribution = (
   const counts: Record<Element, number> = { earth: 0, fire: 0, water: 0, air: 0 };
 
   sorted.forEach(([el, p], i) => {
-    if (p < 5) { counts[el] = 0; return; }                // absent
-    if (i === 0) { counts[el] = 3; return; }              // primary — fixed 3
+    // Anything under the suppression threshold contributes nothing at all.
+    // This mirrors the element-low guard in validateDiagnosis — previously the
+    // picker handed out a material down to 5%, which the validator then
+    // rejected, and the entire diagnosis was discarded.
+    if (p < LOW_ELEMENT_THRESHOLD) { counts[el] = 0; return; }
+    if (i === 0) { counts[el] = 3; return; }               // primary — fixed 3
     if (i === 1) { counts[el] = p >= 15 ? 2 : 1; return; } // secondary — 2 or 1
-    if (i === 2) { counts[el] = p >= 15 ? 2 : p >= 10 ? 1 : 0; return; } // third — 2/1/0
-    // 4th element (weak) — only 1 when total stays at/under 7
-    counts[el] = p >= 5 ? 1 : 0;
+    if (i === 2) { counts[el] = p >= 15 ? 2 : 1; return; } // third — 2 or 1
+    counts[el] = 1;                                        // fourth — 1
   });
 
-  // Cap total at 8 — drop weak/4th first, then trim a third-tier material
-  // so we never exceed the SHRE VARIATION RULE max of 8.
   let total = counts.earth + counts.fire + counts.water + counts.air;
-  for (let i = sorted.length - 1; i >= 0 && total > 8; i--) {
+
+  // A very concentrated reading (one element at 80%+) can be suppressed down
+  // to three or four surfaces, which is not enough to build a room from.
+  // Deepen the strongest live elements until the minimum is met.
+  while (total < MIN_MATERIALS) {
+    const target = sorted.find(([el]) => counts[el] > 0 && counts[el] < MAX_PER_ELEMENT);
+    if (!target) break;
+    counts[target[0]] += 1;
+    total += 1;
+  }
+
+  // Cap total — drop weak/4th first, then trim a third-tier material
+  // so we never exceed the SHRE VARIATION RULE max.
+  for (let i = sorted.length - 1; i >= 0 && total > MAX_MATERIALS; i--) {
     const el = sorted[i][0];
     const floor = i === 0 ? 3 : i === 1 ? 1 : 0;
-    while (counts[el] > floor && total > 8) {
+    while (counts[el] > floor && total > MAX_MATERIALS) {
       counts[el] -= 1;
       total -= 1;
     }
@@ -491,7 +522,7 @@ export const pickDiagnosisMaterials = (
 
   // DualCore special case: the runner-up gets parity with the primary —
   // bump its count to primary-tier (3) if it isn't there already.
-  if (composition === 'DualCore' && sorted[1]) {
+  if (composition === 'DualCore' && sorted[1] && counts[sorted[1][0]] > 0) {
     const secondaryEl = sorted[1][0];
     const have = materials.filter((m) => m.primaryElement === secondaryEl).length;
     if (have < 3) {
@@ -512,6 +543,12 @@ export const pickDiagnosisMaterials = (
  * Per-style-direction spatial-guidance template. Each template uses ONLY
  * the approved SHRE vocabulary. The validator scans the resulting prose
  * for banned terms and throws if any slip in.
+ *
+ * Clauses that speak in a single element's register are written as pairs:
+ * the full-register wording when that element is live, and a neutral
+ * rewording when it is suppressed. Without this a low-Fire reading would
+ * still be told about "warm pools" and the whole diagnosis would be thrown
+ * away by the element-low guard.
  */
 const buildSpatialGuidance = (
   style: StyleDirection,
@@ -521,58 +558,136 @@ const buildSpatialGuidance = (
   pct: Record<Element, number>,
 ): string => {
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const live = (el: Element) => pct[el] >= LOW_ELEMENT_THRESHOLD;
   const dualNote = composition === 'DualCore' && secondary
-    ? ` Because ${cap(primary)} and ${cap(secondary)} share identity (within 5%), neither dominates — the room reads as their dialogue, not as a single-element statement.`
+    ? `Because ${cap(primary)} and ${cap(secondary)} share identity (within 5%), neither dominates — the room reads as their dialogue, not as a single-element statement.`
     : '';
 
-  switch (style) {
-    case 'Grounded Minimalism':
-      return [
-        `Feel: the room reads with spatial stability — material weight at the floor and base of walls, openness above. Visual rhythm is the cadence between solid mass and quiet void. Tactile density is reserved for the surfaces hands touch (counter, handrail, seat).`,
-        `Avoid: high contrast level, multiple focal points, saturated colour. Ornament reads as noise here.`,
-        `Balance critical at: the floor-to-wall transition (continuity must read with a clean shadow gap, not a heavy baseboard), the daylight aperture (one tall framed opening, never an over-glazed wall), and the seating height relative to ceiling height (proportion held to under 1:2.5).`,
-        dualNote,
-      ].filter(Boolean).join(' ');
+  /** Join the surviving "balance critical at" clauses into one sentence. */
+  const list = (items: Array<string | false>): string => {
+    const kept = items.filter(Boolean) as string[];
+    if (kept.length === 0) return '';
+    if (kept.length === 1) return `${kept[0]}.`;
+    return `${kept.slice(0, -1).join(', ')}, and ${kept[kept.length - 1]}.`;
+  };
 
+  const compose = (feel: Array<string | false>, avoid: string, balance: Array<string | false>) =>
+    [
+      `Feel: ${(feel.filter(Boolean) as string[]).join(' ')}`,
+      `Avoid: ${avoid}`,
+      `Balance critical at: ${list(balance)}`,
+      dualNote,
+    ].filter(Boolean).join(' ');
+
+  switch (style) {
+    // Earth is always the primary or a dual-core partner here, so its
+    // register is guaranteed live; only Air needs guarding.
+    case 'Grounded Minimalism':
+      return compose(
+        [
+          'the room reads with spatial stability — material weight at the floor and base of walls,',
+          live('air') ? 'openness above.' : 'quiet restraint above.',
+          'Visual rhythm is the cadence between solid mass and quiet void.',
+          'Tactile density is reserved for the surfaces hands touch (counter, handrail, seat).',
+        ],
+        live('fire')
+          ? 'high contrast level, multiple focal points, saturated colour — ornament reads as noise here.'
+          : 'busy detail, competing centres of attention, saturated colour — ornament reads as noise here.',
+        [
+          'the floor-to-wall transition (a clean shadow gap, never a heavy baseboard)',
+          live('air') && 'the daylight aperture (one tall framed opening, never an over-glazed wall)',
+          'the seating height relative to ceiling height (proportion held under 1:2.5)',
+        ],
+      );
+
+    // Earth and Fire are both live by construction.
     case 'Warm Brutal Harmony':
-      return [
-        `Feel: mass dominates with measurable material weight; ${cap(primary)} (${pct[primary]}%) provides the grounding plane, and the warm secondary register concentrates as focal intensity rather than as distributed surface area.`,
-        `Avoid: spreading warm-metal or dark-stone across multiple walls (it dissolves into a generic dark interior and loses contrast level); high-saturation soft textiles that compete with the focal piece; bright overhead light.`,
-        `Balance critical at: the single warm-metal or dark-stone focal placement (one feature only, scaled to the room), the lighting (warm pools at human-eye height, not flood), and the proportion of mass-to-void (heavy below, calmer above).`,
-        dualNote,
-      ].filter(Boolean).join(' ');
+      return compose(
+        [
+          `mass dominates with measurable material weight; ${cap(primary)} (${pct[primary]}%) provides the grounding plane,`,
+          'and the warm secondary register concentrates as focal intensity rather than as distributed surface area.',
+        ],
+        'spreading warm-metal or dark-stone across multiple walls (it dissolves into a generic dark interior and loses contrast level); high-saturation soft textiles that compete with the focal piece; bright overhead light.',
+        [
+          'the single warm-metal or dark-stone focal placement (one feature only, scaled to the room)',
+          'the lighting (warm pools at human-eye height, not flood)',
+          'the proportion of mass-to-void (heavy below, calmer above)',
+        ],
+      );
 
     case 'Sculptural Flow':
-      return [
-        `Feel: continuity dominates — curved partitions, polished bases, fluid spatial movement; visual rhythm is built on reflection and gradient, not on edge or contrast level. Tactile density is low and uniform; surfaces read as continuous.`,
-        `Avoid: orthogonal-only layouts, hard 90-degree joins, matte-on-matte surface stacks, focal intensity that breaks the flow.`,
-        `Balance critical at: the curvature radius (large enough to read as architecture, not as furniture), the floor finish (continuous, no grout-line interruptions), and the reflection contract (one major reflective plane only — distributing reflection across many surfaces fragments the flow).`,
-        dualNote,
-      ].filter(Boolean).join(' ');
+      return compose(
+        [
+          'continuity dominates — curved partitions, polished bases, fluid spatial movement;',
+          live('fire')
+            ? 'visual rhythm is built on reflection and gradient, not on edge or contrast level.'
+            : 'visual rhythm is built on reflection and gradient rather than on edge.',
+          live('earth')
+            ? 'Tactile density is low and uniform; surfaces read as continuous.'
+            : 'Surfaces stay even to the hand and read as continuous.',
+        ],
+        'orthogonal-only layouts, hard 90-degree joins, matte-on-matte surface stacks, any accent sharp enough to break the flow.',
+        [
+          'the curvature radius (large enough to read as architecture, not as furniture)',
+          'the floor finish (continuous, no grout-line interruptions)',
+          'the reflection contract (one major reflective plane only — spreading reflection across many surfaces fragments the flow)',
+        ],
+      );
 
     case 'Accent Geometry':
-      return [
-        `Feel: a quieter base (calm structure throughout) hosts one or two sharp focal intensity points. Contrast level is high at the focal points, low everywhere else; the room reads as a composition with clear hierarchy.`,
-        `Avoid: distributing the fire-register across multiple surfaces (the focal points lose their work); pairing the accent with high tactile density nearby (the accent gets visually crowded); ornament outside the focal zones.`,
-        `Balance critical at: the focal placement (one or two feature points, not three), the negative space around each accent (must read as restraint, not omission), and the lighting on the accent (warm pool, narrow beam, not a uniform fill).`,
-        dualNote,
-      ].filter(Boolean).join(' ');
+      return compose(
+        [
+          'a quieter base (calm structure throughout) hosts one or two sharp focal intensity points.',
+          'Contrast level is high at the focal points, low everywhere else;',
+          'the room reads as a composition with clear hierarchy.',
+        ],
+        live('earth')
+          ? 'distributing the fire-register across multiple surfaces (the focal points lose their work); pairing the accent with high tactile density nearby; ornament outside the focal zones.'
+          : 'distributing the fire-register across multiple surfaces (the focal points lose their work); crowding the accent with nearby detail; ornament outside the focal zones.',
+        [
+          'the focal placement (one or two feature points, not three)',
+          'the negative space around each accent (must read as restraint, not omission)',
+          'the lighting on the accent (a narrow warm beam, not a uniform fill)',
+        ],
+      );
 
     case 'Silent Light Spaces':
-      return [
-        `Feel: weightless luminance — openness, clarity, silence. Surfaces lean white-base; visible structure is thin (mullions, profiles); daylight is the primary base light; artificial light reads as a secondary register at warm pools, never as the dominant source.`,
-        `Avoid: heavy material weight at the base of walls, saturated colour, ornament, dense tactile textiles that absorb the luminance.`,
-        `Balance critical at: the daylight aperture (tall, multiple where appropriate, never an over-glazed continuous wall — proportion matters), the ceiling treatment (clean white plaster with concealed cove LED, never cladding), and the contrast level (low — every contrast event in the room reads loud here).`,
-        dualNote,
-      ].filter(Boolean).join(' ');
+      return compose(
+        [
+          'weightless luminance — openness, clarity, silence. Surfaces lean white-base; visible structure is thin (mullions, profiles); daylight is the primary base light;',
+          live('fire')
+            ? 'artificial light reads as a secondary register at warm pools, never as the dominant source.'
+            : 'artificial light stays indirect and even, never the dominant source.',
+        ],
+        'heavy material weight at the base of walls, saturated colour, ornament, dense textiles that absorb the luminance.',
+        [
+          'the daylight aperture (tall, repeated where appropriate, never one continuous over-glazed wall — proportion matters)',
+          'the ceiling treatment (clean white plaster with concealed cove light, never cladding)',
+          live('fire')
+            ? 'the contrast level (low — every contrast event in the room reads loud here)'
+            : 'the tonal range (narrow — every tonal shift in the room reads loud here)',
+        ],
+      );
 
+    // Earth is always primary or a dual-core partner here.
     case 'Deep Ambient Atmosphere':
-      return [
-        `Feel: depth and shadow control the volume. Dark-base materials hold the room (${cap(primary)} ${pct[primary]}%${secondary ? `, ${cap(secondary)} ${pct[secondary]}%` : ''}); warm light concentrates as pools at human-eye height, never as base illumination. Tactile density is high on the surfaces nearest the seated body.`,
-        `Avoid: bright overhead light, white-base surfaces in large area, distributed contrast level (which dissolves the depth), thin profiles or high-clarity glass that breaks the gravity.`,
-        `Balance critical at: the lighting hierarchy (multiple warm pools at low height, ambient daylight kept indirect), the dark-surface placement (continuous backdrop, not patchwork), and the proportion of mass-to-air (heavy in the lower half of the room).`,
-        dualNote,
-      ].filter(Boolean).join(' ');
+      return compose(
+        [
+          `depth and shadow control the volume. Dark-base materials hold the room (${cap(primary)} ${pct[primary]}%${secondary ? `, ${cap(secondary)} ${pct[secondary]}%` : ''});`,
+          live('fire')
+            ? 'warm light concentrates as pools at human-eye height, never as base illumination.'
+            : 'light stays low and indirect, never as base illumination.',
+          'Tactile density is high on the surfaces nearest the seated body.',
+        ],
+        'bright overhead light, large areas of white-base surface, distributed contrast (which dissolves the depth), thin profiles or transparent panels that break the gravity.',
+        [
+          live('fire')
+            ? 'the lighting hierarchy (multiple warm pools at low height, ambient daylight kept indirect)'
+            : 'the lighting hierarchy (low indirect sources only, ambient daylight kept soft)',
+          'the dark-surface placement (continuous backdrop, not patchwork)',
+          'the proportion of mass-to-void (heavy in the lower half of the room)',
+        ],
+      );
   }
 };
 
@@ -750,8 +865,14 @@ export const validateDiagnosis = (d: Diagnosis): string[] => {
     }
   });
 
-  // 6. element-low guards
-  const guidance = `${d.styleDirectionReason} ${d.paletteReason} ${d.spatialGuidance}`;
+  // 6. element-low guards.
+  //    The "Avoid:" clause is deliberately excluded from the scan: it exists
+  //    precisely to name the register the room must stay away from, so
+  //    "Avoid: heavy material weight" on a low-Earth reading is the correct
+  //    instruction, not a violation.
+  const guidance = [d.styleDirectionReason, d.paletteReason, d.spatialGuidance]
+    .join(' ')
+    .replace(/Avoid:[\s\S]*?(?=Balance critical at:|$)/g, ' ');
   if (d.percentages.fire < 10) {
     const fireDom = d.materials.find((m) => m.primaryElement === 'fire');
     if (fireDom) errs.push(`Fire < 10% but Fire-dominant material picked: ${fireDom.label}`);
@@ -774,20 +895,21 @@ export const validateDiagnosis = (d: Diagnosis): string[] => {
   }
 
   // 7. material count per role — SHRE v2 strict rule
-  //    primary 3 (always when distribution is non-degenerate)
+  //    primary 2-5 (above 3 only when a concentrated reading suppresses the
+  //    other elements and the primary has to carry the minimum on its own)
   //    secondary 0-3 (3 only on DualCore)
   //    supporting 0-3 (third + weak elements)
   const primCount = d.materials.filter((m) => m.role === 'primary').length;
   const secCount = d.materials.filter((m) => m.role === 'secondary').length;
   const supCount = d.materials.filter((m) => m.role === 'supporting').length;
-  if (primCount < 2 || primCount > 3) errs.push(`primary materials count ${primCount}, expected 2-3`);
+  if (primCount < 2 || primCount > MAX_PER_ELEMENT) errs.push(`primary materials count ${primCount}, expected 2-${MAX_PER_ELEMENT}`);
   if (secCount > 3) errs.push(`secondary materials count ${secCount}, expected 0-3`);
   if (supCount > 3) errs.push(`supporting materials count ${supCount}, expected 0-3`);
 
   // 8. total 5-8 (MATERIAL VARIATION RULE — 6-8 typical, 5 only when
   //    composition is Minimal with no third element).
-  if (d.materials.length < 5 || d.materials.length > 8) {
-    errs.push(`total materials ${d.materials.length}, expected 5-8`);
+  if (d.materials.length < MIN_MATERIALS || d.materials.length > MAX_MATERIALS) {
+    errs.push(`total materials ${d.materials.length}, expected ${MIN_MATERIALS}-${MAX_MATERIALS}`);
   }
 
   // 9. SHRE VARIATION RULE — no two picks may share the same base

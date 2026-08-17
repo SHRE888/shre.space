@@ -46,6 +46,7 @@ const MATERIAL_PRODUCT_MAP: Record<string, string> = {
   'Natural oak (horizontal)': 'Kährs Grande Collection engineered oak, horizontal grain',
   'Walnut veneer': 'Alpi walnut fine veneer, satin vertical grain',
   'Industrial brick': 'Brickworks red industrial face brick, pastoral rustic',
+  'Marrón Emperador (warm brown marble)': 'Levantina Emperador Dark marble, polished reddish-brown with loaded beige veining',
   'Textured concrete (matte)': 'LCDA BFUP concrete panel, raw shuttered matte',
   'Brushed metal': 'Rimadesio brushed metal profile, satin anodized',
   'Solid oak': 'Boen Chaletino wide plank solid oak',

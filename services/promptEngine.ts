@@ -1,5 +1,6 @@
 import { UserState, AnalysisResult, Element, PromptResult, PromptInput, GenerationPackage, Vector4, MaterialDef, ColorPalette, BudgetLevel, CompositionMode, DominanceStrength } from '../types';
 import { SHORT_QUESTIONS, ELEMENTS, COMBINATION_ARTICLES, PROMPT_BANS, ELEMENT_ARCH_TERMS } from '../constants';
+import { debiasedSignal } from './adaptiveDiagnostic';
 import { scrubBannedTokens } from './bannedTokens';
 import { elementLanguageProfile } from './elementLanguage';
 import { buildDesignSummary } from './designSummary';
@@ -150,40 +151,73 @@ export const calculateAnalysis = (state: UserState): AnalysisResult => {
     };
   }
 
-  // Sum weighted-percentage contributions across all answered questions.
-  // Each answer's weights already sum to 100, so totalScore = 100 × n
-  // where n is the number of answered questions — normalization below
-  // divides by totalScore to produce the final per-element percentage.
+  // Score against the question set the user was actually shown. The survey
+  // draws a fresh variant rotation when it mounts, so the module-level
+  // SHORT_QUESTIONS constant is a *different* draw — reading weights out of
+  // it scores answers against questions the user never saw. It stays as the
+  // fallback only for legacy states saved before the set was persisted.
+  const askedQuestions = state.shortSurveyQuestions?.length
+    ? state.shortSurveyQuestions
+    : SHORT_QUESTIONS;
+
+  // Sum contributions across all answered questions. Each answer contributes
+  // exactly 100 points, so every step carries equal influence.
+  //
+  // Answers are read through `debiasedSignal` rather than straight off the
+  // authored weights: it scores a pick against what that particular screen was
+  // offering. The references are real dual-element photographs and Earth is by
+  // far the most common secondary, so raw weights handed a random clicker 31%
+  // Earth. The correction is a property of the reading, not of the catalogue —
+  // no authored weight changes.
   const scores: Record<Element, number> = { earth: 0, fire: 0, water: 0, air: 0 };
   Object.entries(state.shortSurveyAnswers).forEach(([qId, answerIdx]) => {
-    const question = SHORT_QUESTIONS.find((q) => q.id === qId);
+    const question = askedQuestions.find((q) => q.id === qId);
     // The colour question is multi-select and scored separately below.
     if (question && question.options.some((o) => o.color)) return;
     if (question && question.options[answerIdx]) {
-      const weights = question.options[answerIdx].weights;
-      Object.entries(weights).forEach(([el, weight]) => {
-        if (weight) scores[el as Element] += weight;
+      const signal = debiasedSignal(question.options[answerIdx], question);
+      (Object.keys(scores) as Element[]).forEach((el) => {
+        scores[el] += signal[el] * 100;
       });
     }
   });
 
   // Colour-palette question (Q5) is multi-select: the user may pick up to 4
-  // swatches. Each picked colour adds its full weights so a set of e.g. four
-  // earthy tones pushes Earth strongly, while a mixed set spreads evenly. The
-  // colour question is identified by its options carrying a `color` field.
-  const colorQuestion = SHORT_QUESTIONS.find((q) => q.options.some((o) => o.color));
-  if (colorQuestion && state.shortSurveyColorAnswers && state.shortSurveyColorAnswers.length) {
-    state.shortSurveyColorAnswers.forEach((idx) => {
+  // swatches. Their weights are AVERAGED, not summed, so the colour step
+  // contributes the same 100 points as every other step. Summing them let a
+  // four-swatch pick count as four questions — half the entire reading — and
+  // it also meant picking fewer colours quietly reduced how much colour
+  // mattered, so two people with identical taste scored differently.
+  const colorQuestion = askedQuestions.find((q) => q.options.some((o) => o.color));
+  const colorPicks = state.shortSurveyColorAnswers ?? [];
+  if (colorQuestion && colorPicks.length) {
+    colorPicks.forEach((idx) => {
       const opt = colorQuestion.options[idx];
       if (opt) {
-        Object.entries(opt.weights).forEach(([el, weight]) => {
-          if (weight) scores[el as Element] += weight;
+        const signal = debiasedSignal(opt, colorQuestion);
+        (Object.keys(scores) as Element[]).forEach((el) => {
+          scores[el] += (signal[el] * 100) / colorPicks.length;
         });
       }
     });
   }
 
-  const totalScore = Object.values(scores).reduce((a, b) => a + b, 0) || 1;
+  // Nothing scored means the stored answers could not be matched to any
+  // question — the case is a state saved before the question set was
+  // persisted, whose keys no longer name anything in the bank. Read it as
+  // undecided rather than as four zeroes, which every downstream consumer
+  // would treat as a real distribution.
+  const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
+  if (totalScore <= 0) {
+    return {
+      percentages: { earth: 25, fire: 25, water: 25, air: 25 },
+      primary: 'earth',
+      secondary: 'air',
+      composition: 'DualCore',
+      dominanceStrength: 'dual',
+      estimate: { cost: { low: 0, high: 0 }, timeline: { low: 0, high: 0 } },
+    };
+  }
   const raw: Record<Element, number> = {
     earth: (scores.earth / totalScore) * 100,
     fire:  (scores.fire  / totalScore) * 100,
@@ -239,7 +273,7 @@ export const MATERIAL_PRODUCT_MAP: Record<string, { brand: string; product: stri
   'Pietra Serena (Tuscan)':                   [{ brand: 'Il Casone', product: 'Pietra Serena Toscana slab', finish: 'sand-blasted matte grey-green Tuscan stone' }],
   'Cipollino marble (warm green-veined)':     [{ brand: 'Antolini', product: 'Cipollino Apuano marble slab', finish: 'polished with warm wavy green-and-gold veining on cream base' }],
   'Green onyx / marble (veined)':             [{ brand: 'Antolini', product: 'Rainforest Green marble slab', finish: 'polished full-height with dramatic emerald-green and white-gold veining' }],
-  'Marrón Emperador (warm brown marble)':     [{ brand: 'Levantina', product: 'Emperador Dark marble slab', finish: 'polished warm chocolate-brown with light beige veining' }],
+  'Marrón Emperador (warm brown marble)':     [{ brand: 'Levantina', product: 'Emperador Dark marble slab', finish: 'polished dark reddish-brown with busy irregular creamy-beige veining' }],
   'Volcanic stone (basalt rough)':            [{ brand: 'Stone Italiana', product: 'basalt volcanic stone slab', finish: 'rough split-face or bush-hammered, deep charcoal' }],
   'Sand-blasted granite (warm)':              [{ brand: 'Levantina', product: 'Giallo Veneziano granite slab', finish: 'sand-blasted warm beige-and-gold' }],
   'Natural oak (horizontal)':                 [{ brand: 'Kährs', product: 'Grande Collection engineered oak', finish: 'horizontal grain natural-oiled honey tone' }],
@@ -277,7 +311,6 @@ export const MATERIAL_PRODUCT_MAP: Record<string, { brand: string; product: stri
   'Aged brass (polished)':                    [{ brand: 'Rocky Mountain Hardware', product: 'polished aged brass panel', finish: 'warm gold patina with living surface, subtle hand-rubbed marks' }],
   'Blackened steel':                          [{ brand: 'A. Zahner', product: 'blackened steel panel', finish: 'oxidized matte gun-metal with subtle warm bronze undertone' }],
   'Bronze accents':                           [{ brand: 'Nanz', product: 'cast bronze lever handle', finish: 'dark patinated wax seal, deep warm bronze' }],
-  'Oxblood / rust velvet upholstery':         [{ brand: 'Dedar', product: 'Mantua mohair velvet — oxblood', finish: 'deep saturated oxblood pile with rich light absorption' }],
   'Cognac saddle leather':                    [{ brand: 'Edelman Leather', product: 'Cavallo natural cognac leather', finish: 'full-grain warm cognac saddle leather with visible pull-up patina' }],
   'Charcoal / smoke velvet':                  [{ brand: 'Pierre Frey', product: 'Velours Plombières charcoal velvet', finish: 'deep charcoal pile with subtle warm bronze undertone' }],
 
@@ -707,7 +740,7 @@ const MATERIAL_COLOR_SIGNATURES: Array<{ match: RegExp; signature: string }> = [
   // ── EARTH / warm stones & clays ─────────────────────────────────────────
   { match: /green.*(onyx|marble|onice|stone)|verde|connemara|rainforest/i, signature: 'deep emerald-to-pistachio green stone with white/gold veining — green is the dominant readable color of this surface' },
   { match: /cipollino/i, signature: 'cream marble base with warm wavy green-and-gold veining — the green veining flows in onion-skin layers' },
-  { match: /marr.n.*emperador|emperador/i, signature: 'warm chocolate-brown marble with light beige veining — saturated rich brown' },
+  { match: /marr.n.*emperador|emperador/i, signature: 'dark reddish-brown Emperador marble with busy irregular creamy-beige veining — loaded, saturated, never grey' },
   { match: /jura.*limestone|jura/i, signature: 'warm golden-beige limestone with fine fossil inclusions and subtle horizontal grain' },
   { match: /pietra.*serena/i, signature: 'soft Tuscan grey-green sandstone with matte sand-blasted texture — neither cold grey nor warm beige' },
   { match: /sand.?blasted.*granite|warm.*granite/i, signature: 'warm beige-and-gold granite with sand-blasted matte surface and small visible mineral flecks' },
@@ -745,7 +778,6 @@ const MATERIAL_COLOR_SIGNATURES: Array<{ match: RegExp; signature: string }> = [
   { match: /venetian.*plaster.*polished/i, signature: 'polished Venetian plaster with deep saturated color (warm sienna, oxblood, or charcoal) and subtle marbled depth' },
   { match: /dark.*herringbone|smoked.*oak|fumed.*oak/i, signature: 'fume-stained dark chocolate oak with cool-grey undertone' },
   { match: /shou.?sugi.?ban|charred.*timber|yakisugi/i, signature: 'charred-black Japanese-style timber with brushed black-silver finish and visible grain — true black, not painted black' },
-  { match: /oxblood.*velvet|rust.*velvet/i, signature: 'deep saturated oxblood / rust velvet pile with rich light absorption — bold red-brown' },
   { match: /cognac.*leather|saddle.*leather/i, signature: 'full-grain warm cognac saddle leather with visible pull-up patina and natural sheen' },
   { match: /charcoal.*velvet|smoke.*velvet/i, signature: 'deep charcoal velvet pile with subtle warm bronze undertone in highlights' },
 
@@ -917,7 +949,7 @@ export const MATERIAL_SURFACE_AFFINITY: Record<string, string> = {
   'Pietra Serena (Tuscan)': 'floor slab, exterior cladding, fireplace surround — Tuscan grey-green stone',
   'Cipollino marble (warm green-veined)': 'feature wall slab, countertop, vanity top — warm green-veined marble',
   'Green onyx / marble (veined)': 'kitchen island, countertop, backsplash, feature wall slab — emerald-green stone with white-gold veining',
-  'Marrón Emperador (warm brown marble)': 'feature wall slab, countertop, fireplace surround — warm chocolate-brown marble',
+  'Marrón Emperador (warm brown marble)': 'feature wall slab, countertop, fireplace surround — dark reddish-brown marble with loaded veining',
   'Volcanic stone (basalt rough)': 'exterior base wall, landscape steps, interior feature wall, fireplace hearth',
   'Sand-blasted granite (warm)': 'floor slab, exterior cladding, kitchen countertop — warm beige-gold granite',
   'Natural oak (horizontal)': 'flooring planks and cabinetry fronts',
@@ -955,7 +987,6 @@ export const MATERIAL_SURFACE_AFFINITY: Record<string, string> = {
   'Aged brass (polished)': 'coffee table surface, hardware pulls, light fixture trim, sculptural accent, kitchen island front',
   'Blackened steel': 'shelf brackets, door frames, window profiles, structural columns',
   'Bronze accents': 'door handles, cabinet pulls, light fixture accents — small surface area, never main wall',
-  'Oxblood / rust velvet upholstery': 'sofa upholstery, accent armchair, cushions, banquette seating — never wall finish',
   'Cognac saddle leather': 'sofa upholstery, dining chairs, lounge armchair, banquette — full-grain leather',
   'Charcoal / smoke velvet': 'sofa upholstery, accent armchair, banquette, drapery — never wall',
 
@@ -1082,21 +1113,30 @@ const buildUserSelectedMaterialsMandatory = (
 // --- ELEMENT → ARCHITECTURAL STYLE RECOGNITION ---
 // Maps each element to well-known architectural directions as a recognition framework.
 // These styles help the AI understand the visual language, but the final result is driven by the element logic.
-const ELEMENT_STYLE_MAP: Record<Element, { styles: string[]; description: string }> = {
+// `referenceCharacter` is read directly off the client's own interior reference
+// set (the same photographs the survey shows at the interior step). The briefs
+// below describe what each element IS; this describes how the client actually
+// recognises it in a photograph, so a render can be technically on-brief and
+// still feel wrong. Where the two disagree, this is the tie-breaker.
+const ELEMENT_STYLE_MAP: Record<Element, { styles: string[]; description: string; referenceCharacter: string }> = {
   earth: {
     styles: ['wabi-sabi', 'organic modernism', 'warm brutalism', 'desert modernism', 'rustic luxury', 'biophilic design', 'materialist architecture'],
+    referenceCharacter: 'REFERENCE CHARACTER — mass that has visibly aged. Rough split stone and boulder-like islands, travertine, green-veined marble, lime plaster carrying trowel marks, heavy reclaimed beams overhead, board-formed concrete, dark walnut joinery. Seating is low, deep and textile-heavy — cream bouclé, linen, wool — with terracotta, rust-orange or olive as the only colour accent. Daylight arrives in defined patches and moves across the surfaces rather than filling the volume. Real structural planting. Warm but never glossy: no mirror finishes, no lacquer.',
     description: 'Grounded in wabi-sabi and organic modernism — celebrating imperfection, material aging, and tactile authenticity. Three sub-languages: (1) WABI-SABI LUXURY: aged plaster walls with visible patina and repair layers, exposed heavy timber beams, reclaimed weathered wood, dramatic veined stone (green onyx, rainforest marble), warm clay plaster, handmade ceramics, jute rugs, branches in ceramic vases. Inspired by restored Mediterranean/Tuscan buildings with modern furniture. (2) WARM MODERNISM: timber slat facades, concrete + walnut + stone composition, boulder landscaping, herringbone parquet, blackened steel windows, walnut cabinetry with green marble countertops, aged brass fixtures. (3) DESERT EARTH: rammed earth/terracotta walls, desert planting (cacti, palms), warm ochre plaster, lap pools, teak furniture, warm sand-tone palette. Spaces feel handmade, warm, tactile, and connected to the earth — never sterile or clinical.',
   },
   fire: {
     styles: ['dramatic modernism', 'dark contemporary luxury', 'industrial refined', 'corten architecture', 'art deco noir', 'moody cinematic interiors'],
+    referenceCharacter: 'REFERENCE CHARACTER — a dark envelope with one warm surface burning inside it. Walls, ceilings and joinery are black, charcoal or deep brown; the heat comes from a single oxidised plane: a copper-clad island, a full-height corten panel, a rusted headboard set into warm plaster, a patinated brass wall. Upholstery is cognac, rust or burnt orange in leather and nubuck. Floors are dark stone, polished concrete or deep-toned timber. Lighting is concealed, low and grazing so the patina reads, and large parts of the room are deliberately left in shadow. Daylight and greenery enter through black steel frames as contrast, not as softness.',
     description: 'Driven by dramatic oxidized warmth and dark material contrast. Signature palette: corten steel (warm amber-rust patina), Nero Marquina marble (black with white calcite veining), oxidized copper (warm verdigris), polished aged brass/gold surfaces, blackened steel frames, dark herringbone parquet floors. Inspired by RCR Arquitectes corten facades, Joseph Dirand dark Parisian interiors, Vincent Van Duysen moody Belgian spaces, Studio Mumbai raw luxury. Exterior: full-facade corten cladding with monumental portal entries, tall slot windows. Interior: dark marble feature walls, polished brass coffee tables, copper-clad kitchen islands, rust/cognac velvet sofas, matte black track lighting on dark ceilings, large abstract art in ochre-rust tones. Atmosphere is cinematic, moody, warm-dark — like architectural photography in Dezeen or Architectural Digest. Every element is real, buildable, branded.',
   },
   water: {
     styles: ['neo-futurism', 'fluid architecture', 'parametric design', 'chrome sculptural', 'liquid-metal interiors', 'reflective modernism'],
+    referenceCharacter: 'REFERENCE CHARACTER — hard materials behaving like liquid. Brushed and mirror stainless, sheet brass with a rippling reflection running down it, hammered metal, rippled and hammered glass pendants, glass block, chrome furniture with a poured silhouette. Ceilings and floors carry moving reflection — caustic ripple patterns, wet-looking polish. Curves are continuous and every edge is radiused; nothing announces a corner. Colour is restrained to silver, pewter, oyster and cream, with deep blue velvet as the one saturated note. Warmth, when present, is a reflected gold rather than a rust patina.',
     description: 'Defined by polished reflective surfaces, gently curved architectural forms, and immersive material atmosphere — all achieved through REAL CONSTRUCTION METHODS. Signature palette: mirror-polished stainless steel cladding (sheet metal fabricated by specialist metalworkers, welded and polished on-site — as done by Gehry Partners and Zaha Hadid Architects), hammered metal panels (hand-textured sheet steel by artisan fabricators like De Castelli), satin chrome fixtures, glass blocks (Seves Glassblock modular systems), curved laminated glass (hot-bent by Cricursa or similar), microcement floors (Kerakoll seamless poured systems), cream bouclé textiles. Reference projects: Walt Disney Concert Hall (Gehry — real fabricated stainless steel sails), Antwerp Port House (Hadid — faceted glass diamond atop real masonry), Elbphilharmonie (Herzog & de Meuron — real curved glass panels). Interior: polished steel counter fronts fabricated from sheet stainless and mechanically polished, chrome-finished curved plasterboard bulkheads (standard drywall on metal stud framing bent to radius), hammered metal feature panels bolted to wall substrate, glass block partition walls with proper mortar joints, white bouclé curved sofas. Every curve has a buildable radius (minimum 500mm for drywall, minimum 300mm for sheet metal). Every metal surface is fabricated from real gauge sheet stock with visible or concealed joining methods.',
   },
   air: {
     styles: ['ethereal futurism', 'white modernism', 'neo-futurism', 'translucent architecture', 'parametric white', 'iridescent minimalism', 'SANAA clarity', 'forward-looking design'],
+    referenceCharacter: 'REFERENCE CHARACTER — a white-dominant volume where the architecture itself is the sculpture. Curved plaster walls and ceiling coves, soft arched openings, glossy poured resin or terrazzo floors, sheer layered curtains, glass block and tinted glass. Lighting is opal globes, halo pendants and concealed cove light. Furniture is soft and sculptural — rounded bouclé, blob and pebble forms, slim metal legs — and the room is under-filled on purpose, with generous ceiling height and clear floor. Colour appears only as a small saturated punctuation inside the pale envelope: one pastel object, one strong artwork, one blue or pink piece. Lightness here is playful and tactile, not clinical.',
     description: 'AIR is forward-looking architecture grounded in REAL BUILDABLE TECHNOLOGY — defined by luminous white spaces, maximum transparency, and innovative yet industrially available materials. Base architecture: white plaster or Corian surfaces (thermoformed by Hi-Macs or Krion certified fabricators), fluted GRC (glass-reinforced concrete) columns, perforated aluminum or GRC facade panels, floor-to-ceiling structural glazing (Schüco or SG-compatible curtain wall systems). Forward-looking accents using REAL PRODUCTS: dichroic glass panels (3M Dichroic Film on laminated glass — used in Olafur Eliasson installations and real buildings like Nedre Foss Park pavilion), tinted laminated glass partitions (standard architectural glass with PVB interlayer in violet/amber tones — produced by AGC, Guardian, or Pilkington), LED cove lighting (standard Zumtobel, iGuzzini, or Deltalight linear LED systems concealed in aluminum channels), 3D textured wall panels (real products by 3DWalldecor, Inhabit, or CNC-milled MDF). Inspired by SANAA (Louvre-Lens, 21st Century Museum Kanazawa), Sou Fujimoto (House NA, Serpentine Pavilion), Junya Ishigami (KAIT Workshop). Interior: clean flat or gently curved ceilings with LED cove lighting, tinted glass partitions, light oak warmth accents, white terrazzo or marble floors. Spaces feel weightless, luminous, and innovative — but every element is sourced from real manufacturers and installed using standard construction methods. NOT sci-fi — genuine architectural futurism that exists today.',
   },
 };
@@ -2509,6 +2549,7 @@ ${contextOverride ? `- ROOM CHARACTER (overrides generic styling): ${contextOver
   // [1f] ARCHITECTURAL STYLE RECOGNITION — gives the AI well-known visual references
   const styleInfo = ELEMENT_STYLE_MAP[primary];
   P.push(`ARCHITECTURAL STYLE DIRECTION: ${styleInfo.description} Reference styles: ${styleInfo.styles.join(', ')}. Use these as a recognition framework for the visual language, NOT as a strict template. The final visual result must be driven primarily by the ${primary.toUpperCase()} energy logic defined below.`);
+  P.push(`${styleInfo.referenceCharacter} This is the house reading of ${primary.toUpperCase()} and takes precedence over the generic style language above wherever the two suggest different atmospheres.`);
 
   // [2] ROOM PROGRAM & LAYOUT
   P.push(`Room contains: ${roomProgram.requiredElements.join('; ')}. ${roomProgram.layoutLogic} ${roomProgram.spatialRules}`);
@@ -2620,7 +2661,7 @@ ${contextOverride ? `- ROOM CHARACTER (overrides generic styling): ${contextOver
     ? 'CAFÉ / COFFEE SHOP: Seating is chair- and stool-scale only — Hay, Vitra, Muuto, Fritz Hansen contract chairs; bar stools at counter; small café tables. Do NOT default to sofas, sectionals, or lounge upholstery; never lean bulky seating on the bar. Keep knee zones and staff access honest.'
     : primary === 'water' ? 'Furniture should have gently organic, sculptural forms achievable through REAL MANUFACTURING — serpentine bouclé sofas (Edra Boa, B&B Italia Bend), polished stainless steel counter fronts fabricated from sheet metal over welded subframes, chrome-legged coffee tables with kidney/organic shapes (Minotti, Living Divani), caramel leather accent chairs (Poltrona Frau). Counters and reception desks are the star — polished steel fronts with gentle curves achievable through sheet metal brake-forming and roll-bending, seam-welded and mechanically polished. Hammered metal panels (De Castelli) on island faces. Glass blocks (Seves) for accent walls. Forms reference BUILT neo-futurism — projects that were actually constructed, not just rendered. Every curve has a feasible fabrication method.'
     : primary === 'earth' ? 'Furniture should feel chunky, low-slung, and grounded — deep modular sofas in natural linen, olive/sage velvet, or warm cream (Baxter, Flexform, Meridiani). Thick solid wood tables — real walnut or reclaimed oak with proper joinery (mortise-and-tenon, doweled). Bar stools with rounded padded forms in sage velvet. Handmade ceramic collections on open shelving. Heavy woven or jute rugs. Wabi-sabi aesthetic: surfaces show real age, warmth, and patina — not artificially distressed but genuinely aged or handcrafted.'
-    : primary === 'fire' ? 'Furniture should have dramatic material contrast — deep rust/cognac/copper-toned velvet (Dedar, Rubelli) or full-grain leather (Poltrona Frau, Baxter) upholstery against dark marble and blackened steel frames. Warm oxidized metal finishes on real branded fixtures. Bold, curated, intense — every piece from an identifiable manufacturer.'
+    : primary === 'fire' ? 'Furniture should have dramatic material contrast — full-grain leather (Poltrona Frau, Baxter) in cognac, rust or burnt orange against dark marble and blackened steel frames. Warm oxidized metal finishes on real branded fixtures. Bold, curated, intense — every piece from an identifiable manufacturer.'
     : 'Furniture should feel refined, forward-looking, and buildable — metallic silver upholstered armchairs (Fritz Hansen Egg in silver, Cassina LC7), stainless steel pedestal tables (Fritz Hansen Series, Vitra), thermoformed white Corian counters (within real bending limits), tinted laminated glass partitions (standard architectural glass with colored PVB interlayer). Dichroic glass panels (real 3M Dichroic Film product) as art accents. LED cove lighting in standard aluminum extrusion channels (iGuzzini, Deltalight). 3D textured wall panels (commercially manufactured relief tiles). White opal globe lights (Flos Glo-Ball) and LED ring pendants (Flos Arrangements, Artemide Discovery). Fluted GRC or MDF columns with CNC-milled profiles. AIR is forward-looking minimalism grounded in REAL PRODUCTS — natural wood and airy organic textures welcome for warmth. Every element is sourceable from real manufacturers and installable by real trades.';
   P.push(`Furniture: ${furnitureItems.join('; ')}. Lighting fixtures: ${lightItems.join('; ')}. ${furnitureFormNote} BRAND & SILHOUETTE — REAL SOURCEABLE PRODUCTS (mandatory): The image must read as a project styled with REAL, currently-manufactured, world-market design pieces — the kind an architect actually specs from a showroom or trade catalogue. Use distinctive silhouettes associated with named manufacturers — pull from a DIVERSE roster, never repeat the same 2-3 brands across every render. Reference vocabulary by category: SOFAS & SEATING: B&B Italia (Tufty-Time, Camaleonda, Bend, Le Bambole), Minotti (Lawrence, Jacques, Quadrado), Poliform (Saint-Germain, Mondrian), Cassina (LC2/LC3/LC5 Le Corbusier, 290 Maralunga, Soriana), Vitra (Eames LCW, Mariposa, Polder, Suita), Molteni&C (Paul, Sloane), Living Divani (Extrasoft, Neowall), Edra (Standard, Boa, On the Rocks), Baxter (Tactile, Chester Moon, Viktor), Flexform (Groundpiece, Magnum), Knoll (Florence Knoll, Platner), Moroso (Misfits, Redondo), De Padova (Louisiana), Poltrona Frau (Vanity Fair, Chester One), Gubi (Beetle, Bat). DINING & SIDE TABLES: Cassina (LC6, Eros), Poliform (Howard, Trip), B&B Italia (Maxalto, Athos), Molteni (Mateo, Asterias), Walter Knoll (Tama, Liz), Fritz Hansen (Super-Elliptical, PK51), e15 (Bigfoot, Habibi), Carl Hansen (CH327, CH011), Maxalto (Solo, Apta). LIGHTING — chandeliers + pendants + sconces + floor lamps drawn from named houses: Flos (IC, Skygarden, Arco, 2097, Aim, Glo-Ball, Bilboquet, String Lights), Artemide (Tolomeo, Nesso, Tizio, Discovery, Dioscuri), Louis Poulsen (PH 5, AJ, Yuh, Patera, Panthella), &Tradition (Flowerpot, Bellevue, Formakami, Mass), Foscarini (Twiggy, Anisha, Aplomb, Le Soleil), Luceplan (Costanza, Trama, Hope, Mesh), Tom Dixon (Melt, Mirror Ball, Plane, Spring), Lee Broom (Orion, Crystal Bulb, Eclipse), Bocci (14, 28, 73, 84), Apparatus (Trapeze, Cloud, Talisman, Tube), DCW éditions (Lampe Gras, In The Tube), Vibia (Wireflow, Match, North), Catellani & Smith (Sissi, Macchina della Luce), Roll & Hill (Modo, Halo, Rudi), Santa & Cole (M64, Cesta), Anglepoise (Type 75). CHAIRS & STOOLS: Fritz Hansen (Egg, Swan, Series 7, PK22), Hay (AAC, Rey, Mags), Vitra (Eames DSW/DSR, HAL, Tip Ton), Carl Hansen (CH24 Wishbone, CH88, CH33), Gubi (Bestlite, Beetle, F3), Magis (Spun, Steelwood), Cappellini (S Chair), Knoll (Tulip, Brno, Womb). PROPORTIONS stay honest: seating 42-45 cm seat height; dining tables 72-75 cm; bars/counters ~90-105 cm. EACH RENDER MUST PULL FROM AT LEAST 3 DISTINCT BRAND FAMILIES across seating + tables + lighting — never all-one-brand showroom, never anonymous blob furniture in focal roles. Anything that is not a real, sourceable, currently-manufactured piece reads as failure. Everything sits on real surfaces with contact shadows; nothing floats or blocks code-clear circulation.`);
 
@@ -3039,7 +3080,11 @@ export const buildUniversalPrompt = (state: UserState, options?: PromptOptions):
   const materialInputs = getEnabledMaterials(
     state.refinement.selectedMaterials,
     state.refinement.disabledMaterialIds,
-  ).map(mat => {
+  ).filter(mat => {
+    const customMeta = mat as Partial<{ isCustom: boolean }>;
+    if (customMeta.isCustom === true) return true;
+    return getMaterialCategory(mat.name) !== null;
+  }).map(mat => {
     const w = mat.elementWeights;
     const vec: Vector4 = {
       earth: (w?.earth || 0) * 100,

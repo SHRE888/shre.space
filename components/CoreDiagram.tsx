@@ -4,6 +4,7 @@ import { ELEMENT_COLORS, ELEMENT_COLORS_MUTED, CANONICAL_MATERIALS, CANONICAL_AT
 import { tick, snap, toggleAmbient, isAmbientPlaying, warmupSpeech } from '../services/soundService';
 import { isMaterialEnabled } from '../services/refinementLogic';
 import { MaterialEnableToggle } from './MaterialEnableToggle';
+import { ElementGlyph } from './ElementGlyph';
 
 const ANIM_STYLE = document.createElement('style');
 ANIM_STYLE.textContent = `
@@ -38,6 +39,15 @@ ANIM_STYLE.textContent = `
   @keyframes btnShimmer{0%{background-position:200% center}100%{background-position:-200% center}}
   @keyframes softGlow{0%,100%{box-shadow:0 0 12px var(--gc30),0 0 24px var(--gc15)}50%{box-shadow:0 0 20px var(--gc40),0 0 40px var(--gc20)}}
   @keyframes sectorHintFadeIn{from{opacity:0}to{opacity:0.92}}
+  @keyframes elementPanelIn{from{opacity:0;transform:translateY(8px) scale(0.982)}to{opacity:1;transform:translateY(0) scale(1)}}
+  .element-panel-in{animation:elementPanelIn .34s cubic-bezier(0.22,0.61,0.36,1) both}
+  /* Stychia mark: the adjust arrows are the only hover-revealed control left,
+     so they get a real chip and a longer ease instead of a bare 10px caret. */
+  .stychia-step{opacity:0;transform:translateY(2px);transition:opacity .26s ease,transform .26s cubic-bezier(0.34,1.56,0.64,1),background .2s ease}
+  .stychia-mark:hover .stychia-step,.stychia-mark:focus-within .stychia-step{opacity:1;transform:translateY(0)}
+  .stychia-step:hover{background:rgba(255,255,255,0.96)}
+  .stychia-step:active{transform:scale(0.9)}
+  @media (hover:none){.stychia-step{opacity:1;transform:none}}
 `;
 if (!document.getElementById('core-diagram-anims')) {
   ANIM_STYLE.id = 'core-diagram-anims';
@@ -219,6 +229,25 @@ function buildSectorLayout(dist: Record<Element, number>): ElementSectorLayout {
   });
 
   return layout;
+}
+
+/**
+ * The two sector boundaries in the lower half of the circle, as `startOffset`
+ * percentages along the 180°→0° label arcs (which run left → bottom → right).
+ *
+ * Ring items are inset from their sector boundaries, so a boundary is the one
+ * angle guaranteed to stay clear of beads. The boundaries move with the
+ * distribution, so the curved ring labels have to follow them rather than sit
+ * on a fixed diagonal — at 46/32 fire-to-earth the lower-left boundary swings
+ * roughly 18° off the diagonal and a static label lands back under the beads.
+ */
+function lowerBoundaryOffsets(dist: Record<Element, number>): { matPct: number; atmoPct: number } {
+  const w = (el: Element) => Math.max(dist[el], 4);
+  const fireEarth = 90 * (w('fire') / (w('fire') + w('earth')));
+  const earthWater = 90 + 90 * (w('earth') / (w('earth') + w('water')));
+  /* offset = 1 - angle/180, clamped so a label never overruns the arc ends. */
+  const toOffset = (deg: number) => Math.min(90, Math.max(10, (1 - deg / 180) * 100));
+  return { matPct: toOffset(earthWater), atmoPct: toOffset(fireEarth) };
 }
 
 /** Annular sector path (same sweep convention as legacy fixed quadrants). */
@@ -427,6 +456,62 @@ const SECTOR_HINT_BRIEF_EN: Record<Element, Record<DistBracket, string>> = {
   },
 };
 
+/**
+ * What each element means when it leads the composition, at the two scales the
+ * studio actually designs at. Written against the elemental *character*, not
+ * the cliché: fire is not flame, earth is not a pile of stone, water is not a
+ * pool, air is not a white box. `strength` reframes the same character for a
+ * share that is not actually dominant, so the card never claims a leading role
+ * for an element sitting at 9%.
+ */
+const ELEMENT_CHARACTER_EN: Record<Element, {
+  essence: string;
+  interior: string;
+  architecture: string;
+  strength: Record<DistBracket, string>;
+}> = {
+  fire: {
+    essence: 'Contrast, depth, and one concentrated point of heat.',
+    interior: 'Saturated surfaces and low pooled light. A single wall or edge carries the room, and the shadow around it is left intact rather than filled in.',
+    architecture: 'Confident mass in a warm, patinated skin — corten, charred timber, bronze. Openings are cut into the volume instead of dissolving it.',
+    strength: {
+      low: 'A quiet accent — warmth is present but never sets the mood.',
+      mid: 'A supporting voice — evening depth without taking over the palette.',
+      high: 'Leading the composition — the space is built around intensity.',
+    },
+  },
+  earth: {
+    essence: 'Weight, texture, and material that ages honestly.',
+    interior: 'Mass you can touch: stone, timber, clay plaster. Furniture sits low and close to the floor, and nothing appears to float.',
+    architecture: 'A building that belongs to its ground — load-bearing weight, deep window reveals, raw surfaces left to weather in place.',
+    strength: {
+      low: 'A quiet accent — the natural register stays in the background.',
+      mid: 'A supporting voice — tactile warmth without going rustic.',
+      high: 'Leading the composition — the space is rooted and grounded.',
+    },
+  },
+  water: {
+    essence: 'Continuity, reflection, and forms without hard edges.',
+    interior: 'Rounded, continuous shapes and honed reflective stone. Edges soften into one another instead of meeting, and light arrives second-hand.',
+    architecture: 'A fluid section and a curved envelope. Volumes flow into each other rather than stacking, and daylight enters reflected.',
+    strength: {
+      low: 'A quiet accent — the space reads more matte than fluid.',
+      mid: 'A supporting voice — calm reflection and sculpted softness.',
+      high: 'Leading the composition — polished, flowing, and serene.',
+    },
+  },
+  air: {
+    essence: 'Lightness, distance, and space deliberately left empty.',
+    interior: 'Pale tones, generous circulation, and emptiness treated as material. Furniture is spare and lifted clear of the floor.',
+    architecture: 'Thin structure, wide glazing, and horizontal planes that appear to hover. The envelope disappears toward the light.',
+    strength: {
+      low: 'A quiet accent — weight stays on texture, not on openness.',
+      mid: 'A supporting voice — minimal clarity and easy circulation.',
+      high: 'Leading the composition — airy, open, and weightless.',
+    },
+  },
+};
+
 /** Cursor must rest near nucleus this long before per-sector hints ease in */
 const NUCLEUS_HINT_DWELL_MS = 1200;
 
@@ -592,6 +677,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
   }, [selectedMaterials]);
 
   const sectorLayout = useMemo(() => buildSectorLayout(distribution), [distribution]);
+  const ringLabelOffsets = useMemo(() => lowerBoundaryOffsets(distribution), [distribution]);
 
   const clearPointerOverlays = useCallback(() => {
     if (nucleusHintsTimerRef.current) {
@@ -781,7 +867,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 const x2 = Math.cos(end) * ringR;
                 const y2 = Math.sin(end) * ringR;
                 const gid = `orbit-arc-${ri}-${el}`;
-                return (
+          return (
                   <linearGradient key={gid} id={gid} gradientUnits="userSpaceOnUse" x1={x1} y1={y1} x2={x2} y2={y2}>
                     <stop offset="0%" stopColor={mc} stopOpacity={0} />
                     <stop offset="12%" stopColor={mc} stopOpacity={peak * 0.22} />
@@ -811,8 +897,8 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                   <stop offset="86%" stopColor="#9c9ca3" stopOpacity={0.14} />
                   <stop offset="100%" stopColor="#a8a8ae" stopOpacity={0} />
                 </linearGradient>
-              );
-            })}
+          );
+        })}
             <path id="orbit-textpath-atmo" d={`M ${-(atmoOrbR - 22)} 0 A ${atmoOrbR - 22} ${atmoOrbR - 22} 0 0 0 ${atmoOrbR - 22} 0`} fill="none" />
             <path id="orbit-textpath-mat" d={`M ${-(matOrbR - 26)} 0 A ${matOrbR - 26} ${matOrbR - 26} 0 0 0 ${matOrbR - 26} 0`} fill="none" />
           </defs>
@@ -860,7 +946,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 const { start, end } = sectorLayout[el];
                 const arcD = sectorRingArcPath(ringR, start, end);
                 const gid = `orbit-arc-${ri}-${el}`;
-                return (
+          return (
                   <path
                     key={`ring-${ri}-${el}`}
                     d={arcD}
@@ -874,8 +960,8 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                       transition: 'opacity 0.55s ease, d 0.55s cubic-bezier(0.22, 0.61, 0.36, 1)',
                     }}
                   />
-                );
-              })}
+          );
+        })}
             </React.Fragment>
           ))}
 
@@ -891,7 +977,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
             const hw = 2.15;
             const px = -ym * hw;
             const py = xm * hw;
-            return (
+          return (
               <path
                 key={`compass-tick-${el}`}
                 d={`M ${xm * rBase + px} ${ym * rBase + py} L ${xm * rTip} ${ym * rTip} L ${xm * rBase - px} ${ym * rBase - py} Z`}
@@ -900,32 +986,51 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 strokeWidth="0.32"
                 strokeLinejoin="round"
               />
+          );
+        })}
+
+          {/* Ring labels — curved along orbit (structural, high contrast).
+              Both used to sit at the bottom of their arc at startOffset 50%,
+              which is exactly where the Earth sector's beads are, so the words
+              were permanently half-buried under spheres. They now ride the
+              lower diagonals instead: sector boundaries fall in the quadrant
+              gaps and ring items are inset from those boundaries, so this is
+              the one band that stays clear whatever the distribution does. A
+              paper-coloured halo keeps them readable if anything does drift
+              across. Clicking a label expands its ring — the word was already
+              the obvious handle for it. */}
+          {([
+            { ring: 'atmo' as const, path: 'atmo', word: 'atmosphere', offset: `${ringLabelOffsets.atmoPct}%`, size: 9.5, spacing: '0.34em' },
+            { ring: 'mat' as const, path: 'mat', word: 'materials', offset: `${ringLabelOffsets.matPct}%`, size: 9.25, spacing: '0.3em' },
+          ]).map(({ ring, path, word, offset, size, spacing }) => {
+            const live = hoveredRing === ring || expandedRing === ring;
+            return (
+              <text
+                key={`ring-label-${ring}`}
+                fill={dc}
+                fillOpacity={live ? 0.95 : 0.6}
+                fontSize={size}
+                fontWeight="600"
+                letterSpacing={spacing}
+                stroke="#FAFBFC"
+                strokeWidth="3"
+                strokeLinejoin="round"
+                style={{
+                  fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
+                  textTransform: 'uppercase',
+                  paintOrder: 'stroke',
+                  pointerEvents: 'auto',
+                  cursor: 'pointer',
+                  transition: 'fill-opacity 0.35s ease',
+                }}
+                onMouseEnter={() => setHoveredRing(ring)}
+                onMouseLeave={() => setHoveredRing(null)}
+                onClick={(e) => { e.stopPropagation(); snap(isMuted); setExpandedRing(expandedRing === ring ? null : ring); }}
+              >
+                <textPath href={`#orbit-textpath-${path}`} startOffset={offset} textAnchor="middle">{word}</textPath>
+              </text>
             );
           })}
-
-          {/* Ring labels — curved along orbit (structural, high contrast) */}
-          <text
-            className="pointer-events-none"
-            fill={dc}
-            fillOpacity={hoveredRing === 'atmo' || expandedRing === 'atmo' ? 0.92 : 0.62}
-            fontSize="9.5"
-            fontWeight="600"
-            letterSpacing="0.34em"
-            style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif", textTransform: 'uppercase' }}
-          >
-            <textPath href="#orbit-textpath-atmo" startOffset="50%" textAnchor="middle">atmosphere</textPath>
-          </text>
-          <text
-            className="pointer-events-none"
-            fill={dc}
-            fillOpacity={hoveredRing === 'mat' || expandedRing === 'mat' ? 0.92 : 0.62}
-            fontSize="9.25"
-            fontWeight="600"
-            letterSpacing="0.3em"
-            style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif", textTransform: 'uppercase' }}
-          >
-            <textPath href="#orbit-textpath-mat" startOffset="50%" textAnchor="middle">materials</textPath>
-          </text>
 
           {/* Subtle radial spokes toward outer hints (ties copy to each sector when dwell completes) */}
           {nucleusHintsVisible && ELEMENTS.map(el => {
@@ -935,7 +1040,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
             const rOuter = atmoOrbR + 40;
             const x1 = Math.cos(ca) * rInner, y1 = Math.sin(ca) * rInner;
             const x2 = Math.cos(ca) * rOuter, y2 = Math.sin(ca) * rOuter;
-            return (
+          return (
               <line key={`hint-spoke-${el}`}
                 x1={x1} y1={y1} x2={x2} y2={y2}
                 stroke={hexToRgba(mc, 0.38)} strokeWidth="0.85" strokeLinecap="round" opacity={0.85}
@@ -944,16 +1049,14 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           })}
         </svg>
 
-        {/* ═══ Orbit rings — interactive: hover glow + click to expand ═══ */}
-        <div className="absolute rounded-full"
+        {/* ═══ Orbit rings — glow only; the hit region is the annular band
+             below, not the whole disc ═══ */}
+        <div className="absolute rounded-full pointer-events-none"
           style={{
             left: ctr - matOrbR - 8, top: ctr - matOrbR - 8,
             width: matOrbR * 2 + 16, height: matOrbR * 2 + 16,
-            cursor: 'pointer', zIndex: 5,
+            zIndex: 5,
           }}
-          onMouseEnter={() => setHoveredRing('mat')}
-          onMouseLeave={() => setHoveredRing(null)}
-          onClick={(e) => { e.stopPropagation(); setExpandedRing(expandedRing === 'mat' ? null : 'mat'); }}
         >
           <div className="absolute rounded-full" style={{
             inset: 8,
@@ -968,15 +1071,12 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
             mask: `radial-gradient(circle closest-side, transparent calc(100% - ${expandedRing === 'mat' ? 5 : hoveredRing === 'mat' ? 4 : 3}px), #000 100%)`,
           }} />
         </div>
-        <div className="absolute rounded-full"
+        <div className="absolute rounded-full pointer-events-none"
           style={{
             left: ctr - atmoOrbR - 8, top: ctr - atmoOrbR - 8,
             width: atmoOrbR * 2 + 16, height: atmoOrbR * 2 + 16,
-            cursor: 'pointer', zIndex: 4,
+            zIndex: 4,
           }}
-          onMouseEnter={() => setHoveredRing('atmo')}
-          onMouseLeave={() => setHoveredRing(null)}
-          onClick={(e) => { e.stopPropagation(); setExpandedRing(expandedRing === 'atmo' ? null : 'atmo'); }}
         >
           <div className="absolute rounded-full" style={{
             inset: 8,
@@ -991,6 +1091,33 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
             mask: `radial-gradient(circle closest-side, transparent calc(100% - ${expandedRing === 'atmo' ? 5 : hoveredRing === 'atmo' ? 4 : 3}px), #000 100%)`,
           }} />
         </div>
+
+        {/* ═══ Ring hit region — annular, not a filled disc ═══
+             Both orbit glows used to be full circles with `cursor:pointer` and
+             an onClick, so every click anywhere inside the outer orbit — empty
+             canvas included — silently toggled a ring open or shut, and the
+             root's click-to-dismiss almost never got the chance to run. The hit
+             area is now the ring band itself: stroked circles that only test
+             against the stroke. */}
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          viewBox={`${-canvasSize / 2} ${-canvasSize / 2} ${canvasSize} ${canvasSize}`}
+          style={{ zIndex: 6 }}
+        >
+          {([['mat', matOrbR, 34], ['atmo', atmoOrbR, 30]] as const).map(([ring, r, band]) => (
+            <circle
+              key={`ring-hit-${ring}`}
+              cx="0" cy="0" r={r}
+              fill="none"
+              stroke="transparent"
+              strokeWidth={band}
+              style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+              onMouseEnter={() => setHoveredRing(ring)}
+              onMouseLeave={() => setHoveredRing(null)}
+              onClick={(e) => { e.stopPropagation(); snap(isMuted); setExpandedRing(expandedRing === ring ? null : ring); }}
+            />
+          ))}
+        </svg>
 
         {/* ═══ Element symbol triangles — uniform size ═══ */}
         {ELEMENTS.map(el => {
@@ -1017,28 +1144,66 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           const barY = isUp ? topY + h * 0.4 : topY + h * 0.6;
           const scale = isAct ? 1.2 : 1;
           const pct = distribution[el];
+          const stepChip: React.CSSProperties = {
+            width: 26, height: 20, color: mc, cursor: 'pointer',
+            background: 'rgba(255,255,255,0.82)',
+            border: `1px solid ${mc}22`,
+            borderRadius: 7, padding: 0,
+            boxShadow: '0 1px 3px rgba(30,30,38,0.06)',
+          };
           return (
-            <div key={`sym-${el}`} className="absolute flex flex-col items-center group orb-item"
-              style={{ left: cx, top: cy, transform: `translate(-50%, -50%) scale(${scale})`, zIndex: 20, transition: 'transform 0.3s ease, opacity 0.3s ease' }}
-              onMouseEnter={e => { if (!isAct) (e.currentTarget as HTMLElement).style.transform = 'translate(-50%, -50%) scale(1.15)'; }}
+            <div key={`sym-${el}`} className="absolute flex flex-col items-center stychia-mark orb-item"
+              style={{ left: cx, top: cy, transform: `translate(-50%, -50%) scale(${scale})`, zIndex: 20, transition: 'transform 0.34s cubic-bezier(0.34,1.56,0.64,1)' }}
+              onMouseEnter={e => { if (!isAct) (e.currentTarget as HTMLElement).style.transform = 'translate(-50%, -50%) scale(1.12)'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = `translate(-50%, -50%) scale(${scale})`; }}>
-              <button className="flex items-center justify-center transition-all opacity-0 group-hover:opacity-70 hover:!opacity-100 hover:scale-125"
-                style={{ width: 22, height: 16, color: mc, background: 'none', border: 'none', padding: 0, cursor: 'pointer', marginBottom: 2 }}
+              <button className="stychia-step flex items-center justify-center"
+                style={{ ...stepChip, marginBottom: 3 }}
+                title={`More ${el}`}
+                aria-label={`Increase ${el}`}
                 onClick={e => { e.stopPropagation(); snap(isMuted); onAdjust(el, Math.min(65, pct + 5)); }}>
-                <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 5 L5 1 L9 5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 5 L5 1 L9 5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
-              <button style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+              {/* The mark itself opens the element's character card. Padding
+                  gives it a real touch target — the triangle outline alone is
+                  mostly empty space and was easy to miss. */}
+              <button style={{ background: 'none', border: 'none', padding: 5, margin: -5, cursor: 'pointer', borderRadius: '50%' }}
+                title={`${ELEMENT_LABEL_EN[el]} — what it means`}
+                aria-label={`${el} character`}
                 onClick={e => { e.stopPropagation(); snap(isMuted); setMatPicker(matPicker === el ? null : el); setAtmoPicker(null); }}>
-                <svg width={SZ} height={SZ} viewBox={`0 0 ${SZ} ${SZ}`} style={{ overflow: 'visible', transition: 'all 0.3s ease' }}>
+                <svg width={SZ} height={SZ} viewBox={`0 0 ${SZ} ${SZ}`} style={{ overflow: 'visible', transition: 'all 0.34s cubic-bezier(0.22,0.61,0.36,1)' }}>
                   <path d={triPath} fill="none" stroke={mc} strokeWidth={sw} strokeLinejoin="round" opacity={op} />
                   {hasBar && <line x1={leftX + side * 0.2} y1={barY} x2={rightX - side * 0.2} y2={barY} stroke={mc} strokeWidth={sw} strokeLinecap="round" opacity={op} />}
                 </svg>
               </button>
-              <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.14em', textTransform: 'uppercase', color: mc, opacity: isAct ? 0.78 : isDom ? 0.48 : 0.28, lineHeight: 1, transition: 'opacity 0.3s ease, transform 0.3s ease', background: 'rgba(255,255,255,0.82)', padding: '0 4px', borderRadius: 2 }}>{el}</span>
-              <button className="flex items-center justify-center transition-all opacity-0 group-hover:opacity-70 hover:!opacity-100 hover:scale-125"
-                style={{ width: 22, height: 16, color: mc, background: 'none', border: 'none', padding: 0, cursor: 'pointer', marginTop: 2 }}
+              {/* Name and share sit as type, not as chips. A paper halo keeps
+                  them readable over beads without drawing a box around them. */}
+              <span style={{
+                fontSize: 9, fontWeight: 600, letterSpacing: '0.16em', textTransform: 'uppercase',
+                color: mc, opacity: isAct ? 1 : isDom ? 0.88 : 0.72, lineHeight: 1,
+                marginTop: 3, transition: 'opacity 0.3s ease',
+                textShadow: '0 0 10px #FAFBFC, 0 0 4px #FAFBFC, 0 1px 0 rgba(250,251,252,0.95)',
+              }}>{el}</span>
+              <span
+                style={{
+                  fontSize: 9,
+                  fontWeight: 500,
+                  letterSpacing: '0.04em',
+                  fontVariantNumeric: 'tabular-nums',
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  color: mc,
+                  opacity: isAct ? 1 : 0.82,
+                  lineHeight: 1,
+                  marginTop: 3,
+                  transition: 'opacity 0.3s ease',
+                  textShadow: '0 0 10px #FAFBFC, 0 0 4px #FAFBFC, 0 1px 0 rgba(250,251,252,0.95)',
+                }}
+              >{Math.round(pct)}%</span>
+              <button className="stychia-step flex items-center justify-center"
+                style={{ ...stepChip, marginTop: 3 }}
+                title={`Less ${el}`}
+                aria-label={`Decrease ${el}`}
                 onClick={e => { e.stopPropagation(); snap(isMuted); onAdjust(el, Math.max(5, pct - 5)); }}>
-                <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1 L5 5 L9 1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1 L5 5 L9 1" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
             </div>
           );
@@ -1076,7 +1241,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
             }
           };
           const showLabel = isExp || ringExp;
-          return (
+            return (
             <div key={mat.id} className="absolute group orb-item"
               style={{
                 left: cx, top: cy, transform: 'translate(-50%, -50%)',
@@ -1110,17 +1275,22 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
               }}>
                 <MaterialBeadInner name={mat.name} tex={tex} mc={mc} />
               </div>
+              {/* Pause / include toggle. It was a 12px dot pinned flush to the
+                  bead corner and only reachable on hover, which made pausing a
+                  material a game of pixel-hunting. Bigger dot, and a padded
+                  wrapper so the clickable area is comfortably larger than the
+                  dot it draws. */}
               {onToggleMaterialEnabled && (
                 <div
-                  className={`absolute z-30 transition-opacity duration-200 ${matOn ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}
-                  style={{ right: -2, bottom: -2 }}
+                  className={`absolute z-30 transition-opacity duration-200 ${matOn ? 'opacity-0 group-hover:opacity-100 focus-within:opacity-100' : 'opacity-100'}`}
+                  style={{ right: -8, bottom: -8, padding: 6 }}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <MaterialEnableToggle
                     enabled={matOn}
                     color={ELEMENT_COLORS[mat.element]}
                     onToggle={(e) => onToggleMaterialEnabled(mat.id, e)}
-                    size={12}
+                    size={17}
                   />
                 </div>
               )}
@@ -1180,8 +1350,8 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 )}
               </div>
             </div>
-          );
-        })}
+            );
+          })}
 
         {/* ═══ Atmosphere — visible labels, hover glow + animate enlarge ═══ */}
         {selectedAdjectives.map((adj, i) => {
@@ -1200,7 +1370,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           const oy = Math.sin(ang) * labelOutR;
           const lblX = ox - p.x;
           const lblY = oy - p.y;
-          return (
+            return (
             <div key={`${key}-${i}`} className="absolute cursor-pointer orb-item"
               style={{ left: cx, top: cy, transform: `translate(-50%, -50%)${atmoRingExp ? ' scale(1.15)' : ''}`, zIndex: atmoRingExp ? 12 : 8, transition: 'all 0.4s cubic-bezier(0.34,1.56,0.64,1)' }}
               onClick={e => { e.stopPropagation(); snap(isMuted); setAtmoPicker(atmoPicker === adj.element ? null : adj.element); setMatPicker(null); }}
@@ -1249,8 +1419,8 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 left: `calc(50% + ${lblX}px)`, top: `calc(50% + ${lblY}px)`, transform: 'translate(-50%, -50%) scale(1)',
               }}>{adj.label}</span>
             </div>
-          );
-        })}
+            );
+          })}
 
         {/* ═══ Central Nucleus — zIndex 30 to stay above everything ═══ */}
         <div ref={nucleusRef} className="absolute nucleus-levitate"
@@ -1265,7 +1435,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
           {/* ═══ Rotation indicator — readable dial (drag / center focus) ═══ */}
           <svg className="absolute pointer-events-none" style={{ inset: -14, width: 'calc(100% + 28px)', height: 'calc(100% + 28px)', opacity: dragging ? 0.62 : nucleusZoneFocused ? 0.5 : 0.24, transition: 'opacity 0.35s ease', transform: dragging ? `rotate(${dragAngle}deg)` : 'rotate(0deg)', transformOrigin: 'center center' }}
             viewBox={`0 0 ${nR * 2 + 28} ${nR * 2 + 28}`}>
-            {(() => {
+                  {(() => {
               const c = nR + 14;
               const r = nR + 6;
               const ticks: React.ReactElement[] = [];
@@ -1292,15 +1462,15 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
               const t1y = ay2 + Math.sin(tipAng + 2.4) * tipLen;
               const t2x = ax2 + Math.cos(tipAng + 0.6) * tipLen;
               const t2y = ay2 + Math.sin(tipAng + 0.6) * tipLen;
-              return (
+                    return (
                 <>
                   <circle cx={c} cy={c} r={r + 5} fill="none" stroke={dc} strokeWidth="0.65" opacity={nucleusZoneFocused ? 0.2 : 0.1} />
                   {ticks}
                   <path d={`M ${ax1} ${ay1} A ${arrowR} ${arrowR} 0 0 1 ${ax2} ${ay2}`} fill="none" stroke={dc} strokeWidth="1" opacity="0.45" strokeLinecap="round" />
                   <polyline points={`${t1x},${t1y} ${ax2},${ay2} ${t2x},${t2y}`} fill="none" stroke={dc} strokeWidth="1" opacity="0.45" strokeLinecap="round" strokeLinejoin="round" />
                 </>
-              );
-            })()}
+                    );
+                  })()}
           </svg>
 
           <div className="absolute inset-0 rounded-full overflow-hidden" style={{
@@ -1337,7 +1507,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
             {/* Default state — element triangle + label */}
             <div style={{ opacity: nucleusTooltip ? 0 : 1, transform: nucleusTooltip ? 'scale(0.6) rotate(120deg)' : 'scale(1) rotate(0deg)', transition: 'opacity 0.5s ease, transform 0.6s cubic-bezier(0.34,1.56,0.64,1)', pointerEvents: nucleusTooltip ? 'none' : 'auto' }}
               className="flex flex-col items-center justify-center">
-              {(() => {
+                {(() => {
                 const s = 48;
                 const side = s * 0.78;
                 const triH = side * Math.sqrt(3) / 2;
@@ -1351,13 +1521,13 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                   ? `M ${s / 2} ${tY} L ${rX} ${bY} L ${lX} ${bY} Z`
                   : `M ${s / 2} ${bY} L ${rX} ${tY} L ${lX} ${tY} Z`;
                 const barYi = isUp ? tY + triH * 0.4 : tY + triH * 0.6;
-                return (
+                  return (
                   <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} style={{ overflow: 'visible', filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.1))' }}>
                     <path d={triP} fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="1.8" strokeLinejoin="round" />
                     {hasBar && <line x1={lX + side * 0.2} y1={barYi} x2={rX - side * 0.2} y2={barYi} stroke="rgba(255,255,255,0.6)" strokeWidth="1.8" strokeLinecap="round" />}
                   </svg>
-                );
-              })()}
+                  );
+                })()}
               <div className="flex flex-col items-center justify-center mt-1">
                 <span
                   className="tabular-nums font-extralight leading-none text-center"
@@ -1391,7 +1561,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
               </svg>
 
               {/* 3-word concept headline */}
-              {(() => {
+        {(() => {
                 const headlines = CONCEPT_HEADLINES[dom];
                 const headlineIdx = (selectedMaterials.length + selectedAdjectives.length) % headlines.length;
                 const headline = headlines[headlineIdx];
@@ -1402,7 +1572,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                     animation: nucleusTooltip ? 'nucleusFadeUp 0.4s ease-out 0.2s both' : 'none',
                   }}>{headline}</span>
                 );
-              })()}
+        })()}
 
               {/* Subtle counts */}
               <span className="mt-2" style={{
@@ -1431,9 +1601,9 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                   Generate
                 </button>
               )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
         {/* Per-sector hints — push into outer gutter + tangential offset; Plex Serif italic */}
         {!matPicker && !atmoPicker && !gathering && !fullMat && nucleusHintsVisible && ELEMENTS.map(el => {
@@ -1552,7 +1722,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                         return (
                           <div key={mat.name} className="flex flex-col items-center gap-2 cursor-pointer group"
                             onClick={e => { e.stopPropagation(); snap(isMuted); setExpMat(isExp ? null : mat.name); }}>
-                            <div style={{
+              <div style={{
                               width: isExp ? 108 : 88, height: isExp ? 108 : 88,
                               borderRadius: '50%', position: 'relative', overflow: 'hidden',
                               background: tex ? 'transparent' : `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)`,
@@ -1560,7 +1730,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                               transition: 'all 0.35s ease',
                             }}>
                               <MaterialBeadInner name={mat.name} tex={tex} mc={mc} />
-                            </div>
+              </div>
                             {/* Name + elemental percentage breakdown. SHRE
                                 MATERIAL SELECTION LOCK: every material on
                                 the board must show its diagnostic reason
@@ -1569,7 +1739,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                             <div className="px-2 py-0.5 rounded-md text-center" style={{ background: 'rgba(255,255,255,0.92)', maxWidth: 116, lineHeight: 1.3 }}>
                               <div style={{ fontSize: 11, fontWeight: 600, color: mc, letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'normal', wordBreak: 'break-word' as const }}>
                                 {mat.name.split('(')[0].trim()}
-                              </div>
+            </div>
                               {mat.elementWeights && (
                                 <div style={{ fontSize: 8.5, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: 400, color: '#777', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
                                   {(['earth', 'fire', 'water', 'air'] as Element[])
@@ -1577,9 +1747,9 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                                     .filter(({ p }) => p > 0)
                                     .map(({ e2, p }) => `${e2.charAt(0).toUpperCase()}${e2.slice(1)} ${p}%`)
                                     .join(' · ')}
-                                </div>
+              </div>
                               )}
-                            </div>
+            </div>
                             {isExp && (
                               <button className="px-3 py-1 rounded-full text-[11px] uppercase tracking-[0.08em] font-medium transition-all hover:bg-red-50"
                                 style={{ color: '#b06060', background: 'rgba(255,255,255,0.95)', border: '1px solid rgba(180,96,96,0.12)', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}
@@ -1587,70 +1757,189 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                                 Remove
                               </button>
                             )}
-                          </div>
+            </div>
                         );
                       })}
-                    </div>
+            </div>
                   </div>
-                );
-              })}
+              );
+            })}
             </div>
           </div>
         </div>
       )}
 
-      {/* ═══ Material picker ═══ */}
+      {/* ═══ Element panel — character first, then materials & atmosphere ═══
+           Clicking a stychia mark used to drop straight into a materials list,
+           which answered "what can I add here" but never "what is this element
+           doing to my space". The character block now leads, and the picker
+           follows underneath so both questions are one click away. */}
       {matPicker && (() => {
-        const mc = MUTED_COLORS[matPicker];
-        const a = fixedStychiaAngleRad(matPicker);
-        const midR = (symOrbR + matOrbR) / 2;
-        const rawX = Math.cos(a) * (midR + 70);
-        const rawY = Math.sin(a) * (midR + 70);
+        const el = matPicker;
+        const mc = MUTED_COLORS[el];
+        const ec = ELEMENT_COLORS[el];
+        const a = fixedStychiaAngleRad(el);
+        const pct = distribution[el];
+        const bracket = distributionBracket(pct);
+        const character = ELEMENT_CHARACTER_EN[el];
+        /* The mark sits at symOrbR in diagram space, but the scene is shrunk by
+           `diagramScale` on small viewports. Without folding the scale in, the
+           panel anchored itself to where the mark would have been at full size
+           and drifted far from the mark actually clicked. */
+        const anchorR = (matOrbR + 26) * diagramScale;
+        const rawX = Math.cos(a) * anchorR;
+        const rawY = Math.sin(a) * anchorR;
+        const PANEL_W = 302;
+        const materials = CANONICAL_MATERIALS[el] || [];
+        const atmoWords = CANONICAL_ATMOSPHERE[el] || [];
+        const selectedHere = materials.filter(n => selectedMaterials.some(m => m.name === n)).length;
+        const Meaning = ({ label, body }: { label: string; body: string }) => (
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.22em', textTransform: 'uppercase', color: `${mc}A8`, marginBottom: 3 }}>{label}</div>
+            <p className="m-0" style={{ fontSize: 11.5, lineHeight: 1.62, color: 'rgba(58,58,66,0.9)', fontFamily: "'IBM Plex Serif', Georgia, serif" }}>{body}</p>
+          </div>
+        );
         return (
-          <div className="fixed z-50 animate-fade-in" style={{ left: `clamp(8px, calc(50% + ${rawX}px - 130px), calc(100vw - 270px))`, top: `clamp(60px, calc(50% + ${rawY}px - 110px), calc(100vh - 320px))` }} onClick={e => e.stopPropagation()}>
-            <div className="rounded-2xl shadow-xl border p-3 w-[260px] max-w-[calc(100vw-16px)] max-h-[48vh] overflow-y-auto" style={{ background: 'rgba(252,252,250,0.98)', borderColor: `${mc}18` }}>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: mc }} />
-                  <span className="text-[13px] uppercase tracking-[0.2em] font-semibold" style={{ color: mc }}>{matPicker}</span>
+          <div
+            className="fixed z-50 element-panel-in"
+            style={{
+              /* Height is capped first, then the anchor is clamped against that
+                 same cap, so the card is bounded by the viewport instead of
+                 being positioned and hoping it fits. */
+              ['--card-max' as string]: 'min(680px, calc(100vh - 56px))',
+              left: `clamp(8px, calc(50% + ${rawX}px - ${PANEL_W / 2}px), calc(100vw - ${PANEL_W + 12}px))`,
+              top: `clamp(28px, calc(50% + ${rawY}px - 170px), calc(100vh - 28px - var(--card-max)))`,
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div
+              className="rounded-2xl border overflow-hidden flex flex-col"
+              style={{
+                width: PANEL_W,
+                maxWidth: 'calc(100vw - 16px)',
+                maxHeight: 'var(--card-max)',
+                background: 'rgba(252,252,250,0.985)',
+                borderColor: `${mc}22`,
+                backdropFilter: 'blur(10px)',
+                boxShadow: `0 18px 48px rgba(24,24,30,0.13), 0 2px 8px rgba(24,24,30,0.06), 0 0 0 1px ${mc}0A`,
+              }}
+            >
+              {/* Header — mark, name, live share */}
+              <div className="flex items-center gap-2.5 px-3.5 pt-3 pb-2.5 shrink-0" style={{ borderBottom: `1px solid ${mc}14` }}>
+                <ElementGlyph element={el} size={17} color={ec} strokeWidth={1.4} />
+                <div className="flex-1 min-w-0">
+                  <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.2em', textTransform: 'uppercase', color: mc, lineHeight: 1.1 }}>
+                    {ELEMENT_LABEL_EN[el]}
+                  </div>
+                  <div style={{ fontSize: 9.5, letterSpacing: '0.1em', color: 'rgba(120,120,130,0.9)', marginTop: 2, fontStyle: 'italic', fontFamily: "'IBM Plex Serif', Georgia, serif" }}>
+                    {character.strength[bracket]}
+                  </div>
                 </div>
-                <button onClick={() => setMatPicker(null)} className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-50">
-                  <svg width="8" height="8" viewBox="0 0 8 8" stroke="#bbb" strokeWidth="1.5"><line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" /></svg>
+                <span style={{ fontSize: 15, fontWeight: 500, color: mc, fontFamily: "'IBM Plex Mono', monospace", fontVariantNumeric: 'tabular-nums' }}>
+                  {Math.round(pct)}%
+                </span>
+                <button
+                  onClick={() => { setMatPicker(null); snap(isMuted); }}
+                  className="w-7 h-7 -mr-1.5 flex items-center justify-center rounded-full transition-colors hover:bg-black/[0.05]"
+                  aria-label="Close"
+                >
+                  <svg width="9" height="9" viewBox="0 0 8 8" stroke="#9a9aa2" strokeWidth="1.6"><line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" /></svg>
                 </button>
               </div>
-              <div className="text-[11px] uppercase tracking-[0.2em] mb-1 font-medium" style={{ color: `${mc}80` }}>Materials</div>
-              <div className="space-y-0.5 mb-2">
-                {(CANONICAL_MATERIALS[matPicker] || []).map(name => {
-                  const sel = selectedMaterials.some(m => m.name === name);
-                  const tex = MAT_TEX[name];
-                  return (
-                    <button key={name} onClick={() => { onToggleMaterial?.(name, matPicker); snap(isMuted); }}
-                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all text-left"
-                      style={{ background: sel ? `${mc}0A` : 'transparent', border: `1px solid ${sel ? `${mc}18` : 'transparent'}`, cursor: 'pointer' }}>
-                      <div className="w-10 h-10 rounded-full shrink-0 relative overflow-hidden" style={{
-                        boxShadow: `0 2px 8px rgba(0,0,0,0.14), 0 0 10px ${mc}30`,
-                        background: tex ? 'transparent' : `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)`,
-                      }}>
-                        <MaterialBeadInner name={name} tex={tex} mc={mc} />
-                      </div>
-                      <div className="flex-1 min-w-0"><div className="text-[13px] font-medium truncate" style={{ color: '#777' }}>{name}</div></div>
-                      {sel && <div className="w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: mc }}><svg width="6" height="6" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2.5"><path d="M2 6l3 3 5-5" /></svg></div>}
-                    </button>
-                  );
-                })}
+
+              {/* One scroll region below the pinned header: on a tall screen
+                  nothing scrolls at all, and on a short one the card can never
+                  run off the bottom edge. */}
+              <div className="overflow-y-auto" style={{ flex: '1 1 auto', minHeight: 0 }}>
+              <div className="px-3.5 py-3 flex flex-col gap-3">
+                <p className="m-0" style={{ fontSize: 12, lineHeight: 1.5, color: mc, fontStyle: 'italic', fontFamily: "'IBM Plex Serif', Georgia, serif" }}>
+                  {character.essence}
+                </p>
+                <Meaning label="In interior" body={character.interior} />
+                <Meaning label="In architecture" body={character.architecture} />
+
+                {/* Adjust — full-size buttons. The hover arrows on the mark are
+                    a 16px target inside a scaled scene; this is the reliable
+                    way to move a share. */}
+                <div className="flex items-center gap-2 pt-0.5">
+                  <button
+                    className="w-9 h-8 flex items-center justify-center rounded-lg transition-all active:scale-95 disabled:opacity-30"
+                    style={{ background: `${mc}0E`, border: `1px solid ${mc}20`, color: mc }}
+                    disabled={pct <= 5}
+                    onClick={() => { snap(isMuted); onAdjust(el, Math.max(5, pct - 5)); }}
+                    aria-label={`Decrease ${el}`}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 12 12"><line x1="2" y1="6" x2="10" y2="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+                  </button>
+                  <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: `${mc}12` }}>
+                    <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: mc, opacity: 0.62, borderRadius: 99, transition: 'width 0.4s cubic-bezier(0.22,0.61,0.36,1)' }} />
+                  </div>
+                  <button
+                    className="w-9 h-8 flex items-center justify-center rounded-lg transition-all active:scale-95 disabled:opacity-30"
+                    style={{ background: `${mc}0E`, border: `1px solid ${mc}20`, color: mc }}
+                    disabled={pct >= 65}
+                    onClick={() => { snap(isMuted); onAdjust(el, Math.min(65, pct + 5)); }}
+                    aria-label={`Increase ${el}`}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 12 12"><line x1="6" y1="2" x2="6" y2="10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /><line x1="2" y1="6" x2="10" y2="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+                  </button>
+                </div>
               </div>
-              <div className="text-[11px] uppercase tracking-[0.2em] mb-1 font-medium" style={{ color: `${mc}80` }}>Atmosphere</div>
-              <div className="flex flex-wrap gap-1">
-                {(CANONICAL_ATMOSPHERE[matPicker] || []).map(w => {
-                  const sel = selectedAdjectives.some(a => a.label === w && a.element === matPicker);
-                  return (
-                    <button key={w} onClick={() => { onToggleAtmosphere?.(w, matPicker); snap(isMuted); }}
-                      className="px-2 py-1 rounded-md text-[11px] font-medium transition-all"
-                      style={{ backgroundColor: sel ? `${mc}0C` : '#f6f6f4', color: sel ? mc : '#aaa', border: `1px solid ${sel ? `${mc}1A` : '#e8e8e5'}`, cursor: 'pointer' }}>
-                      {sel && '✓ '}{w}
-                    </button>
-                  );
-                })}
+
+              <div className="px-3.5 pb-3" style={{ borderTop: `1px solid ${mc}14`, paddingTop: 10 }}>
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.22em', textTransform: 'uppercase', color: `${mc}A8` }}>Materials</span>
+                  {selectedHere > 0 && (
+                    <span style={{ fontSize: 9, letterSpacing: '0.1em', color: 'rgba(150,150,158,0.95)', fontFamily: "'IBM Plex Mono', monospace" }}>{selectedHere} on orbit</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-0.5 mb-3">
+                  {materials.map(name => {
+                    const sel = selectedMaterials.some(m => m.name === name);
+                    const tex = MAT_TEX[name];
+                    return (
+                      <button key={name} onClick={() => { onToggleMaterial?.(name, el); snap(isMuted); }}
+                        className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-xl transition-all text-left hover:bg-black/[0.02]"
+                        style={{ background: sel ? `${mc}0C` : 'transparent', border: `1px solid ${sel ? `${mc}20` : 'transparent'}`, cursor: 'pointer' }}>
+                        <div className="w-9 h-9 rounded-full shrink-0 relative overflow-hidden" style={{
+                          boxShadow: `0 2px 8px rgba(0,0,0,0.12), 0 0 10px ${mc}28`,
+                          background: tex ? 'transparent' : `radial-gradient(circle at 34% 30%, ${mc}E8, ${mc}A0)`,
+                        }}>
+                          <MaterialBeadInner name={name} tex={tex} mc={mc} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div style={{ fontSize: 12, fontWeight: sel ? 500 : 400, color: sel ? '#4a4a52' : '#84848c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
+                        </div>
+                        <div className="w-4 h-4 rounded-full flex items-center justify-center shrink-0 transition-all"
+                          style={sel
+                            ? { backgroundColor: mc }
+                            : { border: '1px solid rgba(0,0,0,0.13)' }}>
+                          {sel && <svg width="7" height="7" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2.6"><path d="M2 6l3 3 5-5" /></svg>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.22em', textTransform: 'uppercase', color: `${mc}A8`, marginBottom: 6 }}>Atmosphere</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {atmoWords.map(w => {
+                    const sel = selectedAdjectives.some(x => x.label === w && x.element === el);
+                    return (
+                      <button key={w} onClick={() => { onToggleAtmosphere?.(w, el); snap(isMuted); }}
+                        className="px-2.5 py-1.5 rounded-lg transition-all active:scale-95"
+                        style={{
+                          fontSize: 11, fontWeight: sel ? 500 : 400,
+                          backgroundColor: sel ? `${mc}12` : 'rgba(0,0,0,0.022)',
+                          color: sel ? mc : '#9a9aa2',
+                          border: `1px solid ${sel ? `${mc}28` : 'rgba(0,0,0,0.05)'}`,
+                          cursor: 'pointer',
+                        }}>
+                        {w}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               </div>
             </div>
           </div>
@@ -1662,8 +1951,8 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
         const mc = MUTED_COLORS[atmoPicker];
         const a = fixedStychiaAngleRad(atmoPicker);
         const midR = (matOrbR + atmoOrbR) / 2;
-        const rawX = Math.cos(a) * (midR + 30);
-        const rawY = Math.sin(a) * (midR + 30);
+        const rawX = Math.cos(a) * (midR + 30) * diagramScale;
+        const rawY = Math.sin(a) * (midR + 30) * diagramScale;
         const atmoWords = CANONICAL_ATMOSPHERE[atmoPicker] || [];
         return (
           <div className="fixed z-50 animate-fade-in" style={{ left: `clamp(8px, calc(50% + ${rawX}px - 110px), calc(100vw - 240px))`, top: `clamp(60px, calc(50% + ${rawY}px - 80px), calc(100vh - 260px))` }} onClick={e => e.stopPropagation()}>
@@ -1672,7 +1961,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 <div className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: mc }} />
                   <span className="text-[12px] uppercase tracking-[0.2em] font-semibold" style={{ color: mc }}>{atmoPicker} atmosphere</span>
-                </div>
+                    </div>
                 <button onClick={() => setAtmoPicker(null)} className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-50">
                   <svg width="8" height="8" viewBox="0 0 8 8" stroke="#bbb" strokeWidth="1.5"><line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" /></svg>
                 </button>
@@ -1685,12 +1974,12 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                       className="px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all hover:scale-105"
                       style={{ backgroundColor: sel ? `${mc}10` : '#f8f8f6', color: sel ? mc : '#aaa', border: `1px solid ${sel ? `${mc}22` : '#eaeae8'}`, cursor: 'pointer' }}>
                       {sel && <span style={{ marginRight: 4 }}>✓</span>}{w}
-                    </button>
-                  );
-                })}
-              </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
+        </div>
         );
       })()}
 
@@ -1730,7 +2019,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
 
       {selectedMaterials.length === 0 && !matPicker && divePhase === 0 && (
         <div className="absolute bottom-20 sm:bottom-24 left-1/2 -translate-x-1/2 z-10 max-w-[90vw] text-center px-2">
-          <p className="text-[11px] sm:text-[13px] font-light tracking-[0.04em] sm:tracking-[0.06em]" style={{ color: `${dc}50` }}>Tap an element symbol to add materials · drag nucleus to shift energy</p>
+          <p className="text-[11px] sm:text-[13px] font-light tracking-[0.04em] sm:tracking-[0.06em]" style={{ color: `${dc}50` }}>Tap an element symbol to read it and add materials · drag nucleus to shift energy</p>
         </div>
       )}
 
@@ -1758,7 +2047,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                 }}>
                   <div style={{ position: 'absolute', inset: '-10%', width: '120%', height: '120%', borderRadius: '50%', background: viewTex ? `url(${viewTex}) center/cover` : `radial-gradient(circle at 32% 28%, ${mc}CC, ${mc}60)` }} />
                   <div className="absolute pointer-events-none" style={{ width: '40%', height: '35%', top: '8%', left: '14%', background: 'radial-gradient(ellipse at 42% 35%, rgba(255,255,255,0.28) 0%, transparent 70%)', borderRadius: '50%' }} />
-                </div>
+                  </div>
 
                 {/* Info card */}
                 <div className="flex flex-col items-center gap-2 px-6 py-3 rounded-2xl" style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(8px)', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
@@ -1792,7 +2081,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                       <div className="cursor-pointer" style={{ flexShrink: 0 }} onClick={() => setFullMat(name)}>
                         <div style={{ width: 48, height: 48, borderRadius: '50%', position: 'relative', overflow: 'hidden', border: `2px solid ${mc}${isViewing ? '60' : '20'}`, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', transition: 'all 0.3s ease' }}>
                           <div style={{ position: 'absolute', inset: '-15%', width: '130%', height: '130%', borderRadius: '50%', background: t ? `url(${t}) center/cover` : `linear-gradient(135deg, ${mc}28, ${mc}0C)` }} />
-                        </div>
+                      </div>
                       </div>
                       {/* Name — click to view */}
                       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setFullMat(name)}>
@@ -1827,7 +2116,7 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
               <button className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 transition-all" onClick={() => setShowAtmoRefs(false)}>
                 <svg width="10" height="10" viewBox="0 0 8 8" stroke="#bbb" strokeWidth="1.5"><line x1="1" y1="1" x2="7" y2="7" /><line x1="7" y1="1" x2="1" y2="7" /></svg>
               </button>
-            </div>
+                      </div>
             <div className="flex flex-wrap sm:flex-nowrap justify-center gap-4 sm:gap-6">
               {sorted.map(([el, pct]) => {
                 const mc = MUTED_COLORS[el as Element];
@@ -1843,17 +2132,17 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                           <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
                             <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', letterSpacing: '0.04em', marginBottom: 2, textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{topRef.title}</div>
                             <div style={{ fontSize: 10, fontWeight: 300, fontStyle: 'italic', color: 'rgba(255,255,255,0.8)', lineHeight: 1.4, fontFamily: "'IBM Plex Serif', Georgia, serif" }}>{topRef.style}</div>
-                          </div>
-                        </div>
+                    </div>
+                      </div>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center relative">
                           <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 50% 40%, ${mc}18 0%, transparent 70%)` }} />
                           <div className="relative z-10 text-center px-3">
                             <div style={{ fontSize: 15, fontWeight: 600, color: mc, letterSpacing: '0.04em', marginBottom: 4 }}>{topRef.title}</div>
                             <div style={{ fontSize: 11, fontWeight: 300, fontStyle: 'italic', color: `${mc}90`, lineHeight: 1.4, fontFamily: "'IBM Plex Serif', Georgia, serif" }}>{topRef.style}</div>
-                          </div>
-                        </div>
-                      )}
+                    </div>
+                </div>
+              )}
                     </div>
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-2 h-2 rounded-full" style={{ background: mc }} />
@@ -1862,14 +2151,14 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
                     </div>
                     <p style={{ fontSize: 11, fontWeight: 300, color: '#999', lineHeight: 1.5, textAlign: 'center', fontFamily: "'IBM Plex Sans', sans-serif" }}>
                       {topRef.desc}
-                    </p>
-                  </div>
+                  </p>
+                </div>
                 );
               })}
-            </div>
-          </div>
-        </div>
-      )}
+                </div>
+              </div>
+                </div>
+              )}
 
       {divePhase > 0 && (
         <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center">
@@ -1877,13 +2166,13 @@ const CoreDiagram: React.FC<CoreDiagramProps> = ({
             <div className="absolute inset-0 rounded-full overflow-hidden">
               <div className="absolute grad-blob-1" style={{ width: '130%', height: '130%', top: '-15%', left: '-15%', background: `radial-gradient(ellipse at 40% 35%, ${nColors[0]}60 0%, transparent 60%)`, mixBlendMode: 'soft-light' }} />
               <div className="absolute grad-blob-2" style={{ width: '110%', height: '110%', top: '-5%', left: '-5%', background: `radial-gradient(ellipse at 60% 65%, ${nColors[1]}45 0%, transparent 55%)`, mixBlendMode: 'soft-light' }} />
-            </div>
-          </div>
+              </div>
+                </div>
           <div className="relative z-10 flex flex-col items-center gap-3" style={{ opacity: divePhase >= 3 ? 1 : 0, transform: divePhase >= 3 ? 'scale(1)' : 'scale(0.85)', transition: 'all 0.7s cubic-bezier(0.22,0.61,0.36,1)' }}>
             <div className="w-10 h-10 rounded-full border-2 border-white/15 flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.06)' }}><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /></div>
             <span className="text-white/60 text-[13px] uppercase tracking-[0.3em] font-light">Generating...</span>
+            </div>
           </div>
-        </div>
       )}
 
     </div>

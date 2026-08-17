@@ -173,11 +173,11 @@ describe('pickDiagnosisMaterials — count rule + SHRE-allowed families', () => 
     ['DualCore 38/35/17/10',               { earth: 38, fire: 35, water: 17, air: 10 }],
   ];
 
-  test.each(cases)('%s — picks 5-7 materials, each in catalog', (_n, pct) => {
+  test.each(cases)('%s — picks 5-8 materials, each in catalog', (_n, pct) => {
     const composition = detectComposition(pct);
     const mats = pickDiagnosisMaterials(pct, composition);
     expect(mats.length).toBeGreaterThanOrEqual(5);
-    expect(mats.length).toBeLessThanOrEqual(7);
+    expect(mats.length).toBeLessThanOrEqual(8);
     mats.forEach((m) => {
       expect(CANONICAL_MATERIAL_BY_LABEL[m.label]).toBeDefined();
       const total = m.percentages.earth + m.percentages.fire + m.percentages.water + m.percentages.air;
@@ -236,6 +236,33 @@ describe('validateDiagnosis', () => {
     d.styleDirection = 'Bohemian Chic' as any;
     const errors = validateDiagnosis(d);
     expect(errors.some((e: string) => e.includes('not in SHRE_STYLE_DIRECTIONS'))).toBe(true);
+  });
+
+  /**
+   * Regression guard for the failure that sent most real readings to the
+   * bare fallback screen: any element under 10% was suppressed by the
+   * validator but not by the material picker or the prose builders, so
+   * buildDiagnosis threw and App.tsx dropped the whole report. Sweeping the
+   * simplex in 5% steps across every composition mode is cheap and catches
+   * the entire class of mismatch.
+   */
+  test('every distribution on the 5% simplex builds a valid diagnosis', () => {
+    const failures: string[] = [];
+    for (let earth = 0; earth <= 100; earth += 5) {
+      for (let fire = 0; earth + fire <= 100; fire += 5) {
+        for (let water = 0; earth + fire + water <= 100; water += 5) {
+          const pct = { earth, fire, water, air: 100 - earth - fire - water };
+          for (const composition of ['SingleDominant', 'DualCore', 'NarrowLead', 'Balanced']) {
+            try {
+              buildDiagnosis({ percentages: pct, composition } as any);
+            } catch (err) {
+              failures.push(`${JSON.stringify(pct)} ${composition}: ${(err as Error).message}`);
+            }
+          }
+        }
+      }
+    }
+    expect(failures).toEqual([]);
   });
 
   test('Fire < 10 → no Fire-dominant material allowed', () => {

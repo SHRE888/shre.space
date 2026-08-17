@@ -8,6 +8,7 @@ import { BUDGET_TIERS } from '../lib/brandCatalog';
 import { saveState } from '../services/storageService';
 import { calculateRefinedDistribution, getSelectionFromPercentages, reweightWithLocks, getEnabledMaterials, isMaterialEnabled } from '../services/refinementLogic';
 import { MaterialEnableToggle } from './MaterialEnableToggle';
+import { ElementGlyph } from './ElementGlyph';
 import { buildUniversalPrompt } from '../services/promptEngine';
 import { getHarmonySignal } from '../services/harmonySignal';
 import { interpretTextToRefinement } from '../services/textInterpretationService';
@@ -1643,18 +1644,30 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({ state, setState })
             const fixedOrder: Element[] = ['earth', 'fire', 'water', 'air'];
             return (
               <>
-                <div className="flex items-center justify-center gap-3 sm:gap-4 mb-2.5 sm:mb-3 w-full">
+                {/* Four bare numbers said nothing about which element each one
+                    belonged to — you had to know the earth/fire/water/air
+                    order by heart. The mark above each figure names it in the
+                    same language the core diagram uses. */}
+                <div className="flex items-start justify-center gap-3 sm:gap-4 mb-2.5 sm:mb-3 w-full">
                   {fixedOrder.map(el => {
                     const isDom = el === domEl;
                     const roundVal = Math.round(dist[el]);
                     return (
-                      <span
-                        key={el}
-                        className="font-mono tabular-nums leading-none"
-                        style={{ fontSize: 10, color: isDom ? '#444' : '#aaa', fontWeight: isDom ? 500 : 400 }}
-                      >
-                        {roundVal}
-                      </span>
+                      <div key={el} className="flex flex-col items-center gap-[3px]" title={`${el} ${roundVal}%`}>
+                        <ElementGlyph
+                          element={el}
+                          size={9}
+                          color={ELEMENT_COLORS[el]}
+                          strokeWidth={isDom ? 1.35 : 1.1}
+                          opacity={isDom ? 0.9 : 0.45}
+                        />
+                        <span
+                          className="font-mono tabular-nums leading-none"
+                          style={{ fontSize: 10, color: isDom ? '#444' : '#aaa', fontWeight: isDom ? 500 : 400 }}
+                        >
+                          {roundVal}
+                        </span>
+                      </div>
                     );
                   })}
                 </div>

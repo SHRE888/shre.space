@@ -91,8 +91,8 @@ const shared = (
 // ════════════════════════════════════════════════════════════════════════════
 // SHRE 4E MATERIAL CATALOG — v2.1 (curated)
 // ────────────────────────────────────────────────────────────────────────────
-// Strict per-element budget: EXACTLY 8 materials per element, plus 4 shared
-// dual-element materials. Total = 36.
+// Strict per-element budget: 8 materials per element (Fire: 7 after
+// dropping oxblood velvet), plus 4 shared dual-element materials.
 //
 // User mandate (SHRE MATERIAL VARIATION RULE):
 //   "8 materials per element is enough"
@@ -111,13 +111,14 @@ const shared = (
 //     element pulls materials from N different surface families.
 //
 // Removed in v2.1 (intentional):
-//   EARTH:  Jura limestone, Cipollino, Green onyx, Marrón Emperador,
+//   EARTH:  Jura limestone, Cipollino, Green onyx, Pietra Serena,
 //           Volcanic stone, Sand-blasted granite, Herringbone parquet,
-//           Reclaimed timber, Lime plaster, Rammed earth, Tadelakt warm,
+//           Reclaimed timber, Lime plaster, Rammed earth,
 //           Zellige tile, Bouclé, Mohair velvet      (redundant or off-base)
 //   FIRE:   Port Laurent, Red travertine, Bardiglio Imperiale, Dark quartzite,
 //           Basalt, Dark herringbone parquet, Oxidized copper, Aged brass,
-//           Blackened steel, Bronze accents, Cognac leather, Charcoal velvet
+//           Blackened steel, Bronze accents, Cognac leather, Charcoal velvet,
+//           Oxblood / rust velvet upholstery
 //   WATER:  Bianco Lasa, Silver travertine, Smooth mineral plaster,
 //           Tadelakt cool, Hammered metal, Satin chrome, Polished nickel,
 //           Diffused glass, Glass blocks, Curved bent glass, Matte ceramic,
@@ -140,12 +141,12 @@ export const CANONICAL_MATERIAL_CATALOG: CanonicalMaterial[] = [
   earth('board-formed-concrete', 'Board-formed concrete', 'concrete'),        // grey structural plane
   earth('walnut-veneer', 'Walnut veneer', 'wood'),                            // dark brown joinery wood
   earth('industrial-brick', 'Industrial brick', 'ceramic'),                   // red-brown textured wall
-  earth('pietra-serena', 'Pietra Serena (Tuscan)', 'stone'),                  // grey-green Tuscan sandstone
+  earth('emperador-dark', 'Marrón Emperador (warm brown marble)', 'stone'),   // dark reddish-brown, loaded veining
   earth('tadelakt-warm', 'Tadelakt (warm pigmented Moroccan)', 'plaster'),    // polished warm mineral plaster
 
   // ════════════════════════════════════════════════════════════
-  // FIRE (8) — concentrated intensity: dark-base stones, charred/smoked
-  //             timber, warm metals, polished dark plaster, oxblood textile
+  // FIRE (7) — concentrated intensity: dark-base stones, charred/smoked
+  //             timber, warm metals, polished dark plaster
   // ════════════════════════════════════════════════════════════
   fire('dark-marble-high-contrast', 'Dark marble (high contrast)', 'stone'),  // black + white veins
   fire('burnished-brass', 'Burnished antique brass', 'metal'),                // warm gold focal metal
@@ -154,7 +155,6 @@ export const CANONICAL_MATERIAL_CATALOG: CanonicalMaterial[] = [
   fire('corten-steel', 'Corten steel (weathering)', 'metal'),                 // rust-patina cladding
   fire('patagonia-quartzite', 'Patagonia quartzite (smoky burgundy)', 'stone'), // smoky red stone
   fire('shou-sugi-ban', 'Shou-sugi-ban (charred timber)', 'wood'),            // black charred cladding
-  fire('oxblood-velvet', 'Oxblood / rust velvet upholstery', 'textile'),      // saturated red textile
 
   // ════════════════════════════════════════════════════════════
   // WATER (8) — fluid serenity: continuous plaster, silver/blue stones,
@@ -204,10 +204,10 @@ const _purePerElement = {
 };
 const _sharedCount = CANONICAL_MATERIAL_CATALOG.filter((m) => m.isShared).length;
 if (
-  _purePerElement.earth !== 8 || _purePerElement.fire !== 8 ||
+  _purePerElement.earth !== 8 || _purePerElement.fire !== 7 ||
   _purePerElement.water !== 8 || _purePerElement.air !== 8 || _sharedCount !== 4
 ) {
-  const msg = `SHRE material catalog drift: expected 8/8/8/8 + 4 shared, got ${_purePerElement.earth}/${_purePerElement.fire}/${_purePerElement.water}/${_purePerElement.air} + ${_sharedCount}`;
+  const msg = `SHRE material catalog drift: expected 8/7/8/8 + 4 shared, got ${_purePerElement.earth}/${_purePerElement.fire}/${_purePerElement.water}/${_purePerElement.air} + ${_sharedCount}`;
   if (typeof process !== 'undefined' && (process as any).env?.NODE_ENV === 'production') {
     console.error(msg);
   } else {

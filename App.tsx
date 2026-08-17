@@ -6,15 +6,30 @@ import { WorkspacePage } from './components/WorkspacePage';
 import { AboutPage } from './components/AboutPage';
 import { SpaceGuide } from './components/SpaceGuide';
 import { DiagnosisReport } from './components/DiagnosisReport';
+import { ElementGlyph } from './components/ElementGlyph';
 import { UserState, Element, MaterialDef, GenerationHistoryEntry, CustomMaterial } from './types';
 import AddCustomMaterialModal from './components/AddCustomMaterialModal';
 import { loadState, saveState, clearState } from './services/storageService';
 import { calculateAnalysis, buildUniversalPrompt, buildTargetedEditPrompt } from './services/promptEngine';
 import { buildDiagnosis } from './services/shreDiagnosis';
+import { buildEnergyNarrative } from './services/energyNarrative';
 import { generateImageFromPrompt, dataUrlToFile, setUserApiKey, hasUserApiKey, analyzeFloorPlan } from './services/geminiService';
 import { interpretRefinementFeedback } from './services/refinementFeedback';
 import { getInitialSelection, getSelectionFromPercentages, isMaterialEnabled } from './services/refinementLogic';
-import { SHORT_QUESTIONS, ELEMENT_COLORS, CANONICAL_MATERIALS, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER, MATERIAL_TEXTURE_TINT, generateSurveyQuestions } from './constants';
+import { SHORT_QUESTIONS, ELEMENT_COLORS, CANONICAL_MATERIALS, MATERIAL_SPHERE_IMAGES, MATERIAL_TEXTURE_FILTER, MATERIAL_TEXTURE_TINT, rememberSurveyVariants } from './constants';
+import {
+  startDiagnostic,
+  recordAnswer,
+  rewindTo,
+  currentStep,
+  currentIndex,
+  isComplete,
+  askedQuestions,
+  answerMap,
+  multiSelectAnswers,
+  readSession,
+  type DiagnosticSession,
+} from './services/adaptiveDiagnostic';
 import { getRecommendedProfessionalPartners, type ProfessionalPartner } from './lib/professionalPartners';
 
 // --- API KEY ENTRY PANEL (browser-local override) ---
@@ -45,8 +60,15 @@ const ApiKeyEntryPanel = ({
       setError('შეიყვანე key.');
       return;
     }
-    if (!/^AIza[0-9A-Za-z_-]{20,}$/.test(trimmed)) {
-      setError('key არასწორი ფორმატის ჩანს — Google Gemini key იწყება „AIza"-თი.');
+    // Google issues two Gemini key shapes: the classic AIzaSy… keys from
+    // AI Studio, and the newer AQ.… keys bound to a Cloud project. Both
+    // work with @google/genai. Rejecting the second shape was blocking
+    // generation with a false "wrong format" error.
+    const looksLikeGeminiKey =
+      /^AIza[0-9A-Za-z_-]{20,}$/.test(trimmed) ||
+      /^AQ\.[0-9A-Za-z_-]{20,}$/.test(trimmed);
+    if (!looksLikeGeminiKey) {
+      setError('key არასწორი ფორმატის ჩანს — Gemini key იწყება „AIza" ან „AQ."-ით.');
       return;
     }
     setUserApiKey(trimmed);
@@ -100,7 +122,7 @@ const ApiKeyEntryPanel = ({
             aistudio.google.com/apikey
           </a>
         </li>
-        <li>დააკოპირე key (იწყება „AIza…")</li>
+        <li>დააკოპირე key (იწყება „AIza…" ან „AQ…")</li>
         <li>ჩასვი ქვემოთ და დააჭირე „შენახვა"</li>
       </ol>
 
@@ -110,7 +132,7 @@ const ApiKeyEntryPanel = ({
           value={keyInput}
           onChange={(e) => { setKeyInput(e.target.value); setError(null); }}
           onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
-          placeholder="AIzaSy..."
+          placeholder="AIza… ან AQ…"
           autoComplete="off"
           spellCheck={false}
           className="flex-1 px-3 py-2 text-[12px] font-mono rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:border-gray-400 focus:outline-none transition-colors"
@@ -241,9 +263,12 @@ const Landing = () => {
 
 // --- SURVEY PAGE (Visual Calibration) ---
 const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState) => void }) => {
-  const [questions] = useState(() => generateSurveyQuestions());
-  const [qIndex, setQIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  // The run is not a pre-drawn list of five questions any more. The engine
+  // holds one step at a time and picks the next one from what has been
+  // answered so far, so the person's own choices decide which layer gets
+  // probed next. Nothing about that is visible to them: they see five
+  // questions appear in sequence, exactly as before.
+  const [session, setSession] = useState<DiagnosticSession>(() => startDiagnostic());
   const [transitioning, setTransitioning] = useState(false);
   const [hoveredOption, setHoveredOption] = useState<number | null>(null);
   const [imagesLoaded, setImagesLoaded] = useState<Record<string, boolean>>({});
@@ -255,31 +280,44 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
   const [imagesFailed, setImagesFailed] = useState<Record<string, boolean>>({});
   const [showResult, setShowResult] = useState(false);
   const [completedState, setCompletedState] = useState<UserState | null>(null);
-  // Colour question (Q5) is multi-select — the user may pick up to 4 swatches.
+  // The colour step is multi-select — the user may pick up to 4 swatches.
   const [colorSelections, setColorSelections] = useState<number[]>([]);
   const MAX_COLORS = 4;
   const navigate = useNavigate();
 
-  // Preload next question's images
-  useEffect(() => {
-    const nextQ = questions[qIndex + 1];
-    if (!nextQ) return;
-    nextQ.options.forEach(opt => {
-      if (opt.image) {
-        const img = new Image();
-        img.src = opt.image;
-      }
-    });
-  }, [qIndex, questions]);
+  const qIndex = currentIndex(session);
+  const step = currentStep(session);
+  const q = step?.question;
 
-  const finalizeSurvey = (surveyAnswers: Record<string, number>, colorAnswers: number[] = []) => {
+  // Record the drawn variant only once it is really on screen, so the next
+  // visit is guaranteed different references.
+  useEffect(() => {
+    if (q) rememberSurveyVariants([q]);
+  }, [q]);
+
+  // Restore the picks when stepping back onto a multi-select step, and clear
+  // them when moving on, so the counter always matches what is highlighted.
+  useEffect(() => {
+    setColorSelections(Array.isArray(step?.answer) ? step.answer : []);
+  }, [step]);
+
+  const finalizeSurvey = (finished: DiagnosticSession) => {
+    const reading = readSession(finished);
     const updatedState: UserState = {
       ...state,
-      shortSurveyAnswers: surveyAnswers,
-      shortSurveyColorAnswers: colorAnswers,
+      shortSurveyAnswers: answerMap(finished),
+      shortSurveyColorAnswers: multiSelectAnswers(finished),
+      // Persist the exact set that was drawn and shown. Answers are stored as
+      // option indices, so they are meaningless without the questions they
+      // were given against — and under adaptive selection no two people are
+      // guaranteed the same set at all.
+      shortSurveyQuestions: askedQuestions(finished),
       shortSurveySkipped: false,
     };
-    const baseAnalysis = calculateAnalysis(updatedState);
+    // Confidence rides along with the percentages but is never rendered. It
+    // records how many independent layers agreed on each share, which is what
+    // separates a reading worth stating plainly from one worth hedging.
+    const baseAnalysis = { ...calculateAnalysis(updatedState), confidence: reading.confidence };
     // Attach the SHRE 7-section diagnosis to the analysis so the report
     // screen and the image-prompt builder can both read it from the same
     // place. Wrapped in try/catch: in production the diagnosis builder
@@ -317,24 +355,50 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
     return finalState;
   };
 
-  const handleAnswer = (answerIdx: number) => {
-    chime();
-    const qId = questions[qIndex].id;
-    const newAnswers = { ...answers, [qId]: answerIdx };
-    setAnswers(newAnswers);
-
-    if (qIndex < questions.length - 1) {
-      setTransitioning(true);
-      setTimeout(() => {
-        setQIndex(qIndex + 1);
-        setHoveredOption(null);
-        setTransitioning(false);
-      }, 400);
-    } else {
-      const fs = finalizeSurvey(newAnswers);
+  // Commit an answer and hand over to the engine, which appends whichever
+  // question best tests what this answer implied. The next step's imagery is
+  // preloaded during the fade — it cannot be preloaded any earlier, because
+  // until the answer exists there is no next step to preload.
+  const advance = (answer: number | number[]) => {
+    const next = recordAnswer(session, answer);
+    if (isComplete(next)) {
+      const fs = finalizeSurvey(next);
       setCompletedState(fs);
       setShowResult(true);
+      return;
     }
+    currentStep(next)?.question.options.forEach((opt) => {
+      if (opt.image) {
+        const img = new Image();
+        img.src = opt.image;
+      }
+    });
+    setTransitioning(true);
+    setTimeout(() => {
+      setSession(next);
+      setHoveredOption(null);
+      setTransitioning(false);
+    }, 400);
+  };
+
+  const handleAnswer = (answerIdx: number) => {
+    chime();
+    advance(answerIdx);
+  };
+
+  // Step back to a question already reached. The pick stays highlighted, but
+  // everything after it is dropped: those questions were chosen in response to
+  // the answer being changed, so keeping them would leave the rest of the run
+  // resting on a premise that no longer holds. From the outside it just looks
+  // like Back works.
+  const goToQuestion = (target: number) => {
+    if (target === qIndex || target < 0 || target > qIndex) return;
+    setTransitioning(true);
+    setTimeout(() => {
+      setSession(rewindTo(session, target));
+      setHoveredOption(null);
+      setTransitioning(false);
+    }, 260);
   };
 
   // Colour question (multi-select): toggle a swatch, capping at MAX_COLORS.
@@ -347,21 +411,22 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
     });
   };
 
-  // Confirm the colour picks and complete the survey.
+  // Confirm the colour picks. This step is no longer guaranteed to be last —
+  // the engine may open with it or place it mid-run — so it advances like any
+  // other answer rather than finishing the survey itself.
   const confirmColors = () => {
     if (colorSelections.length === 0) return;
     chime();
-    const fs = finalizeSurvey(answers, colorSelections);
-    setCompletedState(fs);
-    setShowResult(true);
+    advance(colorSelections);
   };
 
-  const q = questions[qIndex];
+  if (!q || !step) return null;
+
   const isColorQ = q.options.some((o) => !!o.color);
-  const progress = ((qIndex + 1) / questions.length) * 100;
-  const lastQ = questions[3];
-  const isSeasonsQ = lastQ?.text?.toLowerCase().includes('season') || lastQ?.text?.toLowerCase().includes('time of year');
-  const stepLabels = ['Landscape', 'Material', 'Interior', isSeasonsQ ? 'Season' : 'Architecture', 'Colour'];
+  // Steps are labelled as they arrive. Naming the remaining ones up front
+  // would advertise a fixed running order the engine no longer follows, and
+  // would leak which layer is coming next.
+  const stepLabels = Array.from({ length: session.length }, (_, i) => session.steps[i]?.label ?? '');
 
   const ENERGY_HEADLINES: Record<Element, string[]> = {
     earth: ['Grounded Raw Warmth', 'Rooted Natural Craft', 'Textured Earth Living'],
@@ -426,17 +491,26 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
             });
             navigate('/generate');
           }}
+          onDeepDive={() => {
+            chime();
+            navigate('/core');
+            setTimeout(() => window.dispatchEvent(new Event('toggle-deep-dive')), 500);
+          }}
         />
       );
     }
 
-    // Fallback — preserved minimal legacy result screen for resilience.
+    // Fallback — minimal result screen for resilience. It still carries the
+    // reading itself: a bare ring and four bars tell the user nothing about
+    // what their energy is or how it becomes a space.
     const dist = completedState?.analysis?.percentages || { earth: 25, fire: 25, water: 25, air: 25 };
     const sorted = (Object.entries(dist) as [Element, number][]).sort((a, b) => b[1] - a[1]);
     const domEl = sorted[0][0];
     const domColor = ELEMENT_COLORS[domEl];
     const headline = ENERGY_HEADLINES[domEl][Math.floor(Math.random() * 3)];
     const total = sorted.reduce((s, [, v]) => s + v, 0);
+    const secEl = sorted[1] && sorted[1][1] >= 10 ? sorted[1][0] : undefined;
+    const fallbackNarrative = buildEnergyNarrative(dist, domEl, secEl);
     return (
       <div
         className="min-h-app-main flex flex-col items-center justify-center bg-[#fafafa] px-4 sm:px-6"
@@ -447,7 +521,7 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
           @keyframes barGrow{from{width:0}to{width:var(--bar-w)}}
           @keyframes ringPulse{0%,100%{box-shadow:0 0 0 0 var(--ring-c)}50%{box-shadow:0 0 0 12px transparent}}
         `}</style>
-        <div className="max-w-sm w-full text-center" style={{ animation: 'resultFadeIn 0.6s ease-out' }}>
+        <div className="max-w-md w-full text-center py-8" style={{ animation: 'resultFadeIn 0.6s ease-out' }}>
           <div className="w-20 h-20 rounded-full mx-auto mb-5 flex items-center justify-center"
             style={{
               background: `conic-gradient(${sorted.map(([el, val], i) => {
@@ -464,7 +538,21 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
             </div>
           </div>
           <h2 className="text-[20px] font-light tracking-[0.12em] mb-1" style={{ color: domColor }}>{headline}</h2>
-          <p className="text-[11px] uppercase tracking-[0.35em] text-gray-400 font-light mb-6">Your Energy Profile</p>
+          <p className="text-[11px] uppercase tracking-[0.35em] text-gray-400 font-light mb-5">Your Energy Profile</p>
+
+          <p
+            className="mx-auto mb-3 max-w-[24ch] font-light leading-[1.3] text-[#1a1a1a]"
+            style={{ fontSize: 'clamp(19px, 4.6vw, 24px)', fontFamily: "'Playfair Display', Georgia, serif" }}
+          >
+            {fallbackNarrative.headline}
+          </p>
+          <p className="text-[13px] font-light leading-[1.7] mx-auto mb-6 max-w-[44ch]" style={{ color: 'rgba(0,0,0,0.6)' }}>
+            Your energy leans toward{' '}
+            <span style={{ color: '#1a1a1a', fontWeight: 500 }}>{fallbackNarrative.leaning}</span>
+            {' — '}
+            {fallbackNarrative.because}.
+          </p>
+
           <div className="space-y-2.5 mb-6 text-left">
             {sorted.map(([el, val], i) => (
               <div key={el} className="flex items-center gap-3">
@@ -476,6 +564,26 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
               </div>
             ))}
           </div>
+
+          {/* The translation in three lines, matching the full report's short
+              form — the fallback should still answer the survey, just without
+              the engine's named direction and material list. */}
+          <dl className="text-left space-y-2 mb-7 mx-auto max-w-[44ch]">
+            {fallbackNarrative.keys.map(({ label, body }) => (
+              <div key={label} className="flex items-baseline gap-3">
+                <dt
+                  className="text-[9px] uppercase font-medium shrink-0 w-[46px]"
+                  style={{ letterSpacing: '0.2em', color: domColor, opacity: 0.75 }}
+                >
+                  {label}
+                </dt>
+                <dd className="text-[12.5px] font-light leading-[1.6]" style={{ color: 'rgba(0,0,0,0.62)' }}>
+                  {body}
+                </dd>
+              </div>
+            ))}
+          </dl>
+
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2.5 sm:gap-3">
             <button
               type="button"
@@ -505,6 +613,24 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
               Generate
             </button>
           </div>
+
+          <div className="mt-7 pt-5" style={{ borderTop: '1px solid rgba(0,0,0,0.07)' }}>
+            <p className="text-[12px] font-light leading-[1.7] mb-3 mx-auto max-w-[40ch]" style={{ color: 'rgba(0,0,0,0.5)' }}>
+              Five questions found the direction of your energy. The deep dive asks the
+              slower ones.
+            </p>
+            <button
+              type="button"
+              onClick={() => { chime(); navigate('/core'); setTimeout(() => window.dispatchEvent(new Event('toggle-deep-dive')), 500); }}
+              className="inline-flex min-h-[44px] items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 hover:bg-gray-100 active:scale-[0.97] touch-manipulation"
+              style={{ border: '1px solid rgba(0,0,0,0.12)' }}
+            >
+              <span className="text-[11px] uppercase tracking-[0.22em] font-medium" style={{ color: 'rgba(0,0,0,0.6)' }}>
+                Deep dive questions
+              </span>
+              <span className="text-[13px] leading-none" style={{ color: domColor, opacity: 0.7 }} aria-hidden>→</span>
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -518,48 +644,58 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
       {/* Numbered step progress — symmetric connectors, readable on narrow phones */}
       <div className="pt-3 sm:pt-6 pb-2 sm:pb-4 px-2 sm:px-4 shrink-0">
         <div className="max-w-lg sm:max-w-xl mx-auto flex items-start justify-between gap-0">
-          {stepLabels.map((label, i) => (
-            <div key={i} className="flex flex-col items-center gap-1 sm:gap-1.5 relative min-w-0 flex-1 max-w-[25%]">
-              {i > 0 && (
-                <div
-                  className="absolute h-[1.5px] z-0"
-                  style={{
-                    top: 14,
-                    right: '50%',
-                    width: '100%',
-                    background: qIndex > i - 1 ? '#1a1a1a' : '#e5e5e5',
-                    transition: 'background 0.4s ease',
-                  }}
-                />
-              )}
-              <div
-                className="relative z-10 flex shrink-0 items-center justify-center rounded-full transition-all duration-400"
-                style={{
-                  width: 28,
-                  height: 28,
-                  background: qIndex > i ? '#1a1a1a' : qIndex === i ? '#1a1a1a' : '#fff',
-                  border: qIndex >= i ? '2px solid #1a1a1a' : '2px solid #d4d4d4',
-                  color: qIndex >= i ? '#fff' : '#aaa',
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}
-              >
-                {qIndex > i ? (
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 8.5 L6.5 12 L13 4" />
-                  </svg>
-                ) : (
-                  i + 1
+          {stepLabels.map((label, i) => {
+            const canRevisit = i < qIndex;
+            return (
+              <div key={i} className="flex flex-col items-center gap-1 sm:gap-1.5 relative min-w-0 flex-1 max-w-[25%]">
+                {i > 0 && (
+                  <div
+                    className="absolute h-[1.5px] z-0"
+                    style={{
+                      top: 14,
+                      right: '50%',
+                      width: '100%',
+                      background: qIndex > i - 1 ? '#1a1a1a' : '#e5e5e5',
+                      transition: 'background 0.4s ease',
+                    }}
+                  />
                 )}
+                <button
+                  type="button"
+                  onClick={() => canRevisit && goToQuestion(i)}
+                  disabled={!canRevisit}
+                  aria-label={canRevisit ? `Back to ${label || `step ${i + 1}`}` : label || `Step ${i + 1}`}
+                  className={`relative z-10 flex shrink-0 items-center justify-center rounded-full transition-all duration-400 ${canRevisit ? 'cursor-pointer hover:scale-110' : 'cursor-default'}`}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    background: qIndex >= i ? '#1a1a1a' : '#fff',
+                    border: qIndex >= i ? '2px solid #1a1a1a' : '2px solid #d4d4d4',
+                    color: qIndex >= i ? '#fff' : '#aaa',
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  {qIndex > i ? (
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 8.5 L6.5 12 L13 4" />
+                    </svg>
+                  ) : (
+                    i + 1
+                  )}
+                </button>
+                <span
+                  className="w-full text-center uppercase font-medium transition-colors duration-300 leading-tight text-[9px] sm:text-[10px] tracking-[0.08em] sm:tracking-[0.12em] break-words px-0.5"
+                  style={{ color: qIndex >= i ? '#1a1a1a' : '#b0b0b0' }}
+                >
+                  {/* Unreached steps stay blank rather than reserving a name:
+                      the engine has not chosen them yet. The space keeps the
+                      row from shifting as each label arrives. */}
+                  {label || '\u00A0'}
+                </span>
               </div>
-              <span
-                className="w-full text-center uppercase font-medium transition-colors duration-300 leading-tight text-[9px] sm:text-[10px] tracking-[0.08em] sm:tracking-[0.12em] break-words px-0.5"
-                style={{ color: qIndex >= i ? '#1a1a1a' : '#b0b0b0' }}
-              >
-                {label}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -569,6 +705,18 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
           <div className={`transition-all duration-400 ease-out ${transitioning ? 'opacity-0 translate-y-3 scale-[0.98]' : 'opacity-100 translate-y-0 scale-100'}`}>
             {/* Question text */}
             <div className="text-center mb-3 sm:mb-6 md:mb-8 px-1">
+              {qIndex > 0 && (
+                <button
+                  type="button"
+                  onClick={() => goToQuestion(qIndex - 1)}
+                  className="mb-2 inline-flex items-center gap-1.5 px-2 py-1 min-h-[32px] text-[10px] uppercase tracking-[0.22em] text-neutral-400 hover:text-neutral-900 transition-colors duration-300"
+                >
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 3 L5 8 L10 13" />
+                  </svg>
+                  Back
+                </button>
+              )}
               <h2 className="text-[clamp(1.05rem,4.2vw,1.875rem)] font-light tracking-tight text-black leading-snug">
                 {q.text}
               </h2>
@@ -595,6 +743,13 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                   const b = parseInt(hex.slice(4, 6), 16);
                   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
                   const labelColor = luminance > 0.6 ? '#1a1a1a' : '#ffffff';
+                  // Pigment shading: a raking highlight and a settled shadow so the
+                  // tile reads as troweled plaster rather than a flat hex fill.
+                  const shade = (amount: number) => {
+                    const mix = (c: number) => Math.max(0, Math.min(255, Math.round(c + amount)));
+                    return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+                  };
+                  const lift = luminance > 0.75 ? 10 : 20;
                   return (
                     <button
                       key={i}
@@ -606,18 +761,23 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                       className="group relative w-full min-h-[44px] min-w-0 overflow-hidden rounded-[12px] focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40 focus-visible:ring-offset-2 touch-manipulation"
                       style={{
                         aspectRatio: '1 / 1',
-                        background: opt.color,
+                        backgroundColor: opt.color,
+                        backgroundImage: [
+                          `radial-gradient(120% 95% at 22% 12%, ${shade(lift)} 0%, rgba(0,0,0,0) 58%)`,
+                          `linear-gradient(158deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0) 42%, ${shade(-18)} 100%)`,
+                        ].join(', '),
                         border: isSelected ? '3px solid #1a1a1a' : '1px solid rgba(0,0,0,0.10)',
                         boxShadow: isSelected
-                          ? '0 8px 30px rgba(0,0,0,0.22)'
+                          ? `inset 0 1px 2px rgba(255,255,255,0.18), inset 0 -14px 26px rgba(0,0,0,0.14), 0 8px 30px rgba(0,0,0,0.22)`
                           : isHovered
-                          ? '0 12px 40px rgba(0,0,0,0.14)'
-                          : '0 2px 12px rgba(0,0,0,0.05)',
+                          ? `inset 0 1px 2px rgba(255,255,255,0.18), inset 0 -14px 26px rgba(0,0,0,0.14), 0 12px 40px rgba(0,0,0,0.14)`
+                          : `inset 0 1px 2px rgba(255,255,255,0.18), inset 0 -14px 26px rgba(0,0,0,0.14), 0 2px 12px rgba(0,0,0,0.05)`,
                         transform: isSelected ? 'scale(1.04)' : isHovered && !atLimit ? 'scale(1.03) translateY(-2px)' : 'scale(1)',
                         opacity: atLimit ? 0.45 : 1,
                         transition: 'all 0.35s cubic-bezier(0.22,0.61,0.36,1)',
                       }}
                     >
+                      <span className="shre-swatch-grain" aria-hidden />
                       {isSelected && (
                         <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-white flex items-center justify-center text-[11px] font-semibold text-[#1a1a1a]" style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
                           {selectionOrder}
@@ -665,7 +825,7 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
             {!isColorQ && (
             <div className="grid w-full max-w-[min(100%,28rem)] sm:max-w-xl md:max-w-2xl mx-auto grid-cols-2 gap-[clamp(0.5rem,2vw,0.75rem)]">
               {q.options.map((opt, i) => {
-                const isSelected = answers[q.id] === i;
+                const isSelected = step.answer === i;
                 const isHovered = hoveredOption === i;
                 const imgKey = `${q.id}-${i}`;
                 const loaded = imagesLoaded[imgKey];
@@ -688,6 +848,7 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                     onClick={() => handleAnswer(i)}
                     onMouseEnter={() => setHoveredOption(i)}
                     onMouseLeave={() => setHoveredOption(null)}
+                    aria-label={opt.text}
                     className="group relative w-full min-h-[44px] min-w-0 overflow-hidden rounded-[12px] focus:outline-none focus-visible:ring-2 focus-visible:ring-black/40 focus-visible:ring-offset-2 touch-manipulation"
                     style={{
                       aspectRatio: '1 / 1',
@@ -745,18 +906,25 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                         style={{
                           opacity: loaded ? 1 : 0,
                           transition: 'opacity 0.5s ease, filter 0.4s ease',
-                          filter: isSelected ? 'brightness(0.7)' : isHovered ? 'brightness(0.85)' : 'brightness(0.95)',
+                          filter: isSelected ? 'brightness(0.82)' : isHovered ? 'brightness(1.04)' : 'brightness(1)',
                         }}
                       />
                     )}
 
-                    {/* Gradient overlay */}
+                    {/* Gradient overlay — a full scrim only exists to keep a
+                        caption legible. Unlabelled scenes get the faintest
+                        grounding wash so the photograph stays at full
+                        strength. */}
                     <div
                       className="absolute inset-0 pointer-events-none"
                       style={{
-                        background: isSelected
-                          ? 'linear-gradient(180deg, transparent 30%, rgba(0,0,0,0.65) 100%)'
-                          : 'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.45) 100%)',
+                        background: q.showLabels
+                          ? isSelected
+                            ? 'linear-gradient(180deg, transparent 30%, rgba(0,0,0,0.65) 100%)'
+                            : 'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.45) 100%)'
+                          : isSelected
+                          ? 'linear-gradient(180deg, rgba(0,0,0,0.10) 0%, transparent 45%, rgba(0,0,0,0.22) 100%)'
+                          : 'linear-gradient(180deg, transparent 65%, rgba(0,0,0,0.14) 100%)',
                         transition: 'background 0.3s ease',
                       }}
                     />
@@ -771,21 +939,26 @@ const Survey = ({ state, setState }: { state: UserState; setState: (s: UserState
                       </div>
                     )}
 
-                    {/* Label */}
-                    <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-3 md:p-4 pb-2.5 sm:pb-3">
-                      <span
-                        className="block text-center text-white font-medium tracking-wide uppercase"
-                        style={{
-                          fontSize: isSelected ? 'clamp(11px, 3.1vw, 13px)' : 'clamp(9px, 2.8vw, 11px)',
-                          letterSpacing: '0.08em',
-                          textShadow: '0 1px 6px rgba(0,0,0,0.55)',
-                          transition: 'font-size 0.3s ease',
-                          lineHeight: 1.25,
-                        }}
-                      >
-                        {opt.text}
-                      </span>
-                    </div>
+                    {/* Label — materials only. Scene photography stays
+                        unlabelled so the choice is made on feeling rather
+                        than by reading the caption and deciding which word
+                        sounds most like you. */}
+                    {q.showLabels && (
+                      <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-3 md:p-4 pb-2.5 sm:pb-3">
+                        <span
+                          className="block text-center text-white font-medium tracking-wide uppercase"
+                          style={{
+                            fontSize: isSelected ? 'clamp(11px, 3.1vw, 13px)' : 'clamp(9px, 2.8vw, 11px)',
+                            letterSpacing: '0.08em',
+                            textShadow: '0 1px 6px rgba(0,0,0,0.55)',
+                            transition: 'font-size 0.3s ease',
+                            lineHeight: 1.25,
+                          }}
+                        >
+                          {opt.text}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Hover ring */}
                     {isHovered && !isSelected && (
@@ -847,10 +1020,10 @@ const MATERIAL_TEXTURES: Record<string, { url: string; alt: string }> = {
   'Board-formed concrete':                    { url: 'https://images.unsplash.com/photo-1617791160505-6f00504e3519?w=400&h=400&fit=crop&q=80', alt: 'Board-formed concrete with formwork lines' },
   'Walnut veneer':                            { url: 'https://images.unsplash.com/photo-1541123603104-512919d6a96c?w=400&h=400&fit=crop&q=80', alt: 'Walnut veneer joinery surface' },
   'Industrial brick':                         { url: 'https://images.unsplash.com/photo-1587582345426-bf07f52b4543?w=400&h=400&fit=crop&q=80', alt: 'Industrial red brick wall' },
-  'Pietra Serena (Tuscan)':                   { url: 'https://images.unsplash.com/photo-1618220179428-22790b461013?w=400&h=400&fit=crop&q=80', alt: 'Tuscan Pietra Serena grey-green sandstone' },
+  'Marrón Emperador (warm brown marble)':     { url: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=400&h=400&fit=crop&q=80', alt: 'Dark reddish-brown Emperador marble with loaded veining' },
   'Tadelakt (warm pigmented Moroccan)':       { url: 'https://images.unsplash.com/photo-1615529328331-f8917597711f?w=400&h=400&fit=crop&q=80', alt: 'Tadelakt warm pigmented Moroccan plaster wall' },
 
-  // ── FIRE (8) ───────────────────────────────────────────────
+  // ── FIRE (7) ───────────────────────────────────────────────
   'Dark marble (high contrast)':              { url: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=400&h=400&fit=crop&q=80', alt: 'Dark marble with white veining' },
   'Burnished antique brass':                  { url: 'https://images.unsplash.com/photo-1618424181497-157f25b6ddd5?w=400&h=400&fit=crop&q=80', alt: 'Burnished antique brass metal' },
   'Smoked / fumed oak':                       { url: 'https://images.unsplash.com/photo-1541123603104-512919d6a96c?w=400&h=400&fit=crop&q=80', alt: 'Smoked / fumed dark oak floor' },
@@ -858,7 +1031,6 @@ const MATERIAL_TEXTURES: Record<string, { url: string; alt: string }> = {
   'Corten steel (weathering)':                { url: 'https://images.unsplash.com/photo-1533035353720-f1c6a75cd8ab?w=400&h=400&fit=crop&q=80', alt: 'Corten weathering steel with rust patina' },
   'Patagonia quartzite (smoky burgundy)':     { url: 'https://images.unsplash.com/photo-1474044159687-1ee9f3a51722?w=400&h=400&fit=crop&q=80', alt: 'Smoky burgundy Patagonia quartzite' },
   'Shou-sugi-ban (charred timber)':           { url: 'https://images.unsplash.com/photo-1545558014-8692077e9b5c?w=400&h=400&fit=crop&q=80', alt: 'Shou-sugi-ban charred timber cladding' },
-  'Oxblood / rust velvet upholstery':         { url: 'https://images.unsplash.com/photo-1558171813-4c088753af8f?w=400&h=400&fit=crop&q=80', alt: 'Oxblood rust velvet upholstery' },
 
   // ── WATER (8) ──────────────────────────────────────────────
   'Microcement (continuous)':                 { url: 'https://images.unsplash.com/photo-1553356084-58ef4a67b2a7?w=400&h=400&fit=crop&q=80', alt: 'Continuous microcement floor' },
@@ -919,13 +1091,13 @@ type HotspotZone = {
 // catalog. Each hotspot lists only materials that are plausibly used on that
 // surface (floor / wall / furniture / etc) — extras are deliberately omitted.
 const IMAGE_HOTSPOTS: HotspotZone[] = [
-  { id: 'floor',     label: 'Floor',      labelGe: 'იატაკი',      category: 'flooring',  x: 25, y: 88, icon: '▭', materialMatch: ['Travertine (honed)', 'Natural oak (horizontal)', 'Walnut veneer', 'Pietra Serena (Tuscan)', 'Board-formed concrete', 'Smoked / fumed oak', 'Patagonia quartzite (smoky burgundy)', 'Microcement (continuous)', 'Glass mosaic tile (10–25 mm cool)', 'White marble (Calacatta)', 'Light oak / ash', 'Pale concrete (smooth)', 'Solid oak', 'Textured concrete (matte)'] },
+  { id: 'floor',     label: 'Floor',      labelGe: 'იატაკი',      category: 'flooring',  x: 25, y: 88, icon: '▭', materialMatch: ['Travertine (honed)', 'Natural oak (horizontal)', 'Walnut veneer', 'Marrón Emperador (warm brown marble)', 'Board-formed concrete', 'Smoked / fumed oak', 'Patagonia quartzite (smoky burgundy)', 'Microcement (continuous)', 'Glass mosaic tile (10–25 mm cool)', 'White marble (Calacatta)', 'Light oak / ash', 'Pale concrete (smooth)', 'Solid oak', 'Textured concrete (matte)'] },
   { id: 'wall',      label: 'Wall',       labelGe: 'კედელი',      category: 'wall',      x: 8,  y: 40, icon: '▯', materialMatch: ['Clay plaster', 'Tadelakt (warm pigmented Moroccan)', 'Board-formed concrete', 'Industrial brick', 'Venetian plaster (polished)', 'Corten steel (weathering)', 'Shou-sugi-ban (charred timber)', 'Microcement (continuous)', 'Limewash (bright)', 'White Corian (curved seamless)', 'Pale concrete (smooth)', 'Textured concrete (matte)'] },
   { id: 'furniture', label: 'Furniture',  labelGe: 'ავეჯი',       category: 'furniture', x: 38, y: 62, icon: '◫', materialMatch: ['Walnut veneer', 'Natural oak (horizontal)', 'Burnished antique brass', 'Light oak / ash', 'White Corian (curved seamless)', 'Anodized champagne aluminium', 'Solid oak', 'Walnut (natural finish)', 'Brushed metal'] },
-  { id: 'seating',   label: 'Seating',    labelGe: 'სკამი',       category: 'seating',   x: 55, y: 68, icon: '◰', materialMatch: ['Oxblood / rust velvet upholstery', 'Sheer linen voile drapery', 'Solid oak', 'Walnut (natural finish)'] },
+  { id: 'seating',   label: 'Seating',    labelGe: 'სკამი',       category: 'seating',   x: 55, y: 68, icon: '◰', materialMatch: ['Sheer linen voile drapery', 'Solid oak', 'Walnut (natural finish)'] },
   { id: 'lighting',  label: 'Lighting',   labelGe: 'განათება',     category: 'lighting',  x: 35, y: 10, icon: '◎', materialMatch: ['Burnished antique brass', 'Brushed metal', 'Anodized champagne aluminium', 'Mirror-polished stainless steel', 'Clear glass (low-iron)', 'Reeded / ribbed fluted glass', 'Curved bent glass'] },
-  { id: 'stone',     label: 'Stone',      labelGe: 'ქვა',         category: 'stone',     x: 72, y: 55, icon: '◆', materialMatch: ['White marble (Calacatta)', 'Travertine (honed)', 'Pietra Serena (Tuscan)', 'Dark marble (high contrast)', 'Patagonia quartzite (smoky burgundy)', 'Smoke quartzite (silver-grey)', 'Onice Acqua (translucent water-blue onyx)', 'Sodalite Blue (deep midnight stone)'] },
-  { id: 'textile',   label: 'Textile',    labelGe: 'ტექსტილი',    category: 'textile',   x: 48, y: 52, icon: '◈', materialMatch: ['Oxblood / rust velvet upholstery', 'Sheer linen voile drapery'] },
+  { id: 'stone',     label: 'Stone',      labelGe: 'ქვა',         category: 'stone',     x: 72, y: 55, icon: '◆', materialMatch: ['White marble (Calacatta)', 'Travertine (honed)', 'Marrón Emperador (warm brown marble)', 'Dark marble (high contrast)', 'Patagonia quartzite (smoky burgundy)', 'Smoke quartzite (silver-grey)', 'Onice Acqua (translucent water-blue onyx)', 'Sodalite Blue (deep midnight stone)'] },
+  { id: 'textile',   label: 'Textile',    labelGe: 'ტექსტილი',    category: 'textile',   x: 48, y: 52, icon: '◈', materialMatch: ['Sheer linen voile drapery'] },
   { id: 'metal',     label: 'Accents',    labelGe: 'აქსესუარი',   category: 'metal',     x: 88, y: 35, icon: '◇', materialMatch: ['Burnished antique brass', 'Corten steel (weathering)', 'Mirror-polished stainless steel', 'Anodized champagne aluminium', 'Brushed metal'] },
   { id: 'decor',     label: 'Decor',      labelGe: 'დეკორი',      category: 'decor',     x: 65, y: 38, icon: '✦', materialMatch: ['Clear glass (low-iron)', 'Reeded / ribbed fluted glass', 'Curved bent glass', 'Glass mosaic tile (10–25 mm cool)', 'Sheer linen voile drapery'] },
 ];
@@ -981,6 +1153,41 @@ const BRAND_CATALOG: BrandInfo[] = [
 ];
 
 // Category display config
+
+const ELEMENT_SHORT: Record<Element, string> = { earth: 'Ea', fire: 'Fi', water: 'Wa', air: 'Ai' };
+
+const ElementBalanceStrip: React.FC<{
+  dist: Record<Element, number>;
+  dominant: Element;
+  variant?: 'default' | 'overlay' | 'inline';
+}> = ({ dist, dominant, variant = 'default' }) => {
+  const order: Element[] = ['earth', 'fire', 'water', 'air'];
+  return (
+    <div
+      className={`shre-el-balance shre-el-balance--${variant}`}
+      role="group"
+      aria-label="Element energy balance"
+    >
+      {order.map(el => {
+        const val = Math.round(dist[el] ?? 0);
+        const isDom = el === dominant;
+        const ec = ELEMENT_COLORS[el];
+        return (
+          <div
+            key={el}
+            className={`shre-el-balance__item${isDom ? ' is-dom' : ''}`}
+            title={`${el} ${val}%`}
+          >
+            <ElementGlyph element={el} color={variant === 'overlay' ? 'rgba(255,255,255,0.92)' : ec} size={10} />
+            <span className="shre-el-balance__abbr">{ELEMENT_SHORT[el]}</span>
+            <span className="shre-el-balance__val">{val}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 // --- RESULTS VIEW ---
 const ResultsView = ({ state, setState }: { state: UserState; setState: React.Dispatch<React.SetStateAction<UserState>> }) => {
   const navigate = useNavigate();
@@ -1304,8 +1511,8 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
       const MATERIALS_BY_ELEMENT: Record<Element, string[]> = {
         // SHRE v2.1 — curated 8-per-element catalog (mirrors materialsCatalog.ts
         // ordering so the picker reads category-interleaved on every element).
-        earth: ['Travertine (honed)', 'Natural oak (horizontal)', 'Clay plaster', 'Board-formed concrete', 'Walnut veneer', 'Industrial brick', 'Pietra Serena (Tuscan)', 'Tadelakt (warm pigmented Moroccan)'],
-        fire:  ['Dark marble (high contrast)', 'Burnished antique brass', 'Smoked / fumed oak', 'Venetian plaster (polished)', 'Corten steel (weathering)', 'Patagonia quartzite (smoky burgundy)', 'Shou-sugi-ban (charred timber)', 'Oxblood / rust velvet upholstery'],
+        earth: ['Travertine (honed)', 'Natural oak (horizontal)', 'Clay plaster', 'Board-formed concrete', 'Walnut veneer', 'Industrial brick', 'Marrón Emperador (warm brown marble)', 'Tadelakt (warm pigmented Moroccan)'],
+        fire:  ['Dark marble (high contrast)', 'Burnished antique brass', 'Smoked / fumed oak', 'Venetian plaster (polished)', 'Corten steel (weathering)', 'Patagonia quartzite (smoky burgundy)', 'Shou-sugi-ban (charred timber)'],
         water: ['Microcement (continuous)', 'Smoke quartzite (silver-grey)', 'Mirror-polished stainless steel', 'Reeded / ribbed fluted glass', 'Onice Acqua (translucent water-blue onyx)', 'Curved bent glass', 'Sodalite Blue (deep midnight stone)', 'Glass mosaic tile (10–25 mm cool)'],
         air:   ['White marble (Calacatta)', 'Light oak / ash', 'Limewash (bright)', 'Clear glass (low-iron)', 'Anodized champagne aluminium', 'Pale concrete (smooth)', 'White Corian (curved seamless)', 'Sheer linen voile drapery'],
       };
@@ -1803,6 +2010,11 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                         reference (element name + behavioural caption + DETAILS
                         link to the Diagnosis report). */}
                     {isComplete && (
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[16] pointer-events-none animate-fade-in" style={{ animationDuration: '0.5s' }}>
+                        <ElementBalanceStrip dist={dist} dominant={dominant} variant="overlay" />
+                      </div>
+                    )}
+                    {isComplete && (
                       <div className="shre-hero-tag animate-fade-in" style={{ animationDuration: '0.5s' }}>
                         <span className="shre-hero-tag__el">Primary</span>
                         <span className="shre-hero-tag__name">{dominant}</span>
@@ -1894,11 +2106,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                 />
                 <span className="text-[#b0aba5]">m</span>
               </div>
-              <div className="shre-meta-bar__balance">
-                {(['earth', 'fire', 'water', 'air'] as Element[]).map(el => (
-                  <span key={el} className={el === dominant ? 'is-dom' : ''}>{Math.round(dist[el])}</span>
-                ))}
-              </div>
+              <ElementBalanceStrip dist={dist} dominant={dominant} variant="default" />
               {scaleDirty && (
                 <button
                   type="button"
@@ -2147,22 +2355,7 @@ const ResultsView = ({ state, setState }: { state: UserState; setState: React.Di
                   );
                 })()}
 
-                {/* Element percentages — minimal readout */}
-                <div className="w-full flex items-center justify-center gap-3 py-1">
-                  {(['earth', 'fire', 'water', 'air'] as Element[]).map(el => {
-                    const val = Math.round(dist[el]);
-                    const isDom = el === dominant;
-                    return (
-                      <span
-                        key={el}
-                        className="font-mono tabular-nums leading-none"
-                        style={{ fontSize: 10, color: isDom ? '#444' : '#aaa', fontWeight: isDom ? 500 : 400 }}
-                      >
-                        {val}
-                      </span>
-                    );
-                  })}
-                </div>
+                <ElementBalanceStrip dist={dist} dominant={dominant} variant="inline" />
                 </div>{/* /orbit + balance stack */}
 
                 {materialsChanged && (
